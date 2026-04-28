@@ -127,7 +127,7 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     # Send result
     await query.edit_message_text(
         messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter),
-        reply_markup=keyboards.cover_letter_result_keyboard(job_id),
+        reply_markup=keyboards.cover_letter_result_keyboard(job_id, is_manual=is_manual),
         parse_mode="MarkdownV2"
     )
 

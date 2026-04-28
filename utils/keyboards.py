@@ -272,19 +272,21 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 # Cover Letter
 # ──────────────────────────────────────────────
 
-def cover_letter_result_keyboard(job_id: int) -> InlineKeyboardMarkup:
+def cover_letter_result_keyboard(job_id: int, is_manual: bool = False) -> InlineKeyboardMarkup:
     """Actions after cover letter is generated."""
+    cl_prefix = "manual_cl" if is_manual else "cl"
+    back_prefix = "manual_view" if is_manual else "job_view"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔄 Regenerate", callback_data=f"cl_regen_{job_id}"),
+            InlineKeyboardButton("🔄 Regenerate", callback_data=f"{cl_prefix}_regen_{job_id}"),
         ],
         [
-            InlineKeyboardButton("✏️ Formal", callback_data=f"cl_tone_formal_{job_id}"),
-            InlineKeyboardButton("✏️ Friendly", callback_data=f"cl_tone_friendly_{job_id}"),
-            InlineKeyboardButton("✏️ Concise", callback_data=f"cl_tone_concise_{job_id}"),
+            InlineKeyboardButton("✏️ Formal", callback_data=f"{cl_prefix}_tone_formal_{job_id}"),
+            InlineKeyboardButton("✏️ Friendly", callback_data=f"{cl_prefix}_tone_friendly_{job_id}"),
+            InlineKeyboardButton("✏️ Concise", callback_data=f"{cl_prefix}_tone_concise_{job_id}"),
         ],
         [
-            InlineKeyboardButton("🔙 Back to Job", callback_data=f"job_view_{job_id}"),
+            InlineKeyboardButton("🔙 Back to Job", callback_data=f"{back_prefix}_{job_id}"),
         ],
     ])
 
