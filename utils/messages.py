@@ -275,16 +275,24 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
         skills_text = escape_md(", ".join(s.title() for s in skills_list[:6])) if skills_list else ""
 
         posted = ""
-        if job.get("posted_at"):
+        posted_raw = job.get("posted_at") or job.get("posted_time")
+        if posted_raw:
             from datetime import datetime, timezone
-            diff = datetime.now(timezone.utc) - job["posted_at"]
-            hours = int(diff.total_seconds() / 3600)
-            if hours < 1:
-                posted = "⏰ Just now"
-            elif hours < 24:
-                posted = f"⏰ {hours}h ago"
-            else:
-                posted = f"⏰ {hours // 24}d ago"
+            try:
+                if isinstance(posted_raw, str):
+                    dt = datetime.fromisoformat(posted_raw.replace('Z', '+00:00'))
+                else:
+                    dt = posted_raw
+                diff = datetime.now(timezone.utc) - dt
+                hours = int(diff.total_seconds() / 3600)
+                if hours < 1:
+                    posted = "⏰ Just now"
+                elif hours < 24:
+                    posted = f"⏰ {hours}h ago"
+                else:
+                    posted = f"⏰ {hours // 24}d ago"
+            except Exception:
+                pass
 
         if url:
             safe_url = url.replace("(", "%28").replace(")", "%29")
@@ -313,7 +321,7 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
             line += f"     🏷 {skills_text}\n"
         
         if user is not None:
-            job_exp = job.get("experience_required")
+            job_exp = job.get("experience_required") or job.get("min_yoe") or 0
             if job.get("is_manual"):
                 details = compute_manual_job_match(user, job)
                 batch_note = details.get("batch_note")
@@ -408,20 +416,23 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         
     subtitle_str = " \\| ".join(subtitle_parts)
     
-    posted_raw = job.get("posted_time")
-    if not posted_raw and job.get("posted_at"):
+    posted_raw = job.get("posted_time") or job.get("posted_at")
+    posted_str = ""
+    if posted_raw:
         from datetime import datetime, timezone
         try:
-            dt = datetime.fromisoformat(job["posted_at"].replace('Z', '+00:00'))
+            if isinstance(posted_raw, str):
+                dt = datetime.fromisoformat(posted_raw.replace('Z', '+00:00'))
+            else:
+                dt = posted_raw
             days = (datetime.now(timezone.utc) - dt).days
             if days == 0:
-                posted_raw = "Today"
+                posted_str = "⏰ Posted Today\n"
             else:
-                posted_raw = f"{days}d ago"
-        except:
-            posted_raw = job.get("posted_at")
-
-    posted_str = f"⏰ Posted {escape_md(str(posted_raw))}\n" if posted_raw else ""
+                posted_str = f"⏰ Posted {days}d ago\n"
+        except Exception:
+            # Fallback if parsing fails
+            posted_str = f"⏰ Posted {escape_md(str(posted_raw))}\n"
 
     raw_url = job.get("url", "") or ""
     url = raw_url.strip() if raw_url.strip().startswith("http") else ""
@@ -440,12 +451,13 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         
     match_section = ""
     if user is not None:
+        job_exp = job.get("experience_required") or job.get("min_yoe") or 0
         if job.get("is_manual"):
             details = compute_manual_job_match(user, job)
         else:
             user_skills = user.get("skills", [])
             user_exp = str(user.get("experience_level", "0"))
-            details = compute_match_details(user_skills, skills_list, user_exp, exp_req)
+            details = compute_match_details(user_skills, skills_list, user_exp, job_exp)
 
         score = details["score"]
         matched_skills = details["matched"]
@@ -472,11 +484,11 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
             if exp_note:
                 if "gap" in exp_note.lower():
                     if "partial" in exp_note.lower():
-                       match_section += f"\n💡 Slight experience gap \\({escape_md(str(exp_req))}\\+ yrs required\\)\n"
+                       match_section += f"\n💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
                     else:
-                        match_section += f"\n💡 Experience gap \\({escape_md(str(exp_req))}\\+ yrs required\\)\n"
+                        match_section += f"\n💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
                 else:
-                    match_section += f"\n✅ Experience matches \\({escape_md(str(exp_req))}\\+ yrs\\)\n"
+                    match_section += f"\n✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
         else:
             if score >= 70:
                 match_section = (
