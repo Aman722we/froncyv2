@@ -329,31 +329,35 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
             
             if plan in ("pro", "trial"):
                 if score >= 70:
-                    match_text = f"🟢 {score}% match"
+                    match_text = f"🟢 High match ({score}%)"
                 elif score >= 40:
-                    match_text = f"🟡 {score}% match"
+                    match_text = f"🟡 Medium match ({score}%)"
                 else:
-                    match_text = f"🔴 {score}% match"
+                    match_text = f"🔴 Low match ({score}%)"
                 
-                # Show skills ratio
-                skill_ratio = f"Skills: {len(matched_skills)}/{len(matched_skills)+len(missing_skills)}"
-                line += f"     {match_text} \\| {escape_md(skill_ratio)}\n"
+                line += f"     {match_text}\n"
                 
-                # Skill breakdown
-                breakdown = ""
-                for s in matched_skills[:4]:
-                    breakdown += f"{escape_md(s)} ✅  "
-                for s in missing_skills[:3]:
-                    breakdown += f"{escape_md(s)} ❌  "
-                
-                if breakdown:
-                    line += f"     {breakdown.strip()}\n"
+                # Skill breakdown without ❌
+                if matched_skills:
+                    m_text = ", ".join(s.title() for s in matched_skills[:4])
+                    line += f"     ✅ Match: {escape_md(m_text)}\n"
+                if missing_skills:
+                    ms_text = ", ".join(s.title() for s in missing_skills[:3])
+                    line += f"     ⚠️ Missing: {escape_md(ms_text)}\n"
                 
                 # Experience & Batch note
                 if exp_note:
-                    line += f"     {escape_md(exp_note)}\n"
-                if batch_note:
-                    line += f"     {escape_md(batch_note)}\n"
+                    if "gap" in exp_note.lower():
+                        if "partial" in exp_note.lower():
+                            line += f"     💡 Slight experience gap ({escape_md(str(job_exp))}\\+ yrs req)\n"
+                        else:
+                            line += f"     💡 Experience gap ({escape_md(str(job_exp))}\\+ yrs req)\n"
+                    else:
+                        line += f"     ✅ Experience matches ({escape_md(str(job_exp))}\\+ yrs)\n"
+                        
+                batch_req = job.get("batch_required")
+                if batch_req and str(batch_req).lower() != "any":
+                    line += f"     🎓 Batch: {escape_md(str(batch_req))}\n"
                     
             elif plan == "free":
                 if score >= 70:
