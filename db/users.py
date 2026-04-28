@@ -280,7 +280,8 @@ async def check_ats_limit(telegram_id: int, plan: str) -> tuple[bool, int]:
     if plan in ("proplus", "premium"):
         return True, 0
 
-    daily_limit = 5 if plan == "pro" else 1
+    # Trial users get same ATS checks as Pro (5/day)
+    daily_limit = 5 if plan in ("pro", "trial") else 1
     pool = get_pool()
 
     async with pool.acquire() as conn:

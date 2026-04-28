@@ -9,10 +9,14 @@ from db.users import get_user, check_ats_limit, increment_ats_check
 from db.jobs import get_job_by_id
 from db.manual_jobs import get_manual_job_by_id
 from services.ats_analyzer import analyze_resume_match
+from services.llm_service import LLMMode, get_mode_for_plan
 from utils import keyboards, messages, helpers
 
 # Re-use WAITING_RESUME state from start.py
 WAITING_RESUME = 4
+
+# Plans treated as non-free (pro-equivalent or better)
+PRO_PLANS = ("pro", "trial", "proplus", "premium")
 
 
 async def view_resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -89,7 +93,7 @@ async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         return
 
-    # Show taste message for free users (first/only check)
+    # Show message — free users see preview notice, pro/trial see remaining checks
     if plan == "free":
         await query.edit_message_text(
             r"📊 *ATS Resume Analyzer* \— Free Preview" "\n\n"
@@ -97,10 +101,15 @@ async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="MarkdownV2"
         )
     else:
-        checks_left = 5 - used_today
+        # Pro/Trial: show remaining checks (proplus/premium have unlimited so no counter)
+        if plan in ("proplus", "premium"):
+            checks_text = "unlimited checks"
+        else:
+            checks_left = 5 - used_today
+            checks_text = f"{checks_left} checks remaining today"
         await query.edit_message_text(
             r"📊 *ATS Resume Analyzer*" "\n\n"
-            rf"Paste the full Job Description below\. \({checks_left} checks remaining today\)",
+            rf"Paste the full Job Description below\. \({checks_text}\)",
             parse_mode="MarkdownV2"
         )
 
@@ -123,14 +132,16 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         await update.message.reply_text(r"⏳ Analyzing with AI — this takes ~15 seconds\.\.\.", parse_mode="MarkdownV2")
 
-        result = await analyze_resume_match(resume_text, jd_text)
+        # Use quality mode only for proplus/premium; fast mode for everyone else
+        mode = get_mode_for_plan(plan)
+        result = await analyze_resume_match(resume_text, jd_text, mode=mode)
         msg = messages.ats_result(result)
 
         # Increment counter AFTER successful analysis
         await increment_ats_check(user_id)
 
-        # Upsell nudge for free users after their one shot
-        if plan == "free":
+        # Upsell nudge only for free users after their one shot
+        if plan not in PRO_PLANS:
             upsell_kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("💎 Get 5 checks/day + full Pro — ₹99/mo", callback_data="upgrade_pro")]
             ])
@@ -160,7 +171,10 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
     
     if not can_run:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        if plan == "pro":
+        is_manual = query.data.startswith("manual_")
+        job_id_str = query.data.split("_")[-1]
+        back_cb = f"manual_view_{job_id_str}" if is_manual else f"job_view_{job_id_str}"
+        if plan in PRO_PLANS:
             msg = ("🔒 *ATS Analyzer Limit Reached*\n\n"
                    "You've used your 5 ATS checks for today\\.\n"
                    "Resets at midnight\\! 🔄\n\n"
@@ -168,7 +182,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
                    "jobs matching your updated resume?")
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔍 Find Matching Jobs", callback_data="menu_jobs")],
-                [InlineKeyboardButton("🔙 Menu", callback_data="back_menu")]
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
             msg = ("🔒 *ATS Analyzer Limit Reached*\n\n"
@@ -177,7 +191,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
                    "\\[ 💎 Pro — ₹99/mo \\| Unlimited Apps \\]")
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("💎 Upgrade to Pro", callback_data="upgrade_pro")],
-                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"job_view_{query.data.split('_')[-1]}")]
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)]
             ])
             
         await query.edit_message_text(
@@ -251,7 +265,8 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
     )
 
     try:
-        result = await analyze_resume_match(resume_text, jd_text)
+        mode = get_mode_for_plan(plan)
+        result = await analyze_resume_match(resume_text, jd_text, mode=mode)
         from utils.messages import ats_result
         msg = ats_result(result)
         
@@ -259,14 +274,17 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
 
         from utils.keyboards import InlineKeyboardMarkup as KB, InlineKeyboardButton as IKB
         
-        # Add upsell for free users
-        if plan == "free":
+        # Correct 'Back to Job' callback depending on scraped vs manual
+        back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+
+        # Add upsell only for free users
+        if plan not in PRO_PLANS:
             back_kb = KB([
                 [IKB("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
-                [IKB("🔙 Back to Job", callback_data=f"job_view_{job_id}")]
+                [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
-            back_kb = KB([[IKB("🔙 Back to Job", callback_data=f"job_view_{job_id}")]])
+            back_kb = KB([[IKB("🔙 Back to Job", callback_data=back_cb)]])
             
         await query.edit_message_text(msg, parse_mode="MarkdownV2", reply_markup=back_kb)
     except Exception as e:
@@ -276,3 +294,58 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             parse_mode="MarkdownV2"
         )
 
+
+# ──────────────────────────────────────────────
+# Replace Resume (standalone — outside onboarding)
+# ──────────────────────────────────────────────
+
+async def replace_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'Replace' button from /resume menu — prompt user to send a new PDF."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["waiting_for_replace_resume"] = True
+    await query.edit_message_text(
+        "📎 Send me your new resume as a PDF file \\(max 5MB\\)\\.",
+        parse_mode="MarkdownV2"
+    )
+
+
+async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Process the new PDF when replacing an existing resume."""
+    if not context.user_data.get("waiting_for_replace_resume"):
+        return
+
+    document = update.message.document
+    if not document or not document.file_name.lower().endswith(".pdf"):
+        await update.message.reply_text("⚠️ Please upload a PDF file\\.", parse_mode="MarkdownV2")
+        return
+
+    if document.file_size > 5 * 1024 * 1024:
+        await update.message.reply_text(
+            "⚠️ File too large\\. Maximum size is 5MB\\.", parse_mode="MarkdownV2"
+        )
+        return
+
+    context.user_data["waiting_for_replace_resume"] = False
+
+    try:
+        from services.resume_parser import save_resume_file, extract_text_from_pdf
+        from db.users import update_resume
+
+        user_id = update.effective_user.id
+        file = await document.get_file()
+        file_bytes = await file.download_as_bytearray()
+        saved_path = save_resume_file(user_id, bytes(file_bytes), document.file_name)
+        resume_text = extract_text_from_pdf(saved_path)
+        await update_resume(user_id, resume_text, document.file_name)
+
+        await update.message.reply_text(
+            messages.resume_uploaded_success(document.file_name),
+            parse_mode="MarkdownV2"
+        )
+    except Exception as e:
+        logger.error(f"Replace resume failed: {e}")
+        await update.message.reply_text(
+            "⚠️ Failed to process your resume\\. Please try again\\.",
+            parse_mode="MarkdownV2"
+        )

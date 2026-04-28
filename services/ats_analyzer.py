@@ -7,7 +7,7 @@ from loguru import logger
 from services.llm_service import generate_ats_analysis, LLMMode
 
 
-async def analyze_resume_match(resume_text: str, job_description: str) -> dict:
+async def analyze_resume_match(resume_text: str, job_description: str, mode=None) -> dict:
     """
     Compare resume against a job description using an LLM.
 
@@ -29,9 +29,13 @@ async def analyze_resume_match(resume_text: str, job_description: str) -> dict:
             "tech_match": {"found": [], "missing": []},
         }
 
+    from services.llm_service import LLMMode as _LLMMode
+    if mode is None:
+        mode = _LLMMode.QUALITY
+
     try:
         # Call LLM logic
-        json_output = await generate_ats_analysis(resume_text, job_description, mode=LLMMode.QUALITY)
+        json_output = await generate_ats_analysis(resume_text, job_description, mode=mode)
         data = json.loads(json_output)
         
         score = data.get("score", 0)

@@ -10,7 +10,7 @@ from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback
+from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -85,8 +85,10 @@ def build_bot() -> Application:
 
 
     # Resume/ATS Callbacks
+    app.add_handler(CallbackQueryHandler(replace_resume_prompt, pattern="^resume_upload$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
+    app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ats_analyze_result))
 
     # Tracker & Analytics
