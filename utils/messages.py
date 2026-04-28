@@ -504,7 +504,7 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
         f"{match_section}\n"
-        f"*Job link:* {url.replace('(', '%28').replace(')', '%29')}\n\n"
+        f"*Job link:* [{escape_md(url)}]({url.replace('(', '%28').replace(')', '%29')})\n\n" if url else "*Job link:* Not available\n\n"
         "What would you like to do?"
     )
 
