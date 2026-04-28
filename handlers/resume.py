@@ -149,7 +149,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(msg, parse_mode="MarkdownV2")
 
     except Exception as e:
-        logger.error(f"ATS analysis failed: {e}")
+        logger.exception(f"ATS analysis failed: {e}")
         await update.message.reply_text(
             "⚠️ Something went wrong during analysis\\. Please try again\\.",
             parse_mode="MarkdownV2"
@@ -287,7 +287,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             
         await query.edit_message_text(msg, parse_mode="MarkdownV2", reply_markup=back_kb)
     except Exception as e:
-        logger.error(f"ATS job analysis failed: {e}")
+        logger.exception(f"ATS job analysis failed: {e}")
         await query.edit_message_text(
             "⚠️ Analysis failed\\. Please try again\\.",
             parse_mode="MarkdownV2"
