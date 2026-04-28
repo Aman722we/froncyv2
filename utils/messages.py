@@ -538,12 +538,12 @@ def cover_letter_result(job_title: str, company: str, letter: str) -> str:
 def cover_letter_limit_hit(used: int, max_cl: int, reset_date: str, pricing: dict | None = None) -> str:
     price_block = _pricing_block(pricing)
     return (
-        "You've written your cover letter for today\.\n\n"
+        "You've written your cover letter for today\\.\n\n"
         "Most callbacks come from applications where "
-        "the cover letter is tailored — not copy\-pasted\. "
-        "With 1/day you can only properly apply to 1 job\.\n\n"
-        "Pro members average 4 tailored applications per day\. "
-        "That's 4x more shots at getting hired\.\n\n"
+        "the cover letter is tailored — not copy\\-pasted\\. "
+        "With 1/day you can only properly apply to 1 job\\.\n\n"
+        "Pro members average 4 tailored applications per day\\. "
+        "That's 4x more shots at getting hired\\.\n\n"
         f"{price_block}\n"
         f"_Resets: {escape_md(reset_date)}_"
     )
