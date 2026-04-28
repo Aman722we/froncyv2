@@ -287,7 +287,8 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
                 posted = f"⏰ {hours // 24}d ago"
 
         if url:
-            line = f"{num}  [{title}]({url}) — {company}\n"
+            safe_url = url.replace("(", "%28").replace(")", "%29")
+            line = f"{num}  [{title}]({safe_url}) — {company}\n"
         else:
             line = f"{num}  *{title}* — {company}\n"
             
@@ -503,7 +504,7 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
         f"{match_section}\n"
-        f"*Job link:* {escape_md(url)}\n\n"
+        f"*Job link:* {url.replace('(', '%28').replace(')', '%29')}\n\n"
         "What would you like to do?"
     )
 
