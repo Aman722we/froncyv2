@@ -59,7 +59,12 @@ async def _send_daily_alerts():
         async with pool.acquire() as conn:
             # Get all users who should receive alerts at this specific hour
             users = await conn.fetch(
-                "SELECT telegram_id, skills, location_pref, plan FROM users WHERE is_onboarded = TRUE AND alert_time = $1",
+                """
+                SELECT telegram_id, skills, location_pref, plan,
+                       experience_level, batch_year
+                FROM users
+                WHERE is_onboarded = TRUE AND alert_time = $1
+                """,
                 current_time_str
             )
 
@@ -73,16 +78,27 @@ async def _send_daily_alerts():
                 skills = user["skills"] or []
                 location = user["location_pref"] or "remote"
                 plan = user["plan"] or "free"
+                # Trial and pro get same job limit (20)
                 limit = 5 if plan == "free" else 20
 
                 jobs = await get_matching_jobs(skills, location, limit=limit)
                 if not jobs:
                     continue
 
+                # Build a proper user dict that format_job_list_message expects
+                user_dict = {
+                    "telegram_id": user["telegram_id"],
+                    "skills": skills,
+                    "location_pref": location,
+                    "plan": plan,
+                    "experience_level": user["experience_level"] or "0",
+                    "batch_year": user["batch_year"],
+                }
+
                 # Format alert message
                 from utils.messages import format_job_list_message
                 from utils import keyboards
-                msg = format_job_list_message(jobs, plan, len(jobs), skills)
+                msg = format_job_list_message(jobs, plan, len(jobs), user=user_dict)
                 kb = keyboards.job_list_keyboard(jobs, plan, total_count=len(jobs), page=1)
 
                 await _bot_app.bot.send_message(
@@ -90,6 +106,7 @@ async def _send_daily_alerts():
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
+                    disable_web_page_preview=True,
                 )
                 sent_count += 1
 
