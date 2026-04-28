@@ -139,14 +139,18 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Increment counter AFTER successful analysis
         await increment_ats_check(user_id)
 
-        # Upsell nudge only for free users after their one shot
+        # Build keyboard — upsell for free users, always show Back button
         if plan not in PRO_PLANS:
-            upsell_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("💎 Get 5 checks/day + full Pro — ₹99/mo", callback_data="upgrade_pro")]
+            result_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
             ])
-            await update.message.reply_text(msg, parse_mode="MarkdownV2", reply_markup=upsell_kb)
         else:
-            await update.message.reply_text(msg, parse_mode="MarkdownV2")
+            result_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📄 My Resume", callback_data="menu_resume")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
+            ])
+        await update.message.reply_text(msg, parse_mode="MarkdownV2", reply_markup=result_kb)
 
     except Exception as e:
         logger.exception(f"ATS analysis failed: {e}")
