@@ -329,11 +329,11 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
             
             if plan in ("pro", "trial"):
                 if score >= 70:
-                    match_text = f"🟢 High match ({score}%)"
+                    match_text = f"🟢 High match \\({score}%\\)"
                 elif score >= 40:
-                    match_text = f"🟡 Medium match ({score}%)"
+                    match_text = f"🟡 Medium match \\({score}%\\)"
                 else:
-                    match_text = f"🔴 Low match ({score}%)"
+                    match_text = f"🔴 Low match \\({score}%\\)"
                 
                 line += f"     {match_text}\n"
                 
