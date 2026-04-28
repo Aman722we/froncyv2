@@ -130,7 +130,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         resume_text = user.get("resume_text", "")
         jd_text = update.message.text
 
-        await update.message.reply_text(r"⏳ Analyzing with AI — this takes ~20 seconds\.\.\.", parse_mode="MarkdownV2")
+        await update.message.reply_text(r"⏳ Analyzing your resume with AI — this takes about 20 seconds\.\.\.", parse_mode="MarkdownV2")
 
         # Always use QUALITY (70B) for ATS — 8B doesn’t reliably output strict JSON
         result = await analyze_resume_match(resume_text, jd_text, mode=LLMMode.QUALITY)
