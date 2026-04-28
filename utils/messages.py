@@ -537,14 +537,18 @@ def generating_cover_letter(mode_display: str) -> str:
     return f"⏳ Generating your cover letter\\.\\.\\.\n\n{escape_md(mode_display)}\n\\(This takes a few seconds\\)"
 
 
-def cover_letter_result(job_title: str, company: str, letter: str) -> str:
+def cover_letter_result(job_title: str, company: str, letter: str, footer: str = "") -> str:
     title = escape_md(f"{job_title} — {company}")
     body = letter.replace("\\", "\\\\").replace("`", "\\`")
-    return (
+    
+    msg = (
         f"✅ *Your Cover Letter — {title}*\n\n"
         f"```text\n{body}\n```\n\n"
-        "👆 *Tap the box above to instantly copy it\\!*"
+        "👆 *Tap the box above to instantly copy it\\!*\n"
     )
+    if footer:
+        msg += f"\n{footer}"
+    return msg
 
 
 def cover_letter_limit_hit(used: int, max_cl: int, reset_date: str, pricing: dict | None = None) -> str:

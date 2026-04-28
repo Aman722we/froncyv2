@@ -114,19 +114,18 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         
         remaining = limit - (cover_letters_today + 1)
         if plan == "free":
-            footer = f"\n\n_({remaining} cover letters left today)_"
+            footer = f"_({remaining} cover letters left today)_"
         else:
-            footer = f"\n\n_({remaining} of 10 remaining today)_"
+            footer = f"_({remaining} of 10 remaining today)_"
             
-        letter += footer
-
     except Exception as e:
         logger.error(f"CL generation error: {e}")
         letter = get_fallback_cover_letter(job.get('title', 'Developer'), job.get('company', 'the company'))
+        footer = ""
 
     # Send result
     await query.edit_message_text(
-        messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter),
+        messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter, footer),
         reply_markup=keyboards.cover_letter_result_keyboard(job_id, is_manual=is_manual),
         parse_mode="MarkdownV2"
     )
