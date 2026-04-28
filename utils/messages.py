@@ -350,11 +350,11 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
                 if exp_note:
                     if "gap" in exp_note.lower():
                         if "partial" in exp_note.lower():
-                            line += f"     💡 Slight experience gap ({escape_md(str(job_exp))}\\+ yrs req)\n"
+                            line += f"     💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
                         else:
-                            line += f"     💡 Experience gap ({escape_md(str(job_exp))}\\+ yrs req)\n"
+                            line += f"     💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
                     else:
-                        line += f"     ✅ Experience matches ({escape_md(str(job_exp))}\\+ yrs)\n"
+                        line += f"     ✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
                         
                 batch_req = job.get("batch_required")
                 if batch_req and str(batch_req).lower() != "any":
@@ -472,11 +472,11 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
             if exp_note:
                 if "gap" in exp_note.lower():
                     if "partial" in exp_note.lower():
-                        match_section += f"\n💡 Slight experience gap ({escape_md(str(exp_req))}\\+ yrs required)\n"
+                       match_section += f"\n💡 Slight experience gap \\({escape_md(str(exp_req))}\\+ yrs required\\)\n"
                     else:
-                        match_section += f"\n💡 Experience gap ({escape_md(str(exp_req))}\\+ yrs required)\n"
+                        match_section += f"\n💡 Experience gap \\({escape_md(str(exp_req))}\\+ yrs required\\)\n"
                 else:
-                    match_section += f"\n✅ Experience matches ({escape_md(str(exp_req))}\\+ yrs)\n"
+                    match_section += f"\n✅ Experience matches \\({escape_md(str(exp_req))}\\+ yrs\\)\n"
         else:
             if score >= 70:
                 match_section = (
