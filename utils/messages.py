@@ -312,13 +312,13 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
             line += f"     🏷 {skills_text}\n"
         
         if user is not None:
+            job_exp = job.get("experience_required")
             if job.get("is_manual"):
                 details = compute_manual_job_match(user, job)
                 batch_note = details.get("batch_note")
             else:
                 user_skills = user.get("skills", [])
                 user_exp = str(user.get("experience_level", "0"))
-                job_exp = job.get("experience_required")
                 details = compute_match_details(user_skills, skills_list, user_exp, job_exp)
                 batch_note = None
             
