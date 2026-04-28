@@ -38,12 +38,15 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         json_output = await generate_ats_analysis(resume_text, job_description, mode=mode)
         data = json.loads(json_output)
         
+        def _sanitize(val):
+            return str(val).replace("~", "").replace("`", "")
+
         score = data.get("score", 0)
-        matching = data.get("matching_keywords", [])
-        missing = data.get("missing_keywords", [])
-        tech_found = data.get("tech_found", [])
-        tech_missing = data.get("tech_missing", [])
-        suggestions = data.get("suggestions", [])
+        matching = [_sanitize(k) for k in data.get("matching_keywords", [])]
+        missing = [_sanitize(k) for k in data.get("missing_keywords", [])]
+        tech_found = [_sanitize(k) for k in data.get("tech_found", [])]
+        tech_missing = [_sanitize(k) for k in data.get("tech_missing", [])]
+        suggestions = [_sanitize(s) for s in data.get("suggestions", [])]
 
         result = {
             "score": score,
