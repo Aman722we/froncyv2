@@ -402,23 +402,45 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         subtitle_parts.append("💰 Not specified")
         
     subtitle_str = " \\| ".join(subtitle_parts)
+    
+    posted_raw = job.get("posted_time")
+    if not posted_raw and job.get("posted_at"):
+        from datetime import datetime, timezone
+        try:
+            dt = datetime.fromisoformat(job["posted_at"].replace('Z', '+00:00'))
+            days = (datetime.now(timezone.utc) - dt).days
+            if days == 0:
+                posted_raw = "Today"
+            else:
+                posted_raw = f"{days}d ago"
+        except:
+            posted_raw = job.get("posted_at")
+
+    posted_str = f"⏰ Posted {escape_md(str(posted_raw))}\n" if posted_raw else ""
+
     raw_url = job.get("url", "") or ""
     url = raw_url.strip() if raw_url.strip().startswith("http") else ""
-    portal = job.get("portal_type", "other")
     exp_req = job.get("experience_required")
     skills_list = job.get("skills", [])
-    skills_text = escape_md(", ".join(s.title() for s in skills_list)) if skills_list else "None listed"
+    
+    if skills_list:
+        skills_text = escape_md(" • ".join(s.title() for s in skills_list))
+    else:
+        skills_text = "None listed"
 
+    batch_str = ""
+    batch_req = job.get("batch_required")
+    if batch_req and str(batch_req).lower() != "any":
+        batch_str = f"\n🎓 Batch: {escape_md(str(batch_req))}"
+        
     match_section = ""
     if user is not None:
         if job.get("is_manual"):
             details = compute_manual_job_match(user, job)
-            batch_note = details.get("batch_note")
         else:
             user_skills = user.get("skills", [])
             user_exp = str(user.get("experience_level", "0"))
             details = compute_match_details(user_skills, skills_list, user_exp, exp_req)
-            batch_note = None
 
         score = details["score"]
         matched_skills = details["matched"]
@@ -426,57 +448,57 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         exp_note = details.get("exp_note")
 
         if plan in ("pro", "trial"):
-            # Score badge
             if score >= 70:
-                badge = f"🟢 *{score}% Match*"
+                badge = f"🟢 High match \\({score}%\\)"
             elif score >= 40:
-                badge = f"🟡 *{score}% Match*"
+                badge = f"🟡 Medium match \\({score}%\\)"
             else:
-                badge = f"🔴 *{score}% Match*"
+                badge = f"🔴 Low match \\({score}%\\)"
             
-            match_section += f"\n{badge}\n"
-            match_section += f"Skills: {len(matched_skills)}/{len(matched_skills)+len(missing_skills)} matched\n"
+            match_section += f"\n\n🎯 *Match Insight*\n\n{badge}\n"
             
             if matched_skills:
-                m_text = ", ".join(s for s in matched_skills[:6])
-                match_section += f"✅ *Have:* {escape_md(m_text)}\n"
+                m_text = ", ".join(s.title() for s in matched_skills)
+                match_section += f"✅ You match: {escape_md(m_text)}\n"
             if missing_skills:
-                ms_text = ", ".join(s for s in missing_skills[:5])
-                match_section += f"❌ *Missing:* {escape_md(ms_text)}\n"
+                ms_text = ", ".join(s.title() for s in missing_skills)
+                match_section += f"⚠️ Missing: {escape_md(ms_text)}\n"
+                
             if exp_note:
-                match_section += f"📅 {escape_md(exp_note)}\n"
-            if batch_note:
-                match_section += f"🎓 {escape_md(batch_note)}\n"
-            match_section += "\n"
+                if "gap" in exp_note.lower():
+                    if "partial" in exp_note.lower():
+                        match_section += f"\n💡 Slight experience gap ({escape_md(str(exp_req))}\\+ yrs required)\n"
+                    else:
+                        match_section += f"\n💡 Experience gap ({escape_md(str(exp_req))}\\+ yrs required)\n"
+                else:
+                    match_section += f"\n✅ Experience matches ({escape_md(str(exp_req))}\\+ yrs)\n"
         else:
-            # Free user teaser
             if score >= 70:
                 match_section = (
-                    "\n👆 *You're a strong match for this one\\.*\n"
-                    "Upgrade to see your full skill breakdown\\.\n\n"
+                    "\n\n🎯 *Match Insight*\n\n"
+                    "👆 *You're a strong match for this one\\.*\n"
+                    "Upgrade to see your full skill breakdown\\.\n"
                 )
             elif score >= 40:
                 match_section = (
-                    "\n⚠️ *You're a partial match for this one\\.*\n"
-                    "Upgrade to see which skills you're missing\\.\n\n"
+                    "\n\n🎯 *Match Insight*\n\n"
+                    "⚠️ *You're a partial match for this one\\.*\n"
+                    "Upgrade to see which skills you're missing\\.\n"
                 )
             else:
                 match_section = (
-                    "\n⚠️ *You might be underqualified for this one\\.*\n"
-                    "Upgrade to see which skills you're missing\\.\n\n"
+                    "\n\n🎯 *Match Insight*\n\n"
+                    "⚠️ *You might be underqualified for this one\\.*\n"
+                    "Upgrade to see which skills you're missing\\.\n"
                 )
 
-    # Experience requirement line
-    exp_line = ""
-    if exp_req is not None:
-        exp_line = f"📅 Experience: {exp_req}\\+ years required\n"
-
     return (
-        f"*{title} \\- {company}*\n"
+        f"*{title} \\- {company}*\n\n"
         f"{subtitle_str}\n"
-        f"🏷 {skills_text}\n"
-        f"{exp_line}"
-        f"{match_section}"
+        f"{posted_str}\n"
+        f"🏷 *Skills*\n{skills_text}\n"
+        f"{batch_str}"
+        f"{match_section}\n"
         f"*Job link:* {escape_md(url)}\n\n"
         "What would you like to do?"
     )
