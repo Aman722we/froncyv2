@@ -9,7 +9,7 @@ from db.users import get_user, check_ats_limit, increment_ats_check
 from db.jobs import get_job_by_id
 from db.manual_jobs import get_manual_job_by_id
 from services.ats_analyzer import analyze_resume_match
-from services.llm_service import LLMMode, get_mode_for_plan
+from services.llm_service import LLMMode
 from utils import keyboards, messages, helpers
 
 # Re-use WAITING_RESUME state from start.py
@@ -130,11 +130,10 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         resume_text = user.get("resume_text", "")
         jd_text = update.message.text
 
-        await update.message.reply_text(r"⏳ Analyzing with AI — this takes ~15 seconds\.\.\.", parse_mode="MarkdownV2")
+        await update.message.reply_text(r"⏳ Analyzing with AI — this takes ~20 seconds\.\.\.", parse_mode="MarkdownV2")
 
-        # Use quality mode only for proplus/premium; fast mode for everyone else
-        mode = get_mode_for_plan(plan)
-        result = await analyze_resume_match(resume_text, jd_text, mode=mode)
+        # Always use QUALITY (70B) for ATS — 8B doesn’t reliably output strict JSON
+        result = await analyze_resume_match(resume_text, jd_text, mode=LLMMode.QUALITY)
         msg = messages.ats_result(result)
 
         # Increment counter AFTER successful analysis
@@ -265,8 +264,8 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
     )
 
     try:
-        mode = get_mode_for_plan(plan)
-        result = await analyze_resume_match(resume_text, jd_text, mode=mode)
+        # Always use QUALITY (70B) for ATS — strict JSON output requires the larger model
+        result = await analyze_resume_match(resume_text, jd_text, mode=LLMMode.QUALITY)
         from utils.messages import ats_result
         msg = ats_result(result)
         
