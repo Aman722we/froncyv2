@@ -21,9 +21,10 @@ def onboarding_welcome_keyboard() -> InlineKeyboardMarkup:
 
 SKILL_CATEGORIES = {
     "🛠️ Core Front-End": ["HTML", "CSS", "JavaScript", "TypeScript"],
+    "⚙️ Core Backend": ["Node.js", "Express", "MongoDB", "PostgreSQL", "MySQL"],
     "⚡ Frameworks": ["React", "Next.js", "Vue", "Angular", "Svelte", "React Native"],
     "🎨 Styling & UI": ["Tailwind", "SCSS", "Figma", "Framer", "Bootstrap"],
-    "⚙️ Tools & DevOps": ["Git", "GitHub", "Node.js", "GraphQL", "CI/CD", "Docker"]
+    "⚙️ Tools & DevOps": ["Git", "GitHub", "GraphQL", "CI/CD", "Docker"]
 }
 
 # Flatten for easy validation
@@ -48,17 +49,16 @@ def skills_keyboard(selected: list[str] | None = None) -> InlineKeyboardMarkup:
                     callback_data=f"skill_{skill.lower().replace('.', '').replace(' ', '_').replace('/', '_')}",
                 )
             )
-            # 2 columns per row looks cleaner with long skill names
             if len(row) == 2:
                 buttons.append(row)
                 row = []
-                
         if row:
             buttons.append(row)
 
-    buttons.append([
-        InlineKeyboardButton("✅ Done — Save my skills", callback_data="skills_done")
-    ])
+    buttons.append([InlineKeyboardButton("➕ Add your own skills", callback_data="add_custom_skill")])
+    
+    if selected:
+        buttons.append([InlineKeyboardButton("Next ▶️", callback_data="skills_done")])
 
     return InlineKeyboardMarkup(buttons)
 

@@ -113,3 +113,49 @@ def split_name(full_name: str) -> tuple[str, str]:
     first = parts[0] if parts else ""
     last = parts[1] if len(parts) > 1 else ""
     return first, last
+
+
+def normalize_skills(skills: list[str]) -> list[str]:
+    """
+    Normalize a list of skills to standard casing/naming for better DB matching.
+    e.g., 'node' -> 'node.js', 'js' -> 'javascript'.
+    """
+    mapping = {
+        "node": "node.js",
+        "nodejs": "node.js",
+        "js": "javascript",
+        "ts": "typescript",
+        "reactjs": "react",
+        "react.js": "react",
+        "vuejs": "vue",
+        "vue.js": "vue",
+        "next": "next.js",
+        "nextjs": "next.js",
+        "mongodb": "mongoDB",
+        "mongo": "mongoDB",
+        "postgres": "postgresql",
+        "pgsql": "postgresql",
+        "mysql": "mySQL",
+        "expressjs": "express",
+        "html5": "html",
+        "css3": "css",
+        "tailwind css": "tailwind",
+        "tailwindcss": "tailwind",
+        "graphql": "graphQL",
+        "redis": "redis"
+    }
+
+    normalized = []
+    for skill in skills:
+        cleaned = skill.strip().lower()
+        if not cleaned:
+            continue
+        # Apply mapping or title case default
+        mapped = mapping.get(cleaned)
+        if mapped:
+            normalized.append(mapped)
+        else:
+            normalized.append(cleaned.title())
+
+    # Return unique normalized skills
+    return list(dict.fromkeys(normalized))

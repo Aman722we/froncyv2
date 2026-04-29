@@ -84,6 +84,46 @@ async def settings_skill_toggle(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+async def settings_add_custom_skill_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prompt user to type custom skills from settings."""
+    query = update.callback_query
+    await query.answer()
+    
+    # We set a flag in user_data so the MessageHandler in bot.py knows to intercept the next text message
+    context.user_data["awaiting_settings_custom_skill"] = True
+    
+    await query.edit_message_text(
+        "✍️ *Type your custom skills separated by commas*\n"
+        "\\(e\\.g\\., Prisma, Redis, GraphQL\\)\n\n"
+        "Send your skills below:",
+        parse_mode="MarkdownV2"
+    )
+
+async def settings_custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Receive text input for custom skills in settings."""
+    text = update.message.text
+    raw_skills = [s.strip() for s in text.split(',') if s.strip()]
+    
+    from utils.helpers import normalize_skills
+    normalized = normalize_skills(raw_skills)
+    
+    selected = context.user_data.get("edit_skills", [])
+    for s in normalized:
+        if s.lower() not in [x.lower() for x in selected]:
+            selected.append(s)
+            
+    context.user_data["edit_skills"] = selected
+    
+    # Clear the flag
+    context.user_data.pop("awaiting_settings_custom_skill", None)
+    
+    await update.message.reply_text(
+        "🏷 *Edit Skills*\n\nSelect your skills, then tap Done\\.",
+        reply_markup=keyboards.skills_keyboard(selected),
+        parse_mode="MarkdownV2",
+    )
+
+
 async def settings_skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Save updated skills and return to settings menu."""
     query = update.callback_query

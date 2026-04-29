@@ -21,7 +21,7 @@ from utils import keyboards, messages
 from utils.admin_notify import notify_admin
 
 # Conversation states
-WELCOME, SKILLS, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME = range(7)
+WELCOME, SKILLS, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME = range(8)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -127,6 +127,43 @@ async def skill_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     context.user_data["selected_skills"] = selected
 
     await query.edit_message_text(
+        messages.skills_prompt(),
+        reply_markup=keyboards.skills_keyboard(selected),
+        parse_mode="MarkdownV2",
+    )
+    return SKILLS
+
+
+async def add_custom_skill_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Prompt user to type their custom skills."""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "✍️ *Type your custom skills separated by commas*\n"
+        "\\(e\\.g\\., Prisma, Redis, GraphQL\\)\n\n"
+        "Send your skills below:",
+        parse_mode="MarkdownV2"
+    )
+    return WAITING_CUSTOM_SKILL
+
+
+async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Receive and normalize custom typed skills, then return to skill grid."""
+    text = update.message.text
+    raw_skills = [s.strip() for s in text.split(',') if s.strip()]
+    
+    from utils.helpers import normalize_skills
+    normalized = normalize_skills(raw_skills)
+    
+    selected = context.user_data.get("selected_skills", [])
+    for s in normalized:
+        if s.lower() not in [x.lower() for x in selected]:
+            selected.append(s)
+            
+    context.user_data["selected_skills"] = selected
+    
+    await update.message.reply_text(
         messages.skills_prompt(),
         reply_markup=keyboards.skills_keyboard(selected),
         parse_mode="MarkdownV2",
@@ -354,6 +391,10 @@ def get_start_handler() -> ConversationHandler:
             SKILLS: [
                 CallbackQueryHandler(skill_toggle, pattern="^skill_"),
                 CallbackQueryHandler(skills_done, pattern="^skills_done$"),
+                CallbackQueryHandler(add_custom_skill_prompt, pattern="^add_custom_skill$"),
+            ],
+            WAITING_CUSTOM_SKILL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
             EXPERIENCE: [
                 CallbackQueryHandler(experience_callback, pattern="^exp_"),

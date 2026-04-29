@@ -20,6 +20,7 @@ from handlers.settings import (
     settings_alert_time, settings_alert_time_save,
     settings_change_batch, settings_batch_save,
     cancel_subscription_prompt, cancel_subscription_confirm,
+    settings_add_custom_skill_prompt, settings_custom_skill_receive,
 )
 from handlers.payments import upgrade_command, checkout_handler
 from handlers.tracker import (
@@ -92,7 +93,13 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ats_analyze_result))
+    async def text_router(update, context):
+        if context.user_data.get("awaiting_settings_custom_skill"):
+            await settings_custom_skill_receive(update, context)
+        else:
+            await ats_analyze_result(update, context)
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Tracker & Analytics
     app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^applied_"))
@@ -105,6 +112,7 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(status_command, pattern="^settings_status$"))
     app.add_handler(CallbackQueryHandler(settings_edit_skills, pattern="^settings_skills$"))
     app.add_handler(CallbackQueryHandler(settings_skill_toggle, pattern="^skill_"))
+    app.add_handler(CallbackQueryHandler(settings_add_custom_skill_prompt, pattern="^add_custom_skill$"))
     app.add_handler(CallbackQueryHandler(settings_skills_done, pattern="^skills_done$"))
     app.add_handler(CallbackQueryHandler(settings_change_experience, pattern="^settings_experience$"))
     app.add_handler(CallbackQueryHandler(settings_experience_save, pattern="^setexp_"))
