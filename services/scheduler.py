@@ -221,6 +221,16 @@ async def _send_weekly_digest():
         logger.error(f"❌ Send weekly digest failed: {e}")
 
 
+async def _cleanup_old_manual_jobs():
+    """Soft-delete manual jobs older than 30 days."""
+    try:
+        from db.manual_jobs import cleanup_old_manual_jobs
+        logger.info("🧹 Running manual jobs cleanup...")
+        deleted = await cleanup_old_manual_jobs(days=30)
+        logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs.")
+    except Exception as e:
+        logger.error(f"❌ Failed to cleanup old manual jobs: {e}")
+
 from datetime import datetime
 
 def start_scheduler():
@@ -249,6 +259,15 @@ def start_scheduler():
         CronTrigger(day_of_week="fri", hour=4, minute=30),
         id="weekly_digest",
         name="Send weekly application digest",
+        replace_existing=True,
+    )
+    
+    # Cleanup old manual jobs — Runs every day at midnight UTC
+    scheduler.add_job(
+        _cleanup_old_manual_jobs,
+        CronTrigger(hour=0, minute=0),
+        id="cleanup_manual_jobs",
+        name="Deactivate manual jobs older than 30 days",
         replace_existing=True,
     )
 

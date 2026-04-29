@@ -111,6 +111,25 @@ async def count_manual_jobs() -> int:
         return row["cnt"] if row else 0
 
 
+async def cleanup_old_manual_jobs(days: int = 30) -> int:
+    """Soft-delete manual jobs older than `days` days."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE manual_jobs 
+            SET is_active = FALSE 
+            WHERE is_active = TRUE AND posted_at < NOW() - INTERVAL '1 day' * $1
+            """,
+            days
+        )
+        # result is a string like "UPDATE 5"
+        try:
+            return int(result.split()[-1])
+        except:
+            return 0
+
+
 async def get_manual_job_by_id(job_id: int) -> dict | None:
     """Get a single manual job by ID."""
     pool = get_pool()
