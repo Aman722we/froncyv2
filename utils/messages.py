@@ -263,132 +263,169 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
     nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
     for i, job in enumerate(jobs[:5]):
-        num = nums[i] if i < len(nums) else f"{i+1}\\."
-        title = escape_md(job.get("title", "Untitled"))
-        company = escape_md(job.get("company") or "Unknown Company")
-        location = escape_md(job.get("location", "Remote") or "Remote")
-        salary = escape_md(job.get("salary", "")) if job.get("salary") else ""
-        raw_url = job.get("url", "") or ""
-        # Only use URL if it's a real http link — avoids broken MarkdownV2 from "Not available"
-        url = raw_url.strip() if raw_url.strip().startswith("http") else ""
-        skills_list = job.get("skills", [])
-        skills_text = escape_md(", ".join(s.title() for s in skills_list[:6])) if skills_list else ""
-
-        posted = ""
-        posted_raw = job.get("posted_at") or job.get("posted_time")
-        if posted_raw:
-            from datetime import datetime, timezone
-            try:
-                if isinstance(posted_raw, str):
-                    dt = datetime.fromisoformat(posted_raw.replace('Z', '+00:00'))
-                else:
-                    dt = posted_raw
-                diff = datetime.now(timezone.utc) - dt
-                hours = int(diff.total_seconds() / 3600)
-                if hours < 1:
-                    posted = "⏰ Just now"
-                elif hours < 24:
-                    posted = f"⏰ {hours}h ago"
-                else:
-                    posted = f"⏰ {hours // 24}d ago"
-            except Exception:
-                pass
-
-        if url:
-            safe_url = url.replace("(", "%28").replace(")", "%29")
-            line = f"{num}  [{title}]({safe_url}) — {company}\n"
-        else:
-            line = f"{num}  *{title}* — {company}\n"
-            
-        job_type = job.get("job_type", "full-time")
-        duration = job.get("duration")
-        
-        subtitle_parts = [f"📍 {location}"]
-        if job_type.lower() == "internship":
-            if duration:
-                subtitle_parts.append(escape_md(f"🎓 Internship ({duration})"))
-            else:
-                subtitle_parts.append("🎓 Internship")
-        elif job_type.lower() != "full-time":
-            subtitle_parts.append(escape_md(f"💼 {job_type.title()}"))
-            
-        if salary:
-            subtitle_parts.append(f"💰 {salary}")
-            
-        subtitle_joined = " \\| ".join(subtitle_parts)
-        line += f"     {subtitle_joined}\n"
-        if skills_text:
-            line += f"     🏷 {skills_text}\n"
-        
-        if user is not None:
-            job_exp = job.get("experience_required") or job.get("min_yoe") or 0
-            if job.get("is_manual"):
-                details = compute_manual_job_match(user, job)
-                batch_note = details.get("batch_note")
-            else:
-                user_skills = user.get("skills", [])
-                user_exp = str(user.get("experience_level", "0"))
-                details = compute_match_details(user_skills, skills_list, user_exp, job_exp)
-                batch_note = None
-            
-            score = details["score"]
-            matched_skills = details["matched"]
-            missing_skills = details["missing"]
-            exp_note = details.get("exp_note")
-            
-            if plan in ("pro", "trial"):
-                if score >= 70:
-                    match_text = f"🟢 High match \\({score}%\\)"
-                elif score >= 40:
-                    match_text = f"🟡 Medium match \\({score}%\\)"
-                else:
-                    match_text = f"🔴 Low match \\({score}%\\)"
-                
-                line += f"     {match_text}\n"
-                
-                # Skill breakdown without ❌
-                if matched_skills:
-                    m_text = ", ".join(s.title() for s in matched_skills[:4])
-                    line += f"     ✅ Match: {escape_md(m_text)}\n"
-                if missing_skills:
-                    ms_text = ", ".join(s.title() for s in missing_skills[:3])
-                    line += f"     ⚠️ Missing: {escape_md(ms_text)}\n"
-                
-                # Experience & Batch note
-                if exp_note:
-                    if "gap" in exp_note.lower():
-                        if "partial" in exp_note.lower():
-                            line += f"     💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
-                        else:
-                            line += f"     💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
-                    else:
-                        line += f"     ✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
-                        
-                batch_req = job.get("batch_required")
-                if batch_req and str(batch_req).lower() != "any":
-                    line += f"     🎓 Batch: {escape_md(str(batch_req))}\n"
-                    
-            elif plan == "free":
-                if score >= 70:
-                    line += "     🟢 High match  🔒\n"
-                    line += "     \\[Upgrade to see breakdown\\]\n"
-                elif score >= 40:
-                    line += "     🟡 Partial match  🔒\n"
-                    line += "     \\[See which skills you're missing → Pro\\]\n"
-                else:
-                    line += "     🔴 Low match  🔒\n"
-                    line += "     \\[See what you're missing → Pro\\]\n"
-
-        if posted:
-            line += f"     {escape_md(posted)}\n"
-        line += "\n"
-        lines.append(line)
+        # Keep 1, 2, 3, 4, 5 for the /jobs pagination display, though _render_job_line uses [1]
+        # But _render_job_line takes `i` and uses `[{i}]`. Let's just pass `i+1` so it prints [1], [2] etc.
+        lines.append(_render_job_line(i + 1, job, user, plan))
 
     footer = "━━━━━━━━━━━━━━━━━━\n"
     if plan == "free":
         footer += escape_md(f"Showing {showing} of {total_count} (Free plan)")
 
     return header + "".join(lines) + footer
+
+
+def _render_job_line(i: int, job: dict, user: dict, plan: str) -> str:
+    """Helper to render a single job for list/feed views."""
+    nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+    if i <= len(nums):
+        num = nums[i - 1]
+    else:
+        num = f"[{i}]"
+        
+    title = escape_md(job.get("title", "Untitled"))
+    company = escape_md(job.get("company") or "Unknown Company")
+    location = escape_md(job.get("location", "Remote") or "Remote")
+    salary = escape_md(job.get("salary", "")) if job.get("salary") else ""
+    raw_url = job.get("url", "") or ""
+    url = raw_url.strip() if raw_url.strip().startswith("http") else ""
+    skills_list = job.get("skills", [])
+    skills_text = escape_md(", ".join(s.title() for s in skills_list[:6])) if skills_list else ""
+
+    posted = ""
+    posted_raw = job.get("posted_at") or job.get("posted_time")
+    if posted_raw:
+        from datetime import datetime, timezone
+        try:
+            if isinstance(posted_raw, str):
+                dt = datetime.fromisoformat(posted_raw.replace('Z', '+00:00'))
+            else:
+                dt = posted_raw
+            diff = datetime.now(timezone.utc) - dt
+            hours = int(diff.total_seconds() / 3600)
+            if hours < 1:
+                posted = "⏰ Just now"
+            elif hours < 24:
+                posted = f"⏰ {hours}h ago"
+            else:
+                posted = f"⏰ {hours // 24}d ago"
+        except Exception:
+            pass
+
+    if url:
+        safe_url = url.replace("(", "%28").replace(")", "%29")
+        line = f"{num}  [{title}]({safe_url}) — {company}\n"
+    else:
+        line = f"{num}  *{title}* — {company}\n"
+        
+    job_type = job.get("job_type", "full-time")
+    duration = job.get("duration")
+    
+    subtitle_parts = [f"📍 {location}"]
+    if job_type.lower() == "internship":
+        if duration:
+            subtitle_parts.append(escape_md(f"🎓 Internship ({duration})"))
+        else:
+            subtitle_parts.append("🎓 Internship")
+    elif job_type.lower() != "full-time":
+        subtitle_parts.append(escape_md(f"💼 {job_type.title()}"))
+        
+    if salary:
+        subtitle_parts.append(f"💰 {salary}")
+        
+    subtitle_joined = " \\| ".join(subtitle_parts)
+    line += f"     {subtitle_joined}\n"
+    if skills_text:
+        line += f"     🏷 {skills_text}\n"
+    
+    if user is not None:
+        job_exp = job.get("experience_required") or job.get("min_yoe") or 0
+        details = compute_manual_job_match(user, job)
+        score = details["score"]
+        matched_skills = details["matched"]
+        missing_skills = details["missing"]
+        exp_note = details.get("exp_note")
+        
+        if plan in ("pro", "trial"):
+            if score >= 70:
+                match_text = f"🟢 High match \\({score}%\\)"
+            elif score >= 40:
+                match_text = f"🟡 Medium match \\({score}%\\)"
+            else:
+                match_text = f"🔴 Low match \\({score}%\\)"
+            
+            line += f"     {match_text}\n"
+            
+            if matched_skills:
+                m_text = ", ".join(s.title() for s in matched_skills[:4])
+                line += f"     ✅ Match: {escape_md(m_text)}\n"
+            if missing_skills:
+                ms_text = ", ".join(s.title() for s in missing_skills[:3])
+                line += f"     ⚠️ Missing: {escape_md(ms_text)}\n"
+            
+            if exp_note:
+                if "gap" in exp_note.lower():
+                    if "partial" in exp_note.lower():
+                        line += f"     💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
+                    else:
+                        line += f"     💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
+                else:
+                    line += f"     ✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
+                    
+            batch_req = job.get("batch_required")
+            if batch_req and str(batch_req).lower() != "any":
+                line += f"     🎓 Batch: {escape_md(str(batch_req))}\n"
+                
+        elif plan == "free":
+            if score >= 70:
+                line += "     🟢 High match  🔒\n"
+                line += "     \\[Upgrade to see breakdown\\]\n"
+            elif score >= 40:
+                line += "     🟡 Partial match  🔒\n"
+                line += "     \\[See which skills you're missing → Pro\\]\n"
+            else:
+                line += "     🔴 Low match  🔒\n"
+                line += "     \\[See what you're missing → Pro\\]\n"
+
+    if posted:
+        line += f"     {escape_md(posted)}\n"
+    line += "\n"
+    return line
+
+
+def format_daily_feed_message(jobs: list[dict], plan: str, total_count: int, user: dict) -> str:
+    """Format the 12-job curated daily alert feed."""
+    header = "📅 *Your Curated Daily Feed*\n"
+    header += "━━━━━━━━━━━━━━━━━━\n\n"
+    
+    top_picks = jobs[:5]
+    good_matches = jobs[5:12]
+    
+    lines = []
+    
+    if top_picks:
+        lines.append("🎯 *Top Picks*\n\n")
+        for i, job in enumerate(top_picks, 1):
+            lines.append(_render_job_line(i, job, user, plan))
+            
+    if good_matches:
+        lines.append("⚡ *Good Matches*\n\n")
+        for i, job in enumerate(good_matches, len(top_picks) + 1):
+            lines.append(_render_job_line(i, job, user, plan))
+
+    footer = "━━━━━━━━━━━━━━━━━━\n"
+    
+    remaining = max(0, total_count - 12)
+    if plan == "free":
+        footer += f"🔒 \\+{remaining} more jobs available today\n"
+        footer += "*Upgrade to unlock*\n"
+    else:
+        footer += f"✅ Showing top 12 matches\n"
+        if remaining > 0:
+            footer += f"\\+{remaining} more available \\(use /jobs command with filters to explore\\)\n"
+
+    return header + "".join(lines) + footer
+
+
 
 
 def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:

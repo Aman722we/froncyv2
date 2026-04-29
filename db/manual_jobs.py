@@ -74,6 +74,33 @@ async def get_manual_jobs(
         return result
 
 
+async def get_personalized_manual_jobs(user: dict, limit: int = 12) -> list[dict]:
+    """
+    Fetch all active manual jobs, score them based on user skills/experience/batch,
+    and return the top matching jobs.
+    """
+    # Fetch a reasonable number of recent jobs to score (e.g., top 100 recent)
+    all_jobs = await get_manual_jobs(limit=100, offset=0)
+    if not all_jobs:
+        return []
+
+    from utils.messages import compute_manual_job_match
+    
+    # Optional role filtering if the user has a filter active in the context
+    # But since this function signature only takes 'user' dict right now,
+    # we'll do the role filtering in handlers/jobs.py if needed, or we can add filters to this function signature later.
+    
+    for job in all_jobs:
+        details = compute_manual_job_match(user, job)
+        job["_match_score"] = details["score"]
+
+    # Sort by score (DESC), then by posted date (DESC)
+    all_jobs.sort(key=lambda j: (j["_match_score"], j["posted_at"]), reverse=True)
+    
+    return all_jobs[:limit]
+
+
+
 
 
 async def count_manual_jobs() -> int:

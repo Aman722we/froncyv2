@@ -62,9 +62,72 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    # Fetch only manually curated jobs with DB-level pagination
-    jobs = await get_manual_jobs(limit=display_count, offset=offset)
-    total_count = await count_manual_jobs()
+    from db.manual_jobs import get_personalized_manual_jobs
+    
+    # Get active filters
+    filters = context.user_data.get("job_filters", {})
+    
+    # Fetch top 100 personalized jobs to allow in-memory filtering
+    # user dict requires correct keys:
+    user_dict = {
+        "telegram_id": user.get("telegram_id"),
+        "skills": user.get("skills") or [],
+        "location_pref": user.get("location_pref") or "remote",
+        "plan": plan,
+        "experience_level": user.get("experience_level") or "0",
+        "batch_year": user.get("batch_year"),
+    }
+    all_jobs = await get_personalized_manual_jobs(user_dict, limit=100)
+    
+    # Apply filters
+    filtered_jobs = []
+    f_exp = filters.get("exp", "any")
+    f_time = filters.get("time", "any")
+    f_match = filters.get("match", "any")
+    f_role = filters.get("role", "any")
+    
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    
+    for job in all_jobs:
+        # 1. Experience Filter
+        job_exp = job.get("min_yoe", 0)
+        if f_exp != "any":
+            if f_exp == "0" and job_exp > 0: continue
+            elif f_exp == "1" and not (1 <= job_exp <= 2): continue
+            elif f_exp == "3" and job_exp < 3: continue
+            
+        # 2. Recency Filter
+        if f_time != "any":
+            posted = job.get("posted_at")
+            if posted:
+                if isinstance(posted, str):
+                    dt = datetime.fromisoformat(posted.replace('Z', '+00:00'))
+                else:
+                    dt = posted
+                diff_hours = (now - dt).total_seconds() / 3600
+                if f_time == "1d" and diff_hours > 24: continue
+                elif f_time == "3d" and diff_hours > 72: continue
+                
+        # 3. Match Level Filter
+        if f_match != "any":
+            score = job.get("_match_score", 0)
+            if f_match == "high" and score < 70: continue
+            elif f_match == "med" and score < 40: continue
+            
+        # 4. Role Filter
+        if f_role != "any":
+            title_lower = job.get("title", "").lower()
+            if f_role == "frontend" and "frontend" not in title_lower and "react" not in title_lower and "angular" not in title_lower and "vue" not in title_lower: continue
+            elif f_role == "backend" and "backend" not in title_lower and "node" not in title_lower and "python" not in title_lower and "java" not in title_lower: continue
+            elif f_role == "fullstack" and "fullstack" not in title_lower and "full stack" not in title_lower: continue
+            
+        filtered_jobs.append(job)
+        
+    total_count = len(filtered_jobs)
+    
+    # Paginate the filtered list
+    jobs = filtered_jobs[offset : offset + display_count]
 
     # For free users, cap the visible total so pagination stays within their limit
     if plan == "free":
@@ -196,3 +259,46 @@ async def save_manual_job_callback(update: Update, context: ContextTypes.DEFAULT
         await query.answer("✅ Job saved!")
     else:
         await query.answer("ℹ️ Job already saved.")
+
+
+async def jobs_filter_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the job filter menu."""
+    query = update.callback_query
+    await query.answer()
+    
+    filters = context.user_data.get("job_filters", {})
+    from utils import keyboards
+    from utils import messages
+    kb = keyboards.filter_menu_keyboard(filters)
+    
+    msg = "⚙️ *Filter Jobs*\nSelect your preferences below:"
+    await query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
+
+
+async def handle_filter_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Toggle a specific filter and refresh the menu."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    filters = context.user_data.get("job_filters", {})
+    
+    if data == "filter_clear":
+        context.user_data["job_filters"] = {}
+    elif data.startswith("filter_"):
+        parts = data.split("_")
+        if len(parts) >= 3:
+            category = parts[1]
+            val = "_".join(parts[2:])
+            filters[category] = val
+            context.user_data["job_filters"] = filters
+            
+    # Refresh menu
+    from utils import keyboards
+    from utils import messages
+    kb = keyboards.filter_menu_keyboard(context.user_data.get("job_filters", {}))
+    msg = "⚙️ *Filter Jobs*\nSelect your preferences below:"
+    try:
+        await query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
+    except Exception:
+        pass # message not modified

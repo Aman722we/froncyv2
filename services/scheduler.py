@@ -56,19 +56,16 @@ async def _send_daily_alerts():
             return
 
         sent_count = 0
+        from db.manual_jobs import get_personalized_manual_jobs, count_manual_jobs
+        
+        # Total count is needed for the "+X more jobs" footer
+        total_active_jobs = await count_manual_jobs()
+
         for user in users:
             try:
                 plan = user["plan"] or "free"
-                # Trial and pro get more jobs in digest
-                limit = 5 if plan == "free" else 20
-
-                # Fetch curated manual jobs for this digest
-                from db.manual_jobs import get_manual_jobs
-                jobs = await get_manual_jobs(limit=limit)
-                if not jobs:
-                    continue
-
-                # Build a proper user dict that format_job_list_message expects
+                
+                # Build a proper user dict that compute_manual_job_match expects
                 user_dict = {
                     "telegram_id": user["telegram_id"],
                     "skills": user["skills"] or [],
@@ -78,11 +75,17 @@ async def _send_daily_alerts():
                     "batch_year": user["batch_year"],
                 }
 
-                # Format alert message
-                from utils.messages import format_job_list_message
+                # Everyone gets 12 personalized jobs now
+                jobs = await get_personalized_manual_jobs(user_dict, limit=12)
+                if not jobs:
+                    continue
+
+                # Format alert message with the new Daily Feed UI
+                from utils.messages import format_daily_feed_message
                 from utils import keyboards
-                msg = format_job_list_message(jobs, plan, len(jobs), user=user_dict)
-                kb = keyboards.job_list_keyboard(jobs, plan, total_count=len(jobs), page=1)
+                
+                msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
+                kb = keyboards.daily_feed_keyboard(jobs, plan)
 
                 await _bot_app.bot.send_message(
                     chat_id=user["telegram_id"],

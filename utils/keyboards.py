@@ -158,12 +158,11 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
 # ──────────────────────────────────────────────
 
 def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: int = 1) -> InlineKeyboardMarkup:
-    """Apply + Save buttons for each job in the listing, with pagination."""
+    """Apply buttons for each job in the listing, with pagination and filters."""
     buttons = []
 
     # Apply buttons row
     apply_row = []
-    save_row = []
     
     # Render jobs 1 through 5 relative to their spot on the page
     for i, job in enumerate(jobs[:5], 1):
@@ -175,26 +174,13 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
         apply_row.append(
             InlineKeyboardButton(f"{num} Apply", callback_data=f"{prefix}_view_{job['id']}")
         )
-        
-        if is_manual:
-            save_row.append(
-                InlineKeyboardButton(f"💾 Save #{i}", callback_data=f"manual_job_save_{job['id']}")
-            )
-        else:
-            save_row.append(
-                InlineKeyboardButton(f"💾 Save #{i}", callback_data=f"job_save_{job['id']}")
-            )
             
         if len(apply_row) == 3:
             buttons.append(apply_row)
-            buttons.append(save_row)
             apply_row = []
-            save_row = []
 
     if apply_row:
         buttons.append(apply_row)
-    if save_row:
-        buttons.append(save_row)
 
     # Pagination controls
     nav_row = []
@@ -217,10 +203,79 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
         buttons.append(nav_row)
 
     buttons.append([
+        InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
+        InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu"),
+    ])
+
+    return InlineKeyboardMarkup(buttons)
+
+
+def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:
+    """12-job grid for the daily curated feed."""
+    buttons = []
+    apply_row = []
+    
+    for i, job in enumerate(jobs[:12], 1):
+        is_manual = job.get("is_manual", False)
+        prefix = "manual" if is_manual else "job"
+        
+        apply_row.append(
+            InlineKeyboardButton(f"[{i}] Apply", callback_data=f"{prefix}_view_{job['id']}")
+        )
+            
+        if len(apply_row) == 3:
+            buttons.append(apply_row)
+            apply_row = []
+
+    if apply_row:
+        buttons.append(apply_row)
+
+    buttons.append([
         InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")
     ])
 
     return InlineKeyboardMarkup(buttons)
+
+
+def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
+    """Keyboard for selecting job filters."""
+    f_exp = filters.get("exp", "any")
+    f_time = filters.get("time", "any")
+    f_match = filters.get("match", "any")
+    f_role = filters.get("role", "any")
+
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("── Experience ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ Fresher (0)" if f_exp == "0" else "Fresher (0)", callback_data="filter_exp_0"),
+            InlineKeyboardButton("✅ 1-2 Yrs" if f_exp == "1" else "1-2 Yrs", callback_data="filter_exp_1"),
+            InlineKeyboardButton("✅ 3+ Yrs" if f_exp == "3" else "3+ Yrs", callback_data="filter_exp_3"),
+            InlineKeyboardButton("✅ Any" if f_exp == "any" else "Any", callback_data="filter_exp_any"),
+        ],
+        [InlineKeyboardButton("── Recency ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ <24h" if f_time == "1d" else "<24h", callback_data="filter_time_1d"),
+            InlineKeyboardButton("✅ <3 Days" if f_time == "3d" else "<3 Days", callback_data="filter_time_3d"),
+            InlineKeyboardButton("✅ Any" if f_time == "any" else "Any", callback_data="filter_time_any"),
+        ],
+        [InlineKeyboardButton("── Match Level ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ High (>70%)" if f_match == "high" else "High (>70%)", callback_data="filter_match_high"),
+            InlineKeyboardButton("✅ Medium (>40%)" if f_match == "med" else "Medium (>40%)", callback_data="filter_match_med"),
+            InlineKeyboardButton("✅ Any" if f_match == "any" else "Any", callback_data="filter_match_any"),
+        ],
+        [InlineKeyboardButton("── Role ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ Frontend" if f_role == "frontend" else "Frontend", callback_data="filter_role_frontend"),
+            InlineKeyboardButton("✅ Backend" if f_role == "backend" else "Backend", callback_data="filter_role_backend"),
+            InlineKeyboardButton("✅ Fullstack" if f_role == "fullstack" else "Fullstack", callback_data="filter_role_fullstack"),
+            InlineKeyboardButton("✅ Any" if f_role == "any" else "Any", callback_data="filter_role_any"),
+        ],
+        [
+            InlineKeyboardButton("🗑 Clear", callback_data="filter_clear"),
+            InlineKeyboardButton("▶️ Apply Filters", callback_data="menu_jobs_filtered")
+        ]
+    ])
 
 
 def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False) -> InlineKeyboardMarkup:
