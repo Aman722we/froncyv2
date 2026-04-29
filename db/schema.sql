@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at       TIMESTAMPTZ DEFAULT NOW(),
     razorpay_customer_id     TEXT,
     razorpay_subscription_id TEXT,
-    subscription_status      TEXT
+    subscription_status      TEXT,
+    is_deleted               BOOLEAN DEFAULT FALSE,
+    trial_used               BOOLEAN DEFAULT FALSE
 );
 
 -- Pricing Configuration

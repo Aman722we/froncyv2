@@ -62,6 +62,7 @@ async def start_trial(telegram_id: int, db_pool):
     await db_pool.execute("""
         UPDATE users
         SET is_trial = TRUE,
+            trial_used = TRUE,
             trial_started_at = $2,
             trial_expires_at = $3,
             plan = 'trial'

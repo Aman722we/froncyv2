@@ -29,6 +29,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     db_user = await get_or_create_user(user.id, user.username, user.first_name)
 
+    if db_user.get("is_deleted"):
+        from db.users import restore_user
+        await restore_user(user.id)
+        db_user = await get_user(user.id)  # Refresh db_user
+        
+        await update.message.reply_text(
+            "🎉 *Welcome back\\! Your previous data has been restored\\.*",
+            parse_mode="MarkdownV2"
+        )
+
     if db_user.get("is_onboarded"):
         # Returning user → main menu
         plan = db_user.get("plan", "free")

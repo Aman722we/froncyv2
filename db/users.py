@@ -258,17 +258,29 @@ async def reset_monthly_counters() -> int:
 
 
 
-async def delete_user(telegram_id: int) -> bool:
-    """Permanently delete user and all associated data (GDPR)."""
+async def soft_delete_user(telegram_id: int) -> bool:
+    """Soft delete user account to prevent trial abuse."""
     pool = get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
-            "DELETE FROM users WHERE telegram_id = $1", telegram_id
+            "UPDATE users SET is_deleted = TRUE WHERE telegram_id = $1", telegram_id
         )
-        deleted = result == "DELETE 1"
+        deleted = result == "UPDATE 1"
         if deleted:
-            logger.info(f"User {telegram_id} permanently deleted (GDPR)")
+            logger.info(f"User {telegram_id} soft deleted")
         return deleted
+
+async def restore_user(telegram_id: int) -> bool:
+    """Restore a soft-deleted user account."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE users SET is_deleted = FALSE WHERE telegram_id = $1", telegram_id
+        )
+        restored = result == "UPDATE 1"
+        if restored:
+            logger.info(f"User {telegram_id} account restored")
+        return restored
 
 
 async def check_ats_limit(telegram_id: int, plan: str) -> tuple[bool, int]:

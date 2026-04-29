@@ -402,11 +402,12 @@ async def delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_T
     
     user_id = update.effective_user.id
     from services.resume_parser import delete_resume_file
+    from db.users import soft_delete_user
     
-    success = await delete_user(user_id)
+    success = await soft_delete_user(user_id)
     if success:
-        delete_resume_file(user_id)
-        logger.info(f"User {user_id} deleted their account.")
+        # We don't delete the resume file anymore since it's a soft delete and we want to recover it later
+        logger.info(f"User {user_id} soft deleted their account.")
         await query.edit_message_text(messages.account_deleted(), parse_mode="MarkdownV2")
     else:
         await query.edit_message_text("❌ Something went wrong\\. Please try again\\.", parse_mode="MarkdownV2")
