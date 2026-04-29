@@ -135,7 +135,10 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not jobs:
         msg = messages.no_jobs_found()
-        back_kb = keyboards.InlineKeyboardMarkup([[keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+        back_kb = keyboards.InlineKeyboardMarkup([[
+            keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
+            keyboards.InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
+        ]])
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
