@@ -40,6 +40,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "plan": plan,
         "experience_level": user.get("experience_level", "0"),
         "batch_year": user.get("batch_year"),
+        "role_pref": user.get("role_pref", "fullstack"),
     }
     
     jobs = await get_personalized_manual_jobs(user_dict, limit=12)
@@ -120,6 +121,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "plan": plan,
         "experience_level": user.get("experience_level") or "0",
         "batch_year": user.get("batch_year"),
+        "role_pref": user.get("role_pref") or "fullstack",
     }
     all_jobs = await get_personalized_manual_jobs(user_dict, limit=100)
     

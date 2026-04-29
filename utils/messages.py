@@ -188,11 +188,16 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
     }
 
 def compute_manual_job_match(user: dict, job: dict) -> dict:
-    """Compute match score for manual jobs: 70% Skills, 15% YOE, 15% Batch."""
-    # ── Skills (70%) ──
+    """
+    Compute match score for manual jobs using 5 signals:
+      45% Skills | 20% YOE | 15% Role | 10% Salary Disclosed | 10% Recency
+    """
+    from datetime import datetime, timezone
+
+    # ── Skills (45%) ──
     user_skills = user.get("skills", [])
     job_skills = job.get("skills", [])
-    
+
     if not job_skills:
         skill_pct = 50
         matched_disp, missing_disp = [], []
@@ -202,16 +207,16 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         matched = list(user_set.intersection(job_set))
         missing = list(job_set.difference(user_set))
         skill_pct = int((len(matched) / len(job_set)) * 100) if job_set else 50
-        
+
         original_map = {s.lower(): s for s in job_skills}
         matched_disp = [original_map.get(m, m) for m in matched]
         missing_disp = [original_map.get(m, m) for m in missing]
 
-    # ── Experience (15%) ──
+    # ── Experience (20%) ──
     user_exp = str(user.get("experience_level", "0"))
-    u_map = {"0": 0, "1": 1, "2": 2, "3_5": 4, "5_plus": 6, "5+": 6}
+    u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
     u_exp_years = u_map.get(user_exp, 0)
-    
+
     min_yoe = job.get("min_yoe") or job.get("experience_required") or 0
     if u_exp_years >= min_yoe:
         exp_pct = 100
@@ -223,10 +228,66 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ── Batch Year (15%) ──
+    # ── Role Preference (15%) ──
+    role_pref = (user.get("role_pref") or "fullstack").lower()
+    job_title = (job.get("title") or "").lower()
+    job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
+
+    ROLE_KEYWORDS = {
+        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"],
+        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"],
+        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"],
+    }
+    role_words = ROLE_KEYWORDS.get(role_pref, [])
+    # Fullstack users have a broader match (match either frontend or backend)
+    if role_pref == "fullstack":
+        role_words = ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]
+
+    title_match = any(kw in job_title for kw in role_words)
+    skills_match = any(kw in s for kw in role_words for s in job_skills_lower)
+
+    if title_match:
+        role_pct = 100
+    elif skills_match:
+        role_pct = 70
+    else:
+        role_pct = 20  # Not 0 — still show the job, just deprioritise
+
+    # ── Salary Disclosed (10%) ──
+    salary = job.get("salary")
+    has_salary = bool(salary and str(salary).strip() and str(salary).strip().lower() not in ["null", "none", "not disclosed", "n/a", "-"])
+    salary_pct = 100 if has_salary else 0
+
+    # ── Recency (10%) — linear decay over 30 days ──
+    posted_at = job.get("posted_at")
+    if posted_at:
+        if isinstance(posted_at, str):
+            try:
+                from dateutil.parser import parse as parse_date
+                posted_at = parse_date(posted_at)
+            except Exception:
+                posted_at = None
+
+        if posted_at:
+            if posted_at.tzinfo is None:
+                posted_at = posted_at.replace(tzinfo=timezone.utc)
+            age_days = (datetime.now(timezone.utc) - posted_at).days
+            if age_days <= 7:
+                recency_pct = 100
+            elif age_days <= 14:
+                recency_pct = 70
+            elif age_days <= 30:
+                recency_pct = max(0, 100 - int(age_days * 3))
+            else:
+                recency_pct = 0
+        else:
+            recency_pct = 50
+    else:
+        recency_pct = 50
+
+    # ── Batch Year (tiebreaker / bonus, not weighted) ──
     user_batch = user.get("batch_year")
     eligible_batches = job.get("eligible_batches", [])
-    
     if not eligible_batches:
         batch_pct = 100
         batch_note = "✅ Any batch eligible"
@@ -234,23 +295,34 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         batch_pct = 100
         batch_note = f"✅ Batch match ({user_batch})"
     else:
-        batch_pct = 50  # Lower score but not 0
+        batch_pct = 50
         batch_str = "/".join(str(b) for b in eligible_batches)
         batch_note = f"⚠️ Batch mismatch: Job requires {batch_str}, your batch is {user_batch or 'unknown'}"
 
-    total_score = int((skill_pct * 0.70) + (exp_pct * 0.15) + (batch_pct * 0.15))
+    # ── Final weighted score ──
+    total_score = int(
+        (skill_pct * 0.45) +
+        (exp_pct   * 0.20) +
+        (role_pct  * 0.15) +
+        (salary_pct * 0.10) +
+        (recency_pct * 0.10)
+    )
     total_score = max(0, min(100, total_score))
 
     return {
         "score": total_score,
         "skill_pct": skill_pct,
         "exp_pct": exp_pct,
+        "role_pct": role_pct,
+        "salary_pct": salary_pct,
+        "recency_pct": recency_pct,
         "batch_pct": batch_pct,
         "matched": matched_disp,
         "missing": missing_disp,
         "exp_note": exp_note,
         "batch_note": batch_note,
         "job_exp": min_yoe,
+        "has_salary": has_salary,
     }
 
 def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user: dict = None) -> str:

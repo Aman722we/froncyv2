@@ -44,9 +44,10 @@ async def _send_daily_alerts():
             users = await conn.fetch(
                 """
                 SELECT telegram_id, skills, location_pref, plan,
-                       experience_level, batch_year
+                       experience_level, batch_year, role_pref
                 FROM users
                 WHERE is_onboarded = TRUE AND alert_time = $1
+                AND (is_deleted IS NULL OR is_deleted = FALSE)
                 """,
                 current_time_str
             )
@@ -73,6 +74,7 @@ async def _send_daily_alerts():
                     "plan": plan,
                     "experience_level": user["experience_level"] or "0",
                     "batch_year": user["batch_year"],
+                    "role_pref": user["role_pref"] or "fullstack",
                 }
 
                 # Everyone gets 12 personalized jobs now
