@@ -14,11 +14,11 @@ def welcome_message(first_name: str = "there") -> str:
     return (
         f"👋 Hey {safe_name}\\!\n\n"
         "Tired of sending 50 applications and hearing nothing back?\n\n"
-        "Applixy finds the RIGHT web jobs for your skills, "
+        "Applixy finds the RIGHT web dev jobs for your skills, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
         "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
-        "Let's get you interviews — not just applications\\. 🎯\n\n"
+        "Let's get you interviews, not just applications\\. 🎯\n\n"
         "What best describes you?"
     )
 
@@ -744,7 +744,7 @@ def upgrade_regular_message(pricing: dict) -> str:
     return (
         f"💎 *Applixy Pro — ₹{price}/month*\n\n"
         "*What you unlock:*\n"
-        "✅ Unlimited web jobs daily\n"
+        "✅ Unlimited web dev jobs daily\n"
         "✅ Full match scores on every listing\n"
         "✅ 10 tailored cover letters/day\n"
         "✅ 5 ATS checks/day\n"
@@ -759,7 +759,7 @@ def upgrade_plans(current_plan: str) -> str:
     return (
         "💎 *Upgrade to Pro*\n\n"
         "*What you unlock:*\n"
-        "✅ Unlimited web jobs daily\n"
+        "✅ Unlimited web dev jobs daily\n"
         "✅ Full match scores on every listing\n"
         "✅ 10 tailored cover letters/day\n"
         "✅ 5 ATS checks/day\n"
