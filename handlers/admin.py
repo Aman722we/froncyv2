@@ -2,6 +2,7 @@
 Admin handlers for ApplixyBot.
 Includes the /addjob command to manually curate jobs.
 """
+import telegram
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ContextTypes,
@@ -139,6 +140,10 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return ConversationHandler.END
 
+    except telegram.error.TimedOut:
+        logger.warning("Telegram timeout while replying to /addjob, but job might be saved.")
+        # We don't try to reply again to avoid another timeout
+        return WAITING_FOR_JOB_TEXT
     except Exception as e:
         logger.error(f"Error parsing manual job: {e}")
         await update.message.reply_text(f"⚠️ Error parsing job: {str(e)}")
