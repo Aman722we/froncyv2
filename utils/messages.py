@@ -190,11 +190,12 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
 def compute_manual_job_match(user: dict, job: dict) -> dict:
     """
     Compute match score for manual jobs using 5 signals:
-      45% Skills | 20% YOE | 15% Role | 10% Salary Disclosed | 10% Recency
+      40% Skills | 25% YOE | 15% Recency | 10% Role | 10% Salary Quality
     """
     from datetime import datetime, timezone
+    import re
 
-    # ── Skills (45%) ──
+    # ── Skills (40%) ──
     user_skills = user.get("skills", [])
     job_skills = job.get("skills", [])
 
@@ -212,7 +213,7 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         matched_disp = [original_map.get(m, m) for m in matched]
         missing_disp = [original_map.get(m, m) for m in missing]
 
-    # ── Experience (20%) ──
+    # ── Experience (25%) ──
     user_exp = str(user.get("experience_level", "0"))
     u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
     u_exp_years = u_map.get(user_exp, 0)
@@ -228,7 +229,7 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ── Role Preference (15%) ──
+    # ── Role Preference (10%) ──
     role_pref = (user.get("role_pref") or "fullstack").lower()
     job_title = (job.get("title") or "").lower()
     job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
@@ -239,7 +240,6 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"],
     }
     role_words = ROLE_KEYWORDS.get(role_pref, [])
-    # Fullstack users have a broader match (match either frontend or backend)
     if role_pref == "fullstack":
         role_words = ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]
 
@@ -251,14 +251,34 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     elif skills_match:
         role_pct = 70
     else:
-        role_pct = 20  # Not 0 — still show the job, just deprioritise
+        role_pct = 20
 
-    # ── Salary Disclosed (10%) ──
+    # ── Salary Quality (10%) ──
     salary = job.get("salary")
     has_salary = bool(salary and str(salary).strip() and str(salary).strip().lower() not in ["null", "none", "not disclosed", "n/a", "-"])
-    salary_pct = 100 if has_salary else 0
+    
+    if not has_salary:
+        salary_pct = -20  # Penalty for not disclosing salary
+    else:
+        s_lower = str(salary).lower()
+        if any(curr in s_lower for curr in ["$", "usd", "€", "£", "k"]):
+            salary_pct = 100
+        elif "lpa" in s_lower:
+            nums = re.findall(r'\d+', s_lower)
+            if nums:
+                max_val = max(int(n) for n in nums)
+                if max_val >= 15:
+                    salary_pct = 100
+                elif max_val >= 8:
+                    salary_pct = 70
+                else:
+                    salary_pct = 40
+            else:
+                salary_pct = 50
+        else:
+            salary_pct = 50
 
-    # ── Recency (10%) — linear decay over 30 days ──
+    # ── Recency (15%) ──
     posted_at = job.get("posted_at")
     if posted_at:
         if isinstance(posted_at, str):
@@ -272,12 +292,14 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
             if posted_at.tzinfo is None:
                 posted_at = posted_at.replace(tzinfo=timezone.utc)
             age_days = (datetime.now(timezone.utc) - posted_at).days
-            if age_days <= 7:
+            if age_days <= 3:
                 recency_pct = 100
+            elif age_days <= 7:
+                recency_pct = 80
             elif age_days <= 14:
-                recency_pct = 70
+                recency_pct = 50
             elif age_days <= 30:
-                recency_pct = max(0, 100 - int(age_days * 3))
+                recency_pct = max(0, 50 - int((age_days - 14) * 3))
             else:
                 recency_pct = 0
         else:
@@ -301,11 +323,11 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
 
     # ── Final weighted score ──
     total_score = int(
-        (skill_pct * 0.45) +
-        (exp_pct   * 0.20) +
-        (role_pct  * 0.15) +
-        (salary_pct * 0.10) +
-        (recency_pct * 0.10)
+        (skill_pct * 0.40) +
+        (exp_pct   * 0.25) +
+        (recency_pct * 0.15) +
+        (role_pct  * 0.10) +
+        (salary_pct * 0.10)
     )
     total_score = max(0, min(100, total_score))
 
