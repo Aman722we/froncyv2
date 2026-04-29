@@ -114,9 +114,9 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         
         remaining = limit - (cover_letters_today + 1)
         if plan == "free":
-            footer = f"_({remaining} cover letters left today)_"
+            footer = f"_\\({remaining} cover letters left today\\)_"
         else:
-            footer = f"_({remaining} of 10 remaining today)_"
+            footer = f"_\\({remaining} of 10 remaining today\\)_"
             
     except Exception as e:
         logger.error(f"CL generation error: {e}")
