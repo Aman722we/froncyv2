@@ -17,6 +17,7 @@ from handlers.settings import (
     settings_edit_skills, settings_skill_toggle, settings_skills_done,
     settings_change_experience, settings_experience_save,
     settings_change_location, settings_location_save,
+    settings_edit_role, settings_role_save,
     settings_alert_time, settings_alert_time_save,
     settings_change_batch, settings_batch_save,
     cancel_subscription_prompt, cancel_subscription_confirm,
@@ -120,6 +121,8 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(settings_experience_save, pattern="^setexp_"))
     app.add_handler(CallbackQueryHandler(settings_change_location, pattern="^settings_location$"))
     app.add_handler(CallbackQueryHandler(settings_location_save, pattern="^setloc_"))
+    app.add_handler(CallbackQueryHandler(settings_edit_role, pattern="^settings_role$"))
+    app.add_handler(CallbackQueryHandler(settings_role_save, pattern="^setrole_"))
     app.add_handler(CallbackQueryHandler(settings_alert_time, pattern="^settings_alert_time$"))
     app.add_handler(CallbackQueryHandler(settings_alert_time_save, pattern="^setalert_"))
     app.add_handler(CallbackQueryHandler(settings_change_batch, pattern="^settings_batch$"))

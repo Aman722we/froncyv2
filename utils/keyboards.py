@@ -72,10 +72,7 @@ def experience_keyboard(prefix: str = "exp_") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🚀 2 Years", callback_data=f"{prefix}2"),
-            InlineKeyboardButton("⚡ 3-5 Years", callback_data=f"{prefix}3_5"),
-        ],
-        [
-            InlineKeyboardButton("🔥 5+ Years", callback_data=f"{prefix}5_plus"),
+            InlineKeyboardButton("🔥 2+ Years", callback_data=f"{prefix}2_plus"),
         ]
     ])
 
@@ -84,9 +81,25 @@ def location_keyboard() -> InlineKeyboardMarkup:
     """Step 3: Location preference."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🌏 Remote Only", callback_data="loc_remote"),
-            InlineKeyboardButton("🇮🇳 India Only", callback_data="loc_india"),
-            InlineKeyboardButton("🌐 Both", callback_data="loc_both"),
+            InlineKeyboardButton("🏠 Remote Only", callback_data="loc_remote"),
+            InlineKeyboardButton("🏢 Onsite Only", callback_data="loc_onsite"),
+        ],
+        [
+            InlineKeyboardButton("🌍 Hybrid Only", callback_data="loc_hybrid"),
+            InlineKeyboardButton("🔄 All", callback_data="loc_all"),
+        ]
+    ])
+
+
+def role_keyboard(prefix: str = "role_") -> InlineKeyboardMarkup:
+    """Role preference selection."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💻 Frontend", callback_data=f"{prefix}frontend"),
+            InlineKeyboardButton("⚙️ Backend", callback_data=f"{prefix}backend"),
+        ],
+        [
+            InlineKeyboardButton("🚀 Fullstack", callback_data=f"{prefix}fullstack"),
         ]
     ])
 
@@ -421,14 +434,17 @@ def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton("🏷 Edit Skills", callback_data="settings_skills"),
+            InlineKeyboardButton("💼 Edit Role", callback_data="settings_role"),
+        ],
+        [
             InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
-        ],
-        [
             InlineKeyboardButton("🎓 Edit Batch Year", callback_data="settings_batch"),
-            InlineKeyboardButton("📍 Change Location", callback_data="settings_location"),
         ],
         [
+            InlineKeyboardButton("📍 Change Location", callback_data="settings_location"),
             InlineKeyboardButton("⏰ Alert Time", callback_data="settings_alert_time"),
+        ],
+        [
             InlineKeyboardButton("📊 My Status", callback_data="settings_status"),
         ],
         [

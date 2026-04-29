@@ -21,7 +21,7 @@ from utils import keyboards, messages
 from utils.admin_notify import notify_admin
 
 # Conversation states
-WELCOME, SKILLS, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME = range(8)
+WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME = range(9)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -193,6 +193,24 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     await update_user_profile(user_id, skills=[s.lower() for s in selected])
 
     await query.edit_message_text(
+        "💼 What is your primary role preference?",
+        reply_markup=keyboards.role_keyboard(),
+        parse_mode="MarkdownV2",
+    )
+    return ROLE
+
+async def role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save role preference and prompt for experience."""
+    query = update.callback_query
+    await query.answer()
+
+    role_val = query.data.replace("role_", "")
+    
+    user_id = update.effective_user.id
+    await update_user_profile(user_id, role_pref=role_val)
+    context.user_data["role_pref"] = role_val
+
+    await query.edit_message_text(
         "🧠 How many years of professional experience do you have?",
         reply_markup=keyboards.experience_keyboard(),
         parse_mode="MarkdownV2",
@@ -225,7 +243,7 @@ async def location_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
 
-    loc_map = {"loc_remote": "remote", "loc_india": "india", "loc_both": "both"}
+    loc_map = {"loc_remote": "remote", "loc_onsite": "onsite", "loc_hybrid": "hybrid", "loc_all": "all"}
     location = loc_map.get(query.data, "remote")
 
     user_id = update.effective_user.id
@@ -405,6 +423,9 @@ def get_start_handler() -> ConversationHandler:
             ],
             WAITING_CUSTOM_SKILL: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
+            ],
+            ROLE: [
+                CallbackQueryHandler(role_callback, pattern="^role_"),
             ],
             EXPERIENCE: [
                 CallbackQueryHandler(experience_callback, pattern="^exp_"),

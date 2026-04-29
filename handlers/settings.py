@@ -231,9 +231,12 @@ async def settings_change_location(update: Update, context: ContextTypes.DEFAULT
 
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🌏 Remote Only", callback_data="setloc_remote"),
-            InlineKeyboardButton("🇮🇳 India Only", callback_data="setloc_india"),
-            InlineKeyboardButton("🌐 Both", callback_data="setloc_both"),
+            InlineKeyboardButton("🏠 Remote Only", callback_data="setloc_remote"),
+            InlineKeyboardButton("🏢 Onsite Only", callback_data="setloc_onsite"),
+        ],
+        [
+            InlineKeyboardButton("🌍 Hybrid Only", callback_data="setloc_hybrid"),
+            InlineKeyboardButton("🔄 All", callback_data="setloc_all"),
         ],
         [InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")],
     ])
@@ -250,18 +253,58 @@ async def settings_location_save(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
 
-    loc_map = {"setloc_remote": "remote", "setloc_india": "india", "setloc_both": "both"}
+    loc_map = {"setloc_remote": "remote", "setloc_onsite": "onsite", "setloc_hybrid": "hybrid", "setloc_all": "all"}
     location = loc_map.get(query.data, "remote")
 
     user_id = update.effective_user.id
     await update_user_profile(user_id, location_pref=location)
 
-    loc_display = {"remote": "🌏 Remote", "india": "🇮🇳 India", "both": "🌐 Both"}
+    loc_display = {"remote": "🏠 Remote", "onsite": "🏢 Onsite", "hybrid": "🌍 Hybrid", "all": "🔄 All"}
     await query.edit_message_text(
         f"✅ Location updated: {escape_md(loc_display.get(location, location))}\n",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
         parse_mode="MarkdownV2",
     )
+
+
+# ──────────────────────────────────────────────
+# Edit Role from Settings
+# ──────────────────────────────────────────────
+
+async def settings_edit_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show role selection."""
+    query = update.callback_query
+    await query.answer()
+
+    kb = keyboards.role_keyboard(prefix="setrole_")
+    # Append back button
+    buttons = list(kb.inline_keyboard)
+    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+
+    await query.edit_message_text(
+        "💼 *Edit Role Preference*\n\nWhat is your primary role preference?",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="MarkdownV2",
+    )
+
+
+async def settings_role_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save updated role preference."""
+    query = update.callback_query
+    await query.answer()
+
+    role_val = query.data.replace("setrole_", "")
+
+    user_id = update.effective_user.id
+    await update_user_profile(user_id, role_pref=role_val)
+
+    await query.edit_message_text(
+        f"✅ Role updated to: *{escape_md(role_val.title())}*\n",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        parse_mode="MarkdownV2",
+    )
+
+
 
 
 # ──────────────────────────────────────────────

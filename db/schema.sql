@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
     razorpay_subscription_id TEXT,
     subscription_status      TEXT,
     is_deleted               BOOLEAN DEFAULT FALSE,
-    trial_used               BOOLEAN DEFAULT FALSE
+    trial_used               BOOLEAN DEFAULT FALSE,
+    role_pref                VARCHAR(50) DEFAULT 'fullstack'
 );
 
 -- Pricing Configuration
