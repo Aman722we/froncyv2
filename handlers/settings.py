@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from loguru import logger
 
-from db.users import get_user, delete_user, update_user_profile
+from db.users import get_user, update_user_profile
 from db.jobs import get_saved_jobs
 from utils import keyboards, messages
 from utils.helpers import escape_md
