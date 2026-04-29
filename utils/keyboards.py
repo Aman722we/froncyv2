@@ -166,7 +166,7 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
     save_row = []
     
     # Render jobs 1 through 5 relative to their spot on the page
-    for i, job in enumerate(jobs, 1):
+    for i, job in enumerate(jobs[:5], 1):
         num = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"][i - 1]
         
         is_manual = job.get("is_manual", False)
