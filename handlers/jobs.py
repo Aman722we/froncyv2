@@ -1,17 +1,61 @@
 """
 Jobs handlers — view jobs list, job details, and save/unsave jobs.
 """
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from loguru import logger
 
 from db.users import get_user, increment_jobs_seen
 from db.jobs import get_job_by_id, save_job, unsave_job, save_manual_job, unsave_manual_job
-from db.manual_jobs import get_manual_jobs, get_manual_job_by_id, count_manual_jobs
+from db.manual_jobs import get_manual_jobs, get_manual_job_by_id, count_manual_jobs, get_personalized_manual_jobs
 from db.connection import get_pool
 from services.reset_service import check_and_reset_daily
 from utils.limits import get_limit
 from utils import keyboards, messages
+
+
+async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /daily_feed command or 'menu_daily' callback."""
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+    
+    if not user:
+        msg = "Please /start first."
+        if update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(msg)
+        else:
+            await update.message.reply_text(msg)
+        return
+
+    if update.callback_query:
+        await update.callback_query.answer()
+
+    plan = user.get("plan", "free")
+    
+    user_dict = {
+        "telegram_id": user_id,
+        "skills": user.get("skills", []),
+        "location_pref": user.get("location_pref", "remote"),
+        "plan": plan,
+        "experience_level": user.get("experience_level", "0"),
+        "batch_year": user.get("batch_year"),
+    }
+    
+    jobs = await get_personalized_manual_jobs(user_dict, limit=12)
+    total_active_jobs = await count_manual_jobs()
+    
+    if not jobs:
+        msg = messages.error_no_jobs()
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+    else:
+        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
+        kb = keyboards.daily_feed_keyboard(jobs, plan)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+    else:
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
 
 async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -165,12 +209,15 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer()
 
-    # Data format: job_view_123 or manual_view_123 or job_view_123_saved
     data_parts = query.data.split("_")
     
     from_saved = False
+    from_daily = False
     if data_parts[-1] == "saved":
         from_saved = True
+        job_id = int(data_parts[-2])
+    elif data_parts[-1] == "daily":
+        from_daily = True
         job_id = int(data_parts[-2])
     else:
         job_id = int(data_parts[-1])
@@ -205,7 +252,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     score = details["score"]
 
     msg = messages.job_detail_message(job, plan=plan, user=user)
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved)
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily)
 
     await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 

@@ -124,10 +124,13 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
     buttons = [
         [
             InlineKeyboardButton("🔍 Browse Jobs", callback_data="menu_jobs"),
-            InlineKeyboardButton("💾 Saved Jobs", callback_data="menu_saved"),
+            InlineKeyboardButton("📅 Daily Feed", callback_data="menu_daily"),
         ],
         [
+            InlineKeyboardButton("💾 Saved Jobs", callback_data="menu_saved"),
             InlineKeyboardButton("📋 My Applications", callback_data="tracker"),
+        ],
+        [
             InlineKeyboardButton("✍️ Cover Letter", callback_data="menu_coverletter"),
         ],
     ]
@@ -220,7 +223,7 @@ def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:
         prefix = "manual" if is_manual else "job"
         
         apply_row.append(
-            InlineKeyboardButton(f"[{i}] Apply", callback_data=f"{prefix}_view_{job['id']}")
+            InlineKeyboardButton(f"[{i}] Apply", callback_data=f"{prefix}_view_{job['id']}_daily")
         )
             
         if len(apply_row) == 3:
@@ -278,7 +281,7 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False) -> InlineKeyboardMarkup:
+def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False) -> InlineKeyboardMarkup:
     """Actions for a single job detail view."""
     is_manual = job.get("is_manual", False)
     prefix = "manual" if is_manual else "job"
@@ -314,6 +317,10 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     if from_saved:
         buttons.append([
             InlineKeyboardButton("🔙 Back to Saved Jobs", callback_data="menu_saved")
+        ])
+    elif from_daily:
+        buttons.append([
+            InlineKeyboardButton("🔙 Back to Daily Feed", callback_data="menu_daily")
         ])
     else:
         buttons.append([
