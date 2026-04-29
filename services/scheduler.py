@@ -1,14 +1,11 @@
 """
-APScheduler setup — job scraping, daily alerts, and counter resets.
-Runs in the same asyncio event loop as the bot.
+APScheduler setup — daily alerts, weekly digest, and follow-up reminders.
+Scraping has been removed. All jobs are manually curated via the admin panel.
 """
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
-
-from services.job_scraper import scrape_all_sources
-from db.jobs import upsert_jobs, deactivate_old_jobs
 
 
 scheduler = AsyncIOScheduler()
@@ -23,25 +20,11 @@ def set_bot_app(app):
     _bot_app = app
 
 
-async def _run_scraper():
-    """Background task: scrape all job sources and upsert into DB."""
-    try:
-        logger.info("⏰ Scheduled job scraper starting...")
-        jobs = await scrape_all_sources()
-        if jobs:
-            inserted = await upsert_jobs(jobs)
-            logger.info(f"✅ Scraper complete: {inserted} new jobs from {len(jobs)} total")
-        else:
-            logger.warning("⚠️ Scraper returned 0 jobs")
-    except Exception as e:
-        logger.error(f"❌ Scheduled scraper failed: {e}")
-
 
 async def _send_daily_alerts():
     """Background task: send daily job digest to all users at their alert time."""
     try:
         from db.connection import get_pool
-        from db.jobs import get_matching_jobs
 
         from datetime import datetime
         from zoneinfo import ZoneInfo
@@ -75,21 +58,21 @@ async def _send_daily_alerts():
         sent_count = 0
         for user in users:
             try:
-                skills = user["skills"] or []
-                location = user["location_pref"] or "remote"
                 plan = user["plan"] or "free"
-                # Trial and pro get same job limit (20)
+                # Trial and pro get more jobs in digest
                 limit = 5 if plan == "free" else 20
 
-                jobs = await get_matching_jobs(skills, location, limit=limit)
+                # Fetch curated manual jobs for this digest
+                from db.manual_jobs import get_manual_jobs
+                jobs = await get_manual_jobs(limit=limit)
                 if not jobs:
                     continue
 
                 # Build a proper user dict that format_job_list_message expects
                 user_dict = {
                     "telegram_id": user["telegram_id"],
-                    "skills": skills,
-                    "location_pref": location,
+                    "skills": user["skills"] or [],
+                    "location_pref": user["location_pref"] or "remote",
                     "plan": plan,
                     "experience_level": user["experience_level"] or "0",
                     "batch_year": user["batch_year"],
@@ -121,14 +104,6 @@ async def _send_daily_alerts():
 
 
 
-
-async def _cleanup_old_jobs():
-    """Deactivate jobs older than 30 days."""
-    try:
-        count = await deactivate_old_jobs(days=30)
-        logger.info(f"🧹 Cleaned up {count} old jobs")
-    except Exception as e:
-        logger.error(f"Job cleanup failed: {e}")
 
 
 async def _process_reminders():
@@ -247,33 +222,12 @@ from datetime import datetime
 
 def start_scheduler():
     """Start all scheduled jobs."""
-    # Job scraper — every 2 hours, starting immediately
-    scheduler.add_job(
-        _run_scraper,
-        IntervalTrigger(hours=2),
-        id="scrape_jobs",
-        name="Scrape all job sources",
-        replace_existing=True,
-        next_run_time=datetime.now()
-    )
-
-    # Daily alerts — Runs every 10 minutes to support more granular alert times like 15:10
+    # Daily alerts — Runs every 10 minutes to support granular alert times
     scheduler.add_job(
         _send_daily_alerts,
         CronTrigger(minute="0,10,20,30,40,50"),
         id="daily_alerts",
         name="Send daily job alerts based on user settings",
-        replace_existing=True,
-    )
-
-
-
-    # Cleanup old jobs — weekly on Sunday
-    scheduler.add_job(
-        _cleanup_old_jobs,
-        CronTrigger(day_of_week="sun", hour=4),
-        id="cleanup_jobs",
-        name="Deactivate old jobs",
         replace_existing=True,
     )
 

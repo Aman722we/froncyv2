@@ -6,8 +6,8 @@ from telegram.ext import ContextTypes
 from loguru import logger
 
 from db.users import get_user, increment_jobs_seen
-from db.jobs import get_matching_jobs, count_matching_jobs, get_job_by_id, save_job, unsave_job, save_manual_job, unsave_manual_job
-from db.manual_jobs import get_manual_jobs, get_manual_job_by_id
+from db.jobs import get_job_by_id, save_job, unsave_job, save_manual_job, unsave_manual_job
+from db.manual_jobs import get_manual_jobs, get_manual_job_by_id, count_manual_jobs
 from db.connection import get_pool
 from services.reset_service import check_and_reset_daily
 from utils.limits import get_limit
@@ -28,8 +28,6 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("Please /start first.")
         return
 
-    skills = user.get("skills", [])
-    location = user.get("location_pref", "remote")
     plan = user.get("plan", "free")
     
     # Determine page number
@@ -40,12 +38,10 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     limit = get_limit(plan, "jobs_per_day")
     jobs_seen_today = user.get("jobs_seen_today", 0)
     offset = (page - 1) * 5
-
-    # Free users: show up to `limit` jobs, but let them re-view anytime
-    # Only block if they try to paginate PAST their daily allowance
     display_count = 5
+
+    # Free users: block pagination past their daily allowance
     if plan == "free":
-        # Cap total viewable jobs at their daily limit
         max_viewable_offset = limit  # e.g. 5 for free
         if offset >= max_viewable_offset:
             msg = (
@@ -66,27 +62,9 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    # 1. Fetch manual jobs (unpaginated from DB, we paginate in Python)
-    all_manual_jobs = await get_manual_jobs(skills=skills, location=location, limit=50)
-    # Exclude jobs already applied to (simplistic check if we had applied status, but for now just show them)
-    # Alternatively we can just use all_manual_jobs as is.
-    M = len(all_manual_jobs)
-    
-    scraped_offset = max(0, offset - M)
-    scraped_limit = display_count
-    if offset < M:
-        scraped_limit = display_count - (M - offset)
-        
-    scraped_jobs = []
-    if scraped_limit > 0:
-        scraped_jobs = await get_matching_jobs(skills, location, limit=scraped_limit, offset=scraped_offset, telegram_id=user_id)
-
-    # Combine manual jobs (sliced) and scraped jobs
-    manual_slice = all_manual_jobs[offset : offset + display_count]
-    jobs = manual_slice + scraped_jobs
-    
-    scraped_total = await count_matching_jobs(skills, location, telegram_id=user_id)
-    total_count = M + scraped_total
+    # Fetch only manually curated jobs with DB-level pagination
+    jobs = await get_manual_jobs(limit=display_count, offset=offset)
+    total_count = await count_manual_jobs()
 
     # For free users, cap the visible total so pagination stays within their limit
     if plan == "free":

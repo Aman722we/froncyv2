@@ -76,6 +76,14 @@ async def get_manual_jobs(
 
 
 
+async def count_manual_jobs() -> int:
+    """Return total count of active manual jobs (for pagination)."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT COUNT(*) AS cnt FROM manual_jobs WHERE is_active = TRUE")
+        return row["cnt"] if row else 0
+
+
 async def get_manual_job_by_id(job_id: int) -> dict | None:
     """Get a single manual job by ID."""
     pool = get_pool()
