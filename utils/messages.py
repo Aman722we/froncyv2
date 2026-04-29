@@ -882,10 +882,11 @@ def user_status(user: dict) -> str:
         early_tag = " 🔒 Early Adopter" if user.get("is_early_adopter") else ""
         expires_at = user.get("plan_expires_at")
         date_str = expires_at.strftime("%b %d, %Y") if expires_at else "Unknown"
-        plan_label = escape_md(f"⭐ Pro{early_tag} — renews {date_str}")
         sub_status = user.get("subscription_status", "")
-        if sub_status == "cancelling":
-            plan_label += escape_md(" (Cancels at cycle end)")
+        if sub_status == "cancelled":
+            plan_label = escape_md(f"⭐ Pro{early_tag} — active till {date_str} (Cancelled)")
+        else:
+            plan_label = escape_md(f"⭐ Pro{early_tag} — renews {date_str}")
     elif is_trial and trial_expires:
         now = datetime.now(timezone.utc)
         remaining = trial_expires - now

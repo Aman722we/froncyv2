@@ -28,7 +28,7 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     plan = user.get("plan", "free")
     if plan == "pro":
-        msg = escape_md("✅ You're already on Pro! Use /status to check your account details.")
+        msg = escape_md("✅ You're already on Pro!")
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg, parse_mode="MarkdownV2")

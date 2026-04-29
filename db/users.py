@@ -226,10 +226,12 @@ async def update_user_subscription(
         row = await conn.fetchrow(
             """
             UPDATE users
-            SET plan = $2, plan_expires_at = $3, 
+            SET plan = $2, 
+                plan_expires_at = COALESCE($3, plan_expires_at), 
                 razorpay_customer_id = COALESCE($4, razorpay_customer_id),
                 razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
                 subscription_status = $6,
+                is_trial = FALSE,
                 updated_at = NOW()
             WHERE telegram_id = $1
             RETURNING *
