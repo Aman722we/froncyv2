@@ -907,6 +907,10 @@ def user_status(user: dict) -> str:
     # ── Skills ──
     skills = escape_md(", ".join(user.get("skills", []))) or "None"
 
+    # ── Role ──
+    role_pref = user.get("role_pref")
+    role_display = escape_md(str(role_pref).title()) if role_pref else "Fullstack"
+
     # ── Location ──
     loc_map = {"remote": "🌏 Remote", "india": "🇮🇳 India", "both": "🌐 Both"}
     location = escape_md(loc_map.get(user.get("location_pref", "remote"), "Remote"))
@@ -946,6 +950,7 @@ def user_status(user: dict) -> str:
     return (
         f"📊 *Your Status*\n\n"
         f"*Plan:* {plan_label}\n"
+        f"*Role:* {role_display}\n"
         f"*Skills:* {skills}\n"
         f"*Location:* {location}\n"
         f"*Alert Time:* {alert_time} IST\n"

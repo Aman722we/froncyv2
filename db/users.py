@@ -53,6 +53,7 @@ async def update_user_profile(
     alert_time: str | None = None,
     experience_level: str | None = None,
     batch_year: int | None = None,
+    role_pref: str | None = None,
 ) -> dict:
     """Update user profile fields. Only updates non-None values."""
     pool = get_pool()
@@ -69,6 +70,11 @@ async def update_user_profile(
         param_idx += 1
         updates.append(f"experience_level = ${param_idx}")
         values.append(experience_level)
+
+    if role_pref is not None:
+        param_idx += 1
+        updates.append(f"role_pref = ${param_idx}")
+        values.append(role_pref)
 
     if location_pref is not None:
         param_idx += 1
