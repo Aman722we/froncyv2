@@ -12,6 +12,7 @@ from db.connection import get_pool
 from services.reset_service import check_and_reset_daily
 from utils.limits import get_limit
 from utils import keyboards, messages
+from utils.helpers import get_effective_plan
 
 
 async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -31,7 +32,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.callback_query:
         await update.callback_query.answer()
 
-    plan = user.get("plan", "free")
+    plan = get_effective_plan(user)
     
     user_dict = {
         "telegram_id": user_id,
@@ -74,7 +75,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("Please /start first.")
         return
 
-    plan = user.get("plan", "free")
+    plan = get_effective_plan(user)
     
     # Determine page number
     page = 1
@@ -241,7 +242,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     user_id = update.effective_user.id
     user = await get_user(user_id)
-    plan = user.get("plan", "free")
+    plan = get_effective_plan(user)
     user_skills = user.get("skills", [])
     user_exp = user.get("experience_level", "0")
 

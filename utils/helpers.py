@@ -4,7 +4,20 @@ Helper utilities — shared across handlers and services.
 import re
 import hashlib
 
+from datetime import datetime, timezone
 
+def get_effective_plan(user: dict) -> str:
+    """Returns 'free' if the user is on trial but it has expired, otherwise returns user.plan."""
+    if not user:
+        return "free"
+    plan = user.get("plan", "free")
+    is_trial = user.get("is_trial", False)
+    
+    if is_trial:
+        trial_expires = user.get("trial_expires_at")
+        if trial_expires and trial_expires <= datetime.now(timezone.utc):
+            return "free"
+    return plan
 def escape_md(text: str) -> str:
     """
     Escape special characters for Telegram MarkdownV2.

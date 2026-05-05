@@ -60,7 +60,7 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         return
 
     # Check limits
-    plan = user.get("plan", "free")
+    plan = get_effective_plan(user)
     limit = get_limit(plan, "cover_letters_per_day")
     cover_letters_today = user.get("cover_letters_today", 0)
 
