@@ -43,7 +43,8 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "role_pref": user.get("role_pref", "fullstack"),
     }
     
-    jobs = await get_personalized_manual_jobs(user_dict, limit=12)
+    feed_limit = 8 if plan == "free" else 12
+    jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
     total_active_jobs = await count_manual_jobs()
     
     if not jobs:
@@ -85,25 +86,24 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     offset = (page - 1) * 5
     display_count = 5
 
-    # Free users: block pagination past their daily allowance
+    # Free users: block pagination past their allowance
     if plan == "free":
-        max_viewable_offset = limit  # e.g. 5 for free
+        max_viewable_offset = 6  # 6 additional jobs
         if offset >= max_viewable_offset:
             msg = (
-                "⚠️ You've seen your 5 free jobs for today.\n"
-                "Fresh jobs reset at midnight.\n\n"
-                "Upgrade to Pro (₹99/mo) for unlimited \n"
-                "jobs every day + 10 cover letters/day."
+                "🔒 *100+ more personalized jobs available*\n\n"
+                "Upgrade to unlock filters & get full access."
             )
+            from utils.messages import escape_md
             kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Upgrade for ₹99/mo", callback_data="upgrade_pro")],
-                [keyboards.InlineKeyboardButton("⏰ Remind me tomorrow", callback_data="back_menu")]
+                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
             ])
             if update.callback_query:
                 await update.callback_query.answer()
-                await update.callback_query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
+                await update.callback_query.edit_message_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
             else:
-                await update.message.reply_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
+                await update.message.reply_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
             return
         display_count = min(5, max_viewable_offset - offset)
 
@@ -177,7 +177,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # For free users, cap the visible total so pagination stays within their limit
     if plan == "free":
-        total_count = min(total_count, limit)
+        total_count = min(total_count, max_viewable_offset)
 
     if not jobs:
         msg = messages.no_jobs_found()

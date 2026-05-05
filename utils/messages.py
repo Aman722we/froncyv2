@@ -87,19 +87,26 @@ def main_menu(user: dict, pricing: dict | None = None) -> str:
             f"Renews: {escape_md(date_str)}\n"
         )
 
-    if plan == "trial":
+    is_trial = user.get("is_trial", False)
+    
+    if is_trial:
         trial_expires = user.get("trial_expires_at")
         from datetime import datetime, timezone
         if trial_expires:
             remaining = trial_expires - datetime.now(timezone.utc)
             hours_left = max(0, int(remaining.total_seconds() / 3600))
-            time_str = f"{hours_left}h remaining"
+            if hours_left > 0:
+                time_str = f"{hours_left}h remaining"
+                return (
+                    "🏠 *Applixy*\n"
+                    f"⚡ Pro Trial — {escape_md(time_str)}\n"
+                )
+            # If hours_left <= 0, fall through to free plan
         else:
-            time_str = "active"
-        return (
-            "🏠 *Applixy*\n"
-            f"⚡ Pro Trial — {escape_md(time_str)}\n"
-        )
+            return (
+                "🏠 *Applixy*\n"
+                f"⚡ Pro Trial — active\n"
+            )
 
     # Free plan — no upgrade text in message body (keyboard has the button)
     return (
