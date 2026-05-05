@@ -11,8 +11,8 @@ async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Start the feedback conversation."""
     await update.message.reply_text(
         "📝 *Send Feedback or Report a Bug*\n\n"
-        "Please type your feedback, suggestion, or bug report below in a single message.\n\n"
-        "Type /cancel if you changed your mind.",
+        "Please type your feedback, suggestion, or bug report below in a single message\\.\n\n"
+        "Type /cancel if you changed your mind\\.",
         parse_mode="MarkdownV2",
     )
     return WAITING_FOR_FEEDBACK
@@ -23,7 +23,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     feedback_text = update.message.text
 
     if not feedback_text:
-        await update.message.reply_text("Please send a text message.")
+        await update.message.reply_text("Please send a text message\\.", parse_mode="MarkdownV2")
         return WAITING_FOR_FEEDBACK
 
     # Construct the admin message
@@ -34,7 +34,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             first_name = user.first_name or "Unknown"
             msg = (
                 f"🚨 *New Feedback Received*\n\n"
-                f"*From:* {escape_md(first_name)} ({escape_md(username)})\n"
+                f"*From:* {escape_md(first_name)} \\({escape_md(username)}\\)\n"
                 f"*ID:* `{user.id}`\n\n"
                 f"*Message:*\n{escape_md(feedback_text)}"
             )
@@ -47,7 +47,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             logger.error(f"Failed to send feedback to admin {admin_id}: {e}")
 
     await update.message.reply_text(
-        "✅ *Thank you!*\n\n"
+        "✅ *Thank you\\!*\n\n"
         "Your feedback has been sent directly to the developer\\. We appreciate your help in making ApplixyBot better\\!",
         parse_mode="MarkdownV2",
     )
