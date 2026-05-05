@@ -44,7 +44,7 @@ async def _send_daily_alerts():
             users = await conn.fetch(
                 """
                 SELECT telegram_id, skills, location_pref, plan,
-                       experience_level, batch_year, role_pref
+                       experience_level, batch_year, role_pref, is_trial, trial_expires_at
                 FROM users
                 WHERE is_onboarded = TRUE AND alert_time = $1
                 AND (is_deleted IS NULL OR is_deleted = FALSE)
@@ -62,9 +62,12 @@ async def _send_daily_alerts():
         # Total count is needed for the "+X more jobs" footer
         total_active_jobs = await count_manual_jobs()
 
+        from utils.helpers import get_effective_plan
+
         for user in users:
             try:
-                plan = user["plan"] or "free"
+                user_record = dict(user)
+                plan = get_effective_plan(user_record)
                 
                 # Build a proper user dict that compute_manual_job_match expects
                 user_dict = {
@@ -77,8 +80,8 @@ async def _send_daily_alerts():
                     "role_pref": user["role_pref"] or "fullstack",
                 }
 
-                # Everyone gets 12 personalized jobs now
-                jobs = await get_personalized_manual_jobs(user_dict, limit=12)
+                feed_limit = 8 if plan == "free" else 12
+                jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
                 if not jobs:
                     continue
 
