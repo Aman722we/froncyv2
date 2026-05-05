@@ -131,7 +131,9 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     f_exp = filters.get("exp", "any")
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
-    f_role = filters.get("role", "any")
+    
+    # Use explicit filter if set, otherwise fallback to user's role preference
+    f_role = filters.get("role", user.get("role_pref", "any")).lower()
     
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -163,11 +165,12 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             elif f_match == "med" and score < 40: continue
             
         # 4. Role Filter
-        if f_role != "any":
+        if f_role != "any" and f_role != "fullstack":
             title_lower = job.get("title", "").lower()
-            if f_role == "frontend" and "frontend" not in title_lower and "react" not in title_lower and "angular" not in title_lower and "vue" not in title_lower: continue
-            elif f_role == "backend" and "backend" not in title_lower and "node" not in title_lower and "python" not in title_lower and "java" not in title_lower: continue
-            elif f_role == "fullstack" and "fullstack" not in title_lower and "full stack" not in title_lower: continue
+            if f_role == "frontend" and not any(kw in title_lower for kw in ["frontend", "front-end", "front end", "react", "angular", "vue"]):
+                continue
+            elif f_role == "backend" and not any(kw in title_lower for kw in ["backend", "back-end", "back end", "node", "python", "java", "django"]):
+                continue
             
         filtered_jobs.append(job)
         
@@ -175,10 +178,6 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     # Paginate the filtered list
     jobs = filtered_jobs[offset : offset + display_count]
-
-    # For free users, cap the visible total so pagination stays within their limit
-    if plan == "free":
-        total_count = min(total_count, max_viewable_offset)
 
     if not jobs:
         msg = messages.no_jobs_found()

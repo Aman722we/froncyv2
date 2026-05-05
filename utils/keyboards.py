@@ -204,8 +204,8 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
         nav_row.append(InlineKeyboardButton("◀️ Previous", callback_data=f"jobs_page_{page - 1}"))
         
     if (page * 5) < total_count:
-        if plan == "free":
-            # Free users hit the upscale wall
+        if plan == "free" and (page * 5) >= 6:
+            # Free users hit the upscale wall after 6 jobs
             buttons.append([
                 InlineKeyboardButton(
                     f"🔒 See all {total_count} jobs — Upgrade to Pro",
@@ -218,9 +218,13 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
     if nav_row:
         buttons.append(nav_row)
 
+    filter_btn = InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
+    if plan == "free":
+        filter_btn = InlineKeyboardButton("🔒 Filters (Pro)", callback_data="menu_upgrade")
+
     buttons.append([
         InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
-        InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu"),
+        filter_btn,
     ])
 
     return InlineKeyboardMarkup(buttons)
