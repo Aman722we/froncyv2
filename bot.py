@@ -29,6 +29,7 @@ from handlers.tracker import (
     manage_app_callback, update_app_status_callback
 )
 from handlers.admin import get_addjob_handler
+from handlers.feedback import get_feedback_handler
 
 from utils.messages import help_message
 
@@ -46,6 +47,7 @@ def build_bot() -> Application:
 
     # Onboarding Flow (ConversationHandler)
     app.add_handler(get_start_handler())
+    app.add_handler(get_feedback_handler())
 
     # Main Menu & Core Commands
     app.add_handler(CommandHandler("menu", menu_command))
