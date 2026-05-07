@@ -61,11 +61,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     context.user_data["selected_skills"] = []
 
     # 🔔 Notify admin about new user
-    username_str = f"@{user.username}" if user.username else "(no username)"
+    import html
+    first_name_esc = html.escape(user.first_name) if user.first_name else "Unknown"
+    username_str = f"@{html.escape(user.username)}" if user.username else "(no username)"
     await notify_admin(
         context.bot,
         f"🆕 <b>New User Joined!</b>\n"
-        f"👤 {user.first_name} {username_str}\n"
+        f"👤 {first_name_esc} {username_str}\n"
         f"🆔 ID: <code>{user.id}</code>"
     )
 
@@ -371,16 +373,22 @@ async def _complete_onboarding(
         await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
 
     # 🔔 Notify admin — user finished onboarding
-    username_str = f"@{user_tg.username}" if user_tg.username else "(no username)"
-    skills_str = ", ".join(skills) if skills else "none selected"
+    import html
+    
+    first_name_esc = html.escape(user_tg.first_name) if user_tg.first_name else "Unknown"
+    username_str = f"@{html.escape(user_tg.username)}" if user_tg.username else "(no username)"
+    skills_str = html.escape(", ".join(skills)) if skills else "none selected"
+    loc_esc = html.escape(str(location))
+    exp_esc = html.escape(str(exp))
     resume_str = "✅ Uploaded" if has_resume else "⏭️ Skipped"
+    
     await notify_admin(
         context.bot,
         f"✅ <b>User Onboarded!</b>\n"
-        f"👤 {user_tg.first_name} {username_str}\n"
+        f"👤 {first_name_esc} {username_str}\n"
         f"🆔 ID: <code>{user_id}</code>\n"
         f"🛠 Skills: {skills_str}\n"
-        f"📍 Location: {location} | Exp: {exp} yrs\n"
+        f"📍 Location: {loc_esc} | Exp: {exp_esc} yrs\n"
         f"📄 Resume: {resume_str}"
     )
 
