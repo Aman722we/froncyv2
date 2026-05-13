@@ -105,17 +105,19 @@ async def users_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await _send_users_page(update, context, page=page, edit=True)
 
 
-async def _send_users_page(update: Update, context, page: int, edit: bool = False):
+async def _send_users_page(update: Update, context, page: int, edit: bool = False, show_deleted: bool = False):
     pool = get_pool()
     offset = (page - 1) * USERS_PAGE_SIZE
 
+    condition = "is_deleted = TRUE" if show_deleted else "is_deleted IS NOT TRUE"
+
     async with pool.acquire() as conn:
-        total = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted IS NOT TRUE")
+        total = await conn.fetchval(f"SELECT COUNT(*) FROM users WHERE {condition}")
         rows  = await conn.fetch(
-            """
+            f"""
             SELECT telegram_id, first_name, username, plan, is_onboarded, created_at
             FROM users
-            WHERE is_deleted IS NOT TRUE
+            WHERE {condition}
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2
             """,
@@ -124,7 +126,10 @@ async def _send_users_page(update: Update, context, page: int, edit: bool = Fals
 
     total_pages = max(1, (total + USERS_PAGE_SIZE - 1) // USERS_PAGE_SIZE)
 
-    lines = [f"👥 <b>Users</b>  (Page {page}/{total_pages} · {total} total)\n"]
+    title = "🗑 <b>Deleted Accounts</b>" if show_deleted else "👥 <b>Users</b>"
+    cb_prefix = "adm_delusers" if show_deleted else "adm_users"
+
+    lines = [f"{title}  (Page {page}/{total_pages} · {total} total)\n"]
     for row in rows:
         name     = html.escape(row["first_name"] or "Unknown")
         username = f"@{html.escape(row['username'])}" if row["username"] else "—"
@@ -140,15 +145,32 @@ async def _send_users_page(update: Update, context, page: int, edit: bool = Fals
     # Pagination keyboard
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"adm_users_{page - 1}"))
+        nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"{cb_prefix}_{page - 1}"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_users_{page + 1}"))
+        nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"{cb_prefix}_{page + 1}"))
     kb = InlineKeyboardMarkup([nav]) if nav else None
 
     if edit and update.callback_query:
         await update.callback_query.edit_message_text(msg, parse_mode="HTML", reply_markup=kb)
     else:
         await update.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
+
+
+async def deleted_users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show paginated list of deleted users."""
+    if not _is_admin(update):
+        return
+    await _send_users_page(update, context, page=1, show_deleted=True)
+
+
+async def deleted_users_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle page-turn callbacks for /deletedusers."""
+    if not _is_admin(update):
+        await update.callback_query.answer()
+        return
+    page = int(update.callback_query.data.split("_")[-1])
+    await update.callback_query.answer()
+    await _send_users_page(update, context, page=page, edit=True, show_deleted=True)
 
 
 # ─────────────────────────────────────────────

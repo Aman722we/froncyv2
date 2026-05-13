@@ -30,7 +30,10 @@ from handlers.tracker import (
 )
 from handlers.admin import get_addjob_handler
 from handlers.feedback import get_feedback_handler
-from handlers.analytics import analytics_command, users_command, user_detail_command, users_page_callback
+from handlers.analytics import (
+    analytics_command, users_command, user_detail_command, users_page_callback,
+    deleted_users_command, deleted_users_page_callback
+)
 
 from utils.messages import help_message
 
@@ -69,7 +72,9 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("analytics", analytics_command))
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))
+    app.add_handler(CommandHandler("deletedusers", deleted_users_command))
     app.add_handler(CallbackQueryHandler(users_page_callback, pattern="^adm_users_\\d+$"))
+    app.add_handler(CallbackQueryHandler(deleted_users_page_callback, pattern="^adm_delusers_\\d+$"))
 
     # Navigation Callbacks
     app.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_menu$"))
