@@ -39,6 +39,7 @@ async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_users      = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted IS NOT TRUE")
         onboarded        = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_onboarded = TRUE AND is_deleted IS NOT TRUE")
         with_resume      = await conn.fetchval("SELECT COUNT(*) FROM users WHERE resume_text IS NOT NULL AND is_deleted IS NOT TRUE")
+        deleted_count    = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted = TRUE")
 
         # Plan breakdown
         free_count       = await conn.fetchval("SELECT COUNT(*) FROM users WHERE plan = 'free' AND (is_deleted IS NOT TRUE)")
@@ -64,7 +65,8 @@ async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👥 <b>Users</b>\n"
         f"  • Total registered : <b>{total_users}</b>\n"
         f"  • Completed setup  : <b>{onboarded}</b>\n"
-        f"  • Uploaded resume  : <b>{with_resume}</b>\n\n"
+        f"  • Uploaded resume  : <b>{with_resume}</b>\n"
+        f"  • Deleted accounts : <b>{deleted_count}</b>\n\n"
         "💳 <b>Plans</b>\n"
         f"  • 🆓 Free          : <b>{free_count}</b>\n"
         f"  • ⏳ Active trials  : <b>{trial_count}</b>\n"
