@@ -113,6 +113,13 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply manual_jobs migrations: {e}")
 
+        # Referral system migrations
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INT DEFAULT 0;")
+        except Exception as e:
+            logger.warning(f"Failed to apply referral migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

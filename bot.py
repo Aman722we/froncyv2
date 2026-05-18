@@ -34,6 +34,7 @@ from handlers.analytics import (
     analytics_command, users_command, user_detail_command, users_page_callback,
     deleted_users_command, deleted_users_page_callback
 )
+from handlers.refer import refer_command
 
 from utils.messages import help_message
 
@@ -66,6 +67,7 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("delete_account", delete_account_prompt))
+    app.add_handler(CommandHandler("refer", refer_command))
 
     # Admin Handlers
     app.add_handler(get_addjob_handler())

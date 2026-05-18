@@ -60,6 +60,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     # New user → start onboarding
     context.user_data["selected_skills"] = []
 
+    # Capture referral param (e.g. /start ref_8619554269)
+    if context.args:
+        arg = context.args[0]
+        if arg.startswith("ref_") and arg[4:].isdigit():
+            referrer_id = int(arg[4:])
+            if referrer_id != user.id:  # Can't refer yourself
+                context.user_data["referrer_id"] = referrer_id
+
+
     # 🔔 Notify admin about new user
     import html
     first_name_esc = html.escape(user.first_name) if user.first_name else "Unknown"
@@ -391,6 +400,31 @@ async def _complete_onboarding(
         f"📍 Location: {loc_esc} | Exp: {exp_esc} yrs\n"
         f"📄 Resume: {resume_str}"
     )
+
+    # ✅ Process referral reward if applicable
+    referrer_id = context.user_data.pop("referrer_id", None)
+    if referrer_id:
+        try:
+            from services.referral_service import process_referral, REFERRAL_BONUS_DAYS
+            rewarded = await process_referral(referrer_id, user_id, db_pool)
+            if rewarded:
+                # Notify the referrer
+                import html as _html
+                new_name = _html.escape(user_tg.first_name or "Someone")
+                try:
+                    await context.bot.send_message(
+                        chat_id=referrer_id,
+                        text=(
+                            f"🎉 <b>Referral Reward!</b>\n\n"
+                            f"Your friend <b>{new_name}</b> just joined Applixy using your link!\n"
+                            f"You've earned <b>{REFERRAL_BONUS_DAYS} free Pro days</b>. Keep it up! 🚀"
+                        ),
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to notify referrer {referrer_id}: {e}")
+        except Exception as e:
+            logger.warning(f"Referral processing failed: {e}")
 
     logger.info(f"User {user_id} completed onboarding: skills={skills}, loc={location}")
     return ConversationHandler.END
