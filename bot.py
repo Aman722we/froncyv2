@@ -34,7 +34,7 @@ from handlers.analytics import (
     analytics_command, users_command, user_detail_command, users_page_callback,
     deleted_users_command, deleted_users_page_callback
 )
-from handlers.refer import refer_command
+from handlers.refer import refer_command, refer_callback
 
 from utils.messages import help_message
 
@@ -87,6 +87,7 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(settings_command, pattern="^menu_settings$"))
     app.add_handler(CallbackQueryHandler(upgrade_command, pattern="^menu_upgrade$"))
     app.add_handler(CallbackQueryHandler(coverletter_menu_handler, pattern="^menu_coverletter$"))
+    app.add_handler(CallbackQueryHandler(refer_callback, pattern="^menu_refer$"))
     
     # Jobs Callbacks
     app.add_handler(CallbackQueryHandler(view_job_detail, pattern="^(job|manual)_view_"))

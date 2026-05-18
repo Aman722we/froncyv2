@@ -1,9 +1,10 @@
 """
 /refer command handler.
 Generates and shows the user's personal referral link with stats.
+Supports both /refer command and menu_refer callback button.
 """
 import html
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from config import settings
@@ -13,16 +14,15 @@ from services.referral_service import get_referral_stats, REFERRAL_BONUS_DAYS, R
 BOT_USERNAME = "ApplixyBot"
 
 
-async def refer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /refer — show user's referral link and stats."""
-    user_id = update.effective_user.id
+async def _build_refer_message(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    """Build the referral message and keyboard for a user."""
     pool = get_pool()
-
     stats = await get_referral_stats(user_id, pool)
-    referrals_made   = stats["referrals_made"]
-    bonus_days       = stats["bonus_days_earned"]
-    days_left_cap    = stats["days_until_cap"]
-    at_cap           = stats["at_cap"]
+
+    referrals_made = stats["referrals_made"]
+    bonus_days     = stats["bonus_days_earned"]
+    days_left_cap  = stats["days_until_cap"]
+    at_cap         = stats["at_cap"]
 
     link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
 
@@ -52,4 +52,28 @@ async def refer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💡 <i>Tap the link above to copy it, then share via WhatsApp or DM!</i>"
     )
 
-    await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+    ])
+
+    return msg, kb
+
+
+async def refer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /refer command."""
+    user_id = update.effective_user.id
+    msg, kb = await _build_refer_message(user_id)
+    await update.message.reply_text(
+        msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
+    )
+
+
+async def refer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle menu_refer callback from main menu button."""
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    msg, kb = await _build_refer_message(user_id)
+    await query.edit_message_text(
+        msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
+    )

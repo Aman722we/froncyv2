@@ -155,10 +155,16 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
             InlineKeyboardButton("📄 Resume", callback_data="menu_resume"),
             InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
         ])
+        buttons.append([
+            InlineKeyboardButton("🎁 Refer a Friend — Earn Free Days!", callback_data="menu_refer"),
+        ])
     else:
         buttons.append([
             InlineKeyboardButton("📄 Resume", callback_data="menu_resume"),
             InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
+        ])
+        buttons.append([
+            InlineKeyboardButton("🎁 Refer a Friend — Earn 5 Free Pro Days!", callback_data="menu_refer"),
         ])
         price_label = f"₹{upgrade_price}/mo" if upgrade_price else "Upgrade"
         buttons.append([
