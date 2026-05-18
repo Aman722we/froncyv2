@@ -12,7 +12,8 @@ from db.connection import get_pool
 from services.llm_service import generate_cover_letter, LLMMode, get_mode_display, get_fallback_cover_letter
 from services.reset_service import check_and_reset_daily
 from utils.limits import get_limit
-from utils import keyboards, messages, helpers
+from utils import keyboards, messages
+from utils.helpers import escape_md, get_effective_plan
 
 
 async def coverletter_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
