@@ -4,6 +4,7 @@ CRUD operations for manually curated jobs.
 from datetime import datetime
 from loguru import logger
 from db.connection import get_pool
+from utils.constants import FRONTEND_SKILLS, ACTIVE_EXPERIENCE
 
 
 async def add_manual_job(data: dict) -> int:
@@ -77,7 +78,7 @@ async def get_manual_jobs(
 async def get_personalized_manual_jobs(user: dict, limit: int = 12) -> list[dict]:
     """
     Fetch all active manual jobs, score them based on user skills/experience/batch,
-    and return the top matching jobs.
+    filter to frontend/fresher niche, and return the top matching jobs.
     """
     # Fetch a reasonable number of recent jobs to score (e.g., top 100 recent)
     all_jobs = await get_manual_jobs(limit=100, offset=0)
@@ -85,19 +86,29 @@ async def get_personalized_manual_jobs(user: dict, limit: int = 12) -> list[dict
         return []
 
     from utils.messages import compute_manual_job_match
-    
-    # Optional role filtering if the user has a filter active in the context
-    # But since this function signature only takes 'user' dict right now,
-    # we'll do the role filtering in handlers/jobs.py if needed, or we can add filters to this function signature later.
-    
-    for job in all_jobs:
+
+    # NICHE FILTER: Keep only frontend-relevant jobs with fresher experience level
+    # FUTURE (multi-role): Remove or loosen this filter when expanding
+    def is_frontend_fresher_job(job: dict) -> bool:
+        job_skills = [s.lower() for s in (job.get("skills") or [])]
+        has_frontend_skill = any(s in FRONTEND_SKILLS for s in job_skills)
+        min_yoe = job.get("min_yoe") or 0
+        is_fresher_level = min_yoe <= 1
+        return has_frontend_skill and is_fresher_level
+
+    filtered_jobs = [j for j in all_jobs if is_frontend_fresher_job(j)]
+    if not filtered_jobs:
+        # Fallback: if admin hasn't tagged skills yet, show all with min_yoe <= 1
+        filtered_jobs = [j for j in all_jobs if (j.get("min_yoe") or 0) <= 1]
+
+    for job in filtered_jobs:
         details = compute_manual_job_match(user, job)
         job["_match_score"] = details["score"]
 
     # Sort by score (DESC), then by posted date (DESC)
-    all_jobs.sort(key=lambda j: (j["_match_score"], j["posted_at"]), reverse=True)
-    
-    return all_jobs[:limit]
+    filtered_jobs.sort(key=lambda j: (j["_match_score"], j["posted_at"]), reverse=True)
+
+    return filtered_jobs[:limit]
 
 
 

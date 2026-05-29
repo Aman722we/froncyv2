@@ -13,8 +13,8 @@ def welcome_message(first_name: str = "there") -> str:
     safe_name = escape_md(first_name)
     return (
         f"👋 Hey {safe_name}\\!\n\n"
-        "Tired of sending 50 applications and hearing nothing back?\n\n"
-        "Applixy finds the RIGHT web dev jobs for your skills, "
+        "Struggling to land your first frontend job?\n\n"
+        "Applixy curates the best frontend jobs & internships for freshers, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
         "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
@@ -24,7 +24,7 @@ def welcome_message(first_name: str = "there") -> str:
 
 
 def skills_prompt() -> str:
-    return "Great\\! Which technologies do you work with?\n\\(Select all that apply, then tap *Done*\\)"
+    return "Great\\! Which frontend technologies do you work with?\n\\(Select all that apply, then tap *Done*\\)"
 
 
 def trial_activated_message(trial_expires_at) -> str:

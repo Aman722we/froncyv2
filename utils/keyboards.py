@@ -21,10 +21,10 @@ def onboarding_welcome_keyboard() -> InlineKeyboardMarkup:
 
 SKILL_CATEGORIES = {
     "🛠️ Core Front-End": ["HTML", "CSS", "JavaScript", "TypeScript"],
-    "⚙️ Core Backend": ["Node.js", "Express", "MongoDB", "PostgreSQL", "MySQL"],
+    # FUTURE (multi-role): "⚙️ Core Backend": ["Node.js", "Express", "MongoDB", "PostgreSQL", "MySQL"],
     "⚡ Frameworks": ["React", "Next.js", "Vue", "Angular", "Svelte", "React Native"],
     "🎨 Styling & UI": ["Tailwind", "SCSS", "Figma", "Framer", "Bootstrap"],
-    "⚙️ Tools & DevOps": ["Git", "GitHub", "GraphQL", "CI/CD", "Docker"]
+    # FUTURE (multi-role): "⚙️ Tools & DevOps": ["Git", "GitHub", "GraphQL", "CI/CD", "Docker"]
 }
 
 # Flatten for easy validation
@@ -64,16 +64,16 @@ def skills_keyboard(selected: list[str] | None = None) -> InlineKeyboardMarkup:
 
 
 def experience_keyboard(prefix: str = "exp_") -> InlineKeyboardMarkup:
-    """Step 2.5: Years of Experience."""
+    """Step 2.5: Years of Experience — limited to fresher range (0-1 yr)."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🎓 Fresher (0 yrs)", callback_data=f"{prefix}0"),
             InlineKeyboardButton("🌱 1 Year", callback_data=f"{prefix}1"),
         ],
-        [
-            InlineKeyboardButton("🚀 2 Years", callback_data=f"{prefix}2"),
-            InlineKeyboardButton("🔥 2+ Years", callback_data=f"{prefix}2_plus"),
-        ]
+        # FUTURE (mid-senior): [
+        #     InlineKeyboardButton("🚀 2 Years", callback_data=f"{prefix}2"),
+        #     InlineKeyboardButton("🔥 2+ Years", callback_data=f"{prefix}2_plus"),
+        # ]
     ])
 
 
@@ -92,15 +92,15 @@ def location_keyboard() -> InlineKeyboardMarkup:
 
 
 def role_keyboard(prefix: str = "role_") -> InlineKeyboardMarkup:
-    """Role preference selection."""
+    """Role preference selection — frontend only in current niche."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💻 Frontend", callback_data=f"{prefix}frontend"),
-            InlineKeyboardButton("⚙️ Backend", callback_data=f"{prefix}backend"),
+            # FUTURE (multi-role): InlineKeyboardButton("⚙️ Backend", callback_data=f"{prefix}backend"),
         ],
-        [
-            InlineKeyboardButton("🚀 Fullstack", callback_data=f"{prefix}fullstack"),
-        ]
+        # FUTURE (multi-role): [
+        #     InlineKeyboardButton("🚀 Fullstack", callback_data=f"{prefix}fullstack"),
+        # ]
     ])
 
 
@@ -293,8 +293,8 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("── Role ──", callback_data="ignore")],
         [
             InlineKeyboardButton("✅ Frontend" if f_role == "frontend" else "Frontend", callback_data="filter_role_frontend"),
-            InlineKeyboardButton("✅ Backend" if f_role == "backend" else "Backend", callback_data="filter_role_backend"),
-            InlineKeyboardButton("✅ Fullstack" if f_role == "fullstack" else "Fullstack", callback_data="filter_role_fullstack"),
+            # FUTURE (multi-role): InlineKeyboardButton("✅ Backend" if f_role == "backend" else "Backend", callback_data="filter_role_backend"),
+            # FUTURE (multi-role): InlineKeyboardButton("✅ Fullstack" if f_role == "fullstack" else "Fullstack", callback_data="filter_role_fullstack"),
             InlineKeyboardButton("✅ Any" if f_role == "any" else "Any", callback_data="filter_role_any"),
         ],
         [
@@ -444,10 +444,10 @@ def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton("🏷 Edit Skills", callback_data="settings_skills"),
-            InlineKeyboardButton("💼 Edit Role", callback_data="settings_role"),
+            # FUTURE (multi-role): InlineKeyboardButton("💼 Edit Role", callback_data="settings_role"),
         ],
         [
-            InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
+            # FUTURE (mid-senior): InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
             InlineKeyboardButton("🎓 Edit Batch Year", callback_data="settings_batch"),
         ],
         [

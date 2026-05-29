@@ -193,7 +193,7 @@ async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Save selected skills and move to location selection."""
+    """Save selected skills, silently set role=frontend & experience=fresher, move to location."""
     query = update.callback_query
     await query.answer()
 
@@ -203,50 +203,54 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_id = update.effective_user.id
     await update_user_profile(user_id, skills=[s.lower() for s in selected])
 
+    # NICHE: Silently auto-set role=frontend and experience=0 (fresher)
+    # FUTURE (multi-role): Replace with role_keyboard prompt and ROLE state
+    await update_user_profile(user_id, role_pref="frontend")
+    await update_user_profile(user_id, experience_level="0")
+    context.user_data["role_pref"] = "frontend"
+    context.user_data["experience_level"] = "0"
+
+    # Jump straight to location (skipping Role and Experience steps)
     await query.edit_message_text(
-        "💼 What is your primary role preference?",
-        reply_markup=keyboards.role_keyboard(),
-        parse_mode="MarkdownV2",
-    )
-    return ROLE
-
-async def role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Save role preference and prompt for experience."""
-    query = update.callback_query
-    await query.answer()
-
-    role_val = query.data.replace("role_", "")
-    
-    user_id = update.effective_user.id
-    await update_user_profile(user_id, role_pref=role_val)
-    context.user_data["role_pref"] = role_val
-
-    await query.edit_message_text(
-        "🧠 How many years of professional experience do you have?",
-        reply_markup=keyboards.experience_keyboard(),
-        parse_mode="MarkdownV2",
-    )
-    return EXPERIENCE
-
-
-async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Save experience level and prompt for location."""
-    query = update.callback_query
-    await query.answer()
-
-    # Data is like: exp_0, exp_1, exp_2, exp_3_5, exp_5_plus
-    exp_val = query.data.replace("exp_", "")
-    
-    user_id = update.effective_user.id
-    await update_user_profile(user_id, experience_level=exp_val)
-    context.user_data["experience_level"] = exp_val
-
-    await query.edit_message_text(
-        "🌍 Where are you looking for work?",
+        "\ud83c\udf0d Where are you looking for work?",
         reply_markup=keyboards.location_keyboard(),
         parse_mode="MarkdownV2",
     )
     return LOCATION
+
+
+# FUTURE (multi-role): Uncomment role_callback when expanding beyond frontend
+# async def role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     """Save role preference and prompt for experience."""
+#     query = update.callback_query
+#     await query.answer()
+#     role_val = query.data.replace("role_", "")
+#     user_id = update.effective_user.id
+#     await update_user_profile(user_id, role_pref=role_val)
+#     context.user_data["role_pref"] = role_val
+#     await query.edit_message_text(
+#         "\ud83e\udde0 How many years of professional experience do you have?",
+#         reply_markup=keyboards.experience_keyboard(),
+#         parse_mode="MarkdownV2",
+#     )
+#     return EXPERIENCE
+
+
+# FUTURE (mid-senior): Uncomment experience_callback when expanding to 2+ yrs
+# async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     """Save experience level and prompt for location."""
+#     query = update.callback_query
+#     await query.answer()
+#     exp_val = query.data.replace("exp_", "")
+#     user_id = update.effective_user.id
+#     await update_user_profile(user_id, experience_level=exp_val)
+#     context.user_data["experience_level"] = exp_val
+#     await query.edit_message_text(
+#         "\ud83c\udf0d Where are you looking for work?",
+#         reply_markup=keyboards.location_keyboard(),
+#         parse_mode="MarkdownV2",
+#     )
+#     return LOCATION
 
 
 async def location_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -467,10 +471,12 @@ def get_start_handler() -> ConversationHandler:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
             ROLE: [
-                CallbackQueryHandler(role_callback, pattern="^role_"),
+                # FUTURE (multi-role): CallbackQueryHandler(role_callback, pattern="^role_"),
+                # State kept here so ConversationHandler states remain valid
             ],
             EXPERIENCE: [
-                CallbackQueryHandler(experience_callback, pattern="^exp_"),
+                # FUTURE (mid-senior): CallbackQueryHandler(experience_callback, pattern="^exp_"),
+                # State kept here so ConversationHandler states remain valid
             ],
             LOCATION: [
                 CallbackQueryHandler(location_callback, pattern="^loc_"),
