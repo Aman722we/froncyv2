@@ -89,17 +89,34 @@ async def get_personalized_manual_jobs(user: dict, limit: int = 12) -> list[dict
 
     # NICHE FILTER: Keep only frontend-relevant jobs with fresher experience level
     # FUTURE (multi-role): Remove or loosen this filter when expanding
+    BACKEND_TITLE_KEYWORDS = [
+        "fullstack", "full stack", "full-stack",
+        "backend", "back-end", "back end",
+        "node.js developer", "node developer",
+        "django", "flask", "rails", "laravel",
+        "devops", "cloud engineer", "data engineer",
+        "machine learning", "ml engineer", "ai engineer",
+    ]
+
     def is_frontend_fresher_job(job: dict) -> bool:
         job_skills = [s.lower() for s in (job.get("skills") or [])]
         has_frontend_skill = any(s in FRONTEND_SKILLS for s in job_skills)
         min_yoe = job.get("min_yoe") or 0
         is_fresher_level = min_yoe <= 1
-        return has_frontend_skill and is_fresher_level
+        # Reject if job title is clearly backend/fullstack
+        title_lower = (job.get("title") or "").lower()
+        is_backend_title = any(kw in title_lower for kw in BACKEND_TITLE_KEYWORDS)
+        return has_frontend_skill and is_fresher_level and not is_backend_title
 
     filtered_jobs = [j for j in all_jobs if is_frontend_fresher_job(j)]
     if not filtered_jobs:
         # Fallback: if admin hasn't tagged skills yet, show all with min_yoe <= 1
-        filtered_jobs = [j for j in all_jobs if (j.get("min_yoe") or 0) <= 1]
+        # but still exclude clearly backend titles
+        filtered_jobs = [
+            j for j in all_jobs
+            if (j.get("min_yoe") or 0) <= 1
+            and not any(kw in (j.get("title") or "").lower() for kw in BACKEND_TITLE_KEYWORDS)
+        ]
 
     for job in filtered_jobs:
         details = compute_manual_job_match(user, job)

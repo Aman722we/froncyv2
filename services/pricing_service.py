@@ -12,21 +12,22 @@ EARLY_ADOPTER_SLOTS = 200  # Max early adopter slots
 async def get_current_pricing(db_pool) -> dict:
     """
     Returns current pricing state.
-    Early adopter = within 30 days of launch AND slots not full.
-    After that = regular pricing.
+    Early adopter = slots not yet full (200 pro users).
+    Time limit removed — price stays at ₹199 until 200 users subscribe.
     """
     config = await db_pool.fetchrow("SELECT * FROM pricing_config LIMIT 1")
 
     now = datetime.now(timezone.utc)
-    days_since_launch = (now - LAUNCH_DATE).days
+    # FUTURE: can re-add days cap if needed
+    # days_since_launch = (now - LAUNCH_DATE).days
     early_adopter_active = (
         config["early_adopter_active"] and
-        days_since_launch < EARLY_ADOPTER_DAYS and
         config["slots_filled"] < config["early_adopter_slots"]
     )
 
     slots_remaining = max(0, config["early_adopter_slots"] - config["slots_filled"])
-    days_remaining = max(0, EARLY_ADOPTER_DAYS - days_since_launch)
+    # days_remaining kept for compatibility but always shows max now
+    days_remaining = EARLY_ADOPTER_DAYS
 
     return {
         "is_early_adopter_active": early_adopter_active,
