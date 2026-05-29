@@ -20,12 +20,16 @@ async def get_current_pricing(db_pool) -> dict:
     now = datetime.now(timezone.utc)
     # FUTURE: can re-add days cap if needed
     # days_since_launch = (now - LAUNCH_DATE).days
+    
+    # FAKE SCARCITY: Pretend 61 slots are already taken (139 remaining out of 200)
+    fake_filled = config["slots_filled"] + 61
+    
     early_adopter_active = (
         config["early_adopter_active"] and
-        config["slots_filled"] < config["early_adopter_slots"]
+        fake_filled < config["early_adopter_slots"]
     )
 
-    slots_remaining = max(0, config["early_adopter_slots"] - config["slots_filled"])
+    slots_remaining = max(0, config["early_adopter_slots"] - fake_filled)
     # days_remaining kept for compatibility but always shows max now
     days_remaining = EARLY_ADOPTER_DAYS
 
