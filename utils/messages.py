@@ -83,7 +83,7 @@ def main_menu(user: dict, pricing: dict | None = None) -> str:
         early_tag = " \\(Early Adopter 🔒\\)" if user.get("is_early_adopter") else ""
         return (
             "🏠 *Applixy*\n"
-            f"Plan: ⭐ Pro{early_tag}\n"
+            f"Plan: ⭐ Pro{early_tag} \\(Unlimited jobs · 10 cover letters · 5 ATS checks/day\\)\n"
             f"Renews: {escape_md(date_str)}\n"
         )
 
@@ -812,13 +812,13 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
     """Dynamic upgrade message shown during early adopter period."""
     ea_price = pricing['early_adopter_price']
     reg_price = pricing['regular_price']
-    days_left = pricing['days_remaining']
+    slots_left = pricing.get('slots_remaining', 200)
 
     return (
         f"🔥 *Early Adopter Offer*\n\n"
         f"*₹{ea_price}/month* \\(regular price ~₹{reg_price}~\\)\n"
         f"Lock this price in forever, it won't increase for you\\.\n\n"
-        f"⏳ _Intro price available for next {days_left} days_\n\n"
+        f"⏳ _Only {pricing.get('slots_remaining', 200)} of 200 early adopter slots remaining_\n\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         "*🎯 Why upgrade?*\n\n"
         "🚀 Apply to more relevant jobs faster\n"

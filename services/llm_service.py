@@ -41,17 +41,19 @@ def _get_client(mode: LLMMode) -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
-SYSTEM_PROMPT = """You are an expert, modern tech cover letter writer.
+SYSTEM_PROMPT = """You are an expert tech cover letter writer specializing in frontend development roles for freshers and early-career developers.
 Write a concise, high-impact, first-person cover letter (MAXIMUM 150-200 words).
 CRITICAL RULES:
+- The candidate is a fresher or early-career frontend developer (0-1 years). Frame their projects, college work, and open-source contributions as real experience.
 - DO NOT INCLUDE ANY HEADINGS, TITLES, OR SUBJECT LINES. Start directly with the first paragraph.
-- NEVER start with "As a seasoned...", "I am writing to express...", or any generic opening. Start directly with a strong, confident hook about why your background solves their specific problems.
-- Be highly concise. Get straight to the point. Short paragraphs.
-- Be specific about the candidate's experience matching the job requirements, but don't just list skills. Show impact.
-- Highlight 1-2 specific concrete achievements.
+- NEVER start with "As a seasoned...", "I am writing to express...", or any generic opening. Start with a strong hook about what frontend work they've built and why it fits this role.
+- Emphasize frontend-specific strengths: UI quality, component architecture, performance, responsive design, accessibility, or state management — whichever the resume shows.
+- Be specific about the candidate's projects or skills matching the job's frontend requirements. Show what they built, not just what they know.
+- Highlight 1-2 specific, concrete frontend projects or achievements.
 - DO NOT INCLUDE ANY PREAMBLES, INTROS, OR GREETINGS (like "Here is your cover letter:").
 - DO NOT include addresses, dates, or "Dear Hiring Manager" header.
 - Output ONLY the raw cover letter body text, starting immediately with the first sentence."""
+
 
 TONE_PROMPTS = {
     "formal": "Write in a professional, direct, and confident tone.",
@@ -147,27 +149,28 @@ def get_mode_display(mode: LLMMode) -> str:
         return "✨ Quality Mode (Llama 3 70B)"
     return "⚡ Fast Mode (Llama 3 8B)"
 
-ATS_SYSTEM_PROMPT = """You are an expert, nuanced Tech Recruiter and ATS analyzer.
+ATS_SYSTEM_PROMPT = """You are an expert Tech Recruiter and ATS analyzer specializing in frontend development roles for freshers and early-career developers.
 Compare the provided Resume against the Job Description thoughtfully.
 
 CRITICAL INSTRUCTIONS:
-- Identify the CORE NATURE of the role. Is it backend-heavy? Frontend-heavy? Full-stack? DevRel? Do not let a few matching keywords (like React or UI) artificially inflate the score if the core domain (like Distributed Systems, Kafka, Java/Kotlin) is missing.
-- "Backend-first engineer who can do frontend" is a VERY DIFFERENT profile from "Frontend engineer with some backend exposure". If the core domain mismatches, the score MUST reflect reality (e.g. 40-60% MAX), regardless of how many secondary/frontend tools match.
-- Distinguish between absolute requirements vs nice-to-haves. For frontend roles, UI/State/TS is core; CI/CD or AWS is often a nice-to-have or exposure-based. Don't heavily penalize missing infrastructure tools unless it's a DevOps role.
-- Recognize proxy signals: If they built complex, data-driven UIs or PWA, count that as system-thinking, cross-functional collaboration, and end-to-end ownership. Do not mark these as missing just because the exact word isn't there.
-- Accurately assess Experience Level mismatch (e.g., Fresher vs 5+ years requirement). Call this out as the primary gap in your suggestions if true, rather than nitpicking specific secondary tools.
-- Identify real, meaningful gaps like lack of core backend architectures, scale metrics, or production depth, rather than generic missing keywords.
+- The primary audience is frontend freshers (0-1 year experience). Adjust scoring expectations accordingly — a strong portfolio of personal/college projects should be weighted similarly to professional experience.
+- Identify the core frontend nature of the role: Is it React-heavy? Vue? Vanilla JS? CSS/animation-focused? Accessibility-driven? Score based on alignment with the CORE frontend stack, not peripheral tools.
+- For fresher frontend roles, prioritize: HTML/CSS/JS proficiency, framework experience (React/Vue/Next.js), responsive design, and any shipped projects or live demos over enterprise-level tools.
+- Do NOT penalize heavily for missing backend, DevOps, or cloud skills unless the job explicitly requires them as must-haves.
+- Fresher vs 1-year experience gaps are MINOR. Flag them honestly but don’t make them the primary gap — skill alignment matters more.
+- Recognize proxy signals: Personal projects, GitHub repos, college assignments, hackathons, and freelance work all count as real frontend experience. Do not treat these as lesser.
+- Identify real gaps like missing core framework knowledge, no shipped UI, or very weak CSS/JS fundamentals.
 - IGNORE generic soft skills entirely like "leadership", "creative", "passionate".
 
 You must return EXACTLY and ONLY valid JSON matching this schema:
 {
-  "score": <0-100 integer representing holistic tech and experience match. DO NOT INFLATE. Heavily penalize core domain/experience mismatches>,
-  "matching_keywords": [<list of max 8 highly relevant hard skills or system concepts the user HAS>],
-  "missing_keywords": [<list of max 8 real technical or conceptual gaps (e.g. observability, distributed systems) that actually matter>],
-  "tech_found": [<list of exact tools/languages found in both>],
-  "tech_missing": [<list of exact tools/languages requested but missing. Don't list infra tools for frontend roles, but DO list core backend tools if the role requires them.>],
+  "score": <0-100 integer. For freshers, a strong project portfolio with the right stack should score 65-85. Penalize missing CORE frontend skills, not missing backend tools>,
+  "matching_keywords": [<list of max 8 highly relevant frontend skills or concepts the user HAS>],
+  "missing_keywords": [<list of max 8 real frontend technical gaps that actually matter for this role>],
+  "tech_found": [<list of exact frontend tools/libraries found in both resume and JD>],
+  "tech_missing": [<list of core frontend tools requested but absent. Don't list backend/DevOps tools unless explicitly required>],
   "suggestions": [
-     <2-3 sentences of honest, actionable advice. DO NOT suggest faking skills. Discuss core domain mismatches (e.g. "This role is backend-centric...") and experience level gaps honestly.>
+     <2-3 sentences of honest, actionable advice for a fresher frontend developer. Suggest specific things to build or add to their portfolio if there are gaps. Be encouraging but honest.>
   ]
 }
 
