@@ -122,7 +122,12 @@ async def cancel_user_subscription(telegram_id: int, db_pool) -> bool:
 
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
-    """Verify Razorpay webhook signature."""
+    """Verify Razorpay webhook signature using HMAC-SHA256.
+    Returns False (reject) if secret is not configured — never silently passes.
+    """
+    if not settings.RAZORPAY_WEBHOOK_SECRET:
+        logger.error("RAZORPAY_WEBHOOK_SECRET is not set — rejecting all webhooks for safety")
+        return False
     try:
         client = _get_client()
         client.utility.verify_webhook_signature(
