@@ -212,11 +212,11 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     # Jump straight to location (skipping Role and Experience steps)
     await query.edit_message_text(
-        "\ud83c\udf0d Where are you looking for work?",
+        "\U0001F30D Where are you looking for work?",
         reply_markup=keyboards.location_keyboard(),
-        parse_mode="MarkdownV2",
     )
     return LOCATION
+
 
 
 # FUTURE (multi-role): Uncomment role_callback when expanding beyond frontend
