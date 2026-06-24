@@ -3,8 +3,10 @@ Application builder for python-telegram-bot.
 Assembles all handlers and returns the bot Application instance.
 """
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.error import TelegramError
 from loguru import logger
 from config import settings
+from utils.error_alert import send_error_alert
 
 from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu
@@ -39,9 +41,42 @@ from handlers.refer import refer_command, refer_callback
 from utils.messages import help_message
 
 
+async def global_error_handler(update, context) -> None:
+    """Catch-all error handler — fires when any Telegram handler raises an exception."""
+    error = context.error
+
+    # Build context string for the alert
+    extra_parts = []
+    if update and update.effective_user:
+        extra_parts.append(f"user={update.effective_user.id}")
+    if update and update.callback_query:
+        extra_parts.append(f"callback={update.callback_query.data}")
+    elif update and update.message:
+        extra_parts.append(f"msg='{update.message.text or '(non-text)'}'")
+    extra = " | ".join(extra_parts)
+
+    logger.error(f"Unhandled exception in handler: {error}", exc_info=error)
+
+    # Don't alert for benign Telegram errors (e.g. message not modified, user blocked bot)
+    ignored = ("Message is not modified", "Query is too old", "bot was blocked")
+    if isinstance(error, TelegramError) and any(msg in str(error) for msg in ignored):
+        return
+
+    try:
+        await send_error_alert(
+            bot=context.bot,
+            source="Telegram Handler",
+            error=error,
+            extra=extra,
+        )
+    except Exception:
+        pass  # Never let the alert crash the app
+
+
 async def help_command(update, context):
     """Handle /help."""
     await update.message.reply_text(help_message(), parse_mode="MarkdownV2")
+
 
 
 def build_bot() -> Application:
@@ -149,6 +184,9 @@ def build_bot() -> Application:
 
     # Upgrade/Payments Callbacks
     app.add_handler(CallbackQueryHandler(checkout_handler, pattern="^upgrade_(pro|proplus|premium)$"))
+
+    # Global error handler — alerts admin on any unhandled exception
+    app.add_error_handler(global_error_handler)
 
     logger.info("Bot application built successfully.")
     return app

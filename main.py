@@ -4,14 +4,17 @@ FastAPI server that manages the Telegram webhook and Razorpay callbacks.
 Also handles bot initialization and the background scheduler.
 """
 import sys
+import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from loguru import logger
 
 from config import settings
 from db.connection import init_db, close_db
 from bot import build_bot
 from services.scheduler import start_scheduler, stop_scheduler, set_bot_app
+from utils.error_alert import send_error_alert
 
 
 # Initialize logs
@@ -74,6 +77,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ApplixyBot API", lifespan=lifespan)
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch-all FastAPI exception handler — alerts admin on any unhandled API error."""
+    logger.error(f"Unhandled FastAPI exception on {request.url.path}: {exc}", exc_info=True)
+    try:
+        await send_error_alert(
+            bot=bot_app.bot,
+            source=f"FastAPI — {request.method} {request.url.path}",
+            error=exc,
+            extra=f"client={request.client.host if request.client else 'unknown'}",
+        )
+    except Exception:
+        pass
+    return JSONResponse(status_code=500, content={"status": "error", "detail": "Internal server error"})
+
+
 @app.get("/health")
 async def health_check():
     """Railway healthcheck endpoint."""
@@ -113,6 +132,7 @@ async def telegram_webhook(request: Request):
         await bot_app.process_update(update)
     except Exception as e:
         logger.error(f"Error processing update: {e}", exc_info=True)
+        # bot_app error_handler will already fire — no double alert needed
         return {"status": "error", "message": str(e)}
     
     return {"status": "ok"}

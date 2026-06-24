@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
+from utils.error_alert import send_error_alert
 
 
 scheduler = AsyncIOScheduler()
@@ -108,6 +109,11 @@ async def _send_daily_alerts():
 
     except Exception as e:
         logger.error(f"❌ Daily alert job failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _send_daily_alerts", e)
+            except Exception:
+                pass
 
 
 
@@ -171,6 +177,11 @@ async def _process_reminders():
         
     except Exception as e:
         logger.error(f"❌ Process reminders failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _process_reminders", e)
+            except Exception:
+                pass
 
 async def _send_weekly_digest():
     """Send weekly application digest to PRO users on Fridays."""
@@ -224,6 +235,11 @@ async def _send_weekly_digest():
         
     except Exception as e:
         logger.error(f"❌ Send weekly digest failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _send_weekly_digest", e)
+            except Exception:
+                pass
 
 
 async def _cleanup_old_manual_jobs():
@@ -235,6 +251,11 @@ async def _cleanup_old_manual_jobs():
         logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs.")
     except Exception as e:
         logger.error(f"❌ Failed to cleanup old manual jobs: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _cleanup_old_manual_jobs", e)
+            except Exception:
+                pass
 
 from datetime import datetime
 
