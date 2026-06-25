@@ -128,18 +128,27 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
         matched_disp, missing_disp = [], []
     else:
         user_set = set(s.lower() for s in user_skills)
-        job_set = set(s.lower() for s in job_skills)
-        if not job_set:
-            skill_pct = 50
-            matched_disp, missing_disp = [], []
-        else:
-            matched = list(user_set.intersection(job_set))
-            missing = list(job_set.difference(user_set))
-            skill_pct = int((len(matched) / len(job_set)) * 100)
-            
-            original_map = {s.lower(): s for s in job_skills}
-            matched_disp = [original_map.get(m, m) for m in matched]
-            missing_disp = [original_map.get(m, m) for m in missing]
+        matched_disp, missing_disp = [], []
+        matched_count = 0
+        
+        for raw_jskill in job_skills:
+            jskill_lower = raw_jskill.lower()
+            if "/" in jskill_lower:
+                # Treat as an "OR" condition (e.g. "React/Angular/Vue")
+                sub_skills = [s.strip() for s in jskill_lower.split("/")]
+                if any(sub in user_set for sub in sub_skills):
+                    matched_count += 1
+                    matched_disp.append(raw_jskill)
+                else:
+                    missing_disp.append(raw_jskill)
+            else:
+                if jskill_lower in user_set:
+                    matched_count += 1
+                    matched_disp.append(raw_jskill)
+                else:
+                    missing_disp.append(raw_jskill)
+                    
+        skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
     
     # ── Experience Component (30% weight) ──
     u_map = {"0": 0, "1": 1, "2": 2, "3_5": 4, "5_plus": 6, "5+": 6}
@@ -211,14 +220,27 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         matched_disp, missing_disp = [], []
     else:
         user_set = set(s.lower() for s in user_skills)
-        job_set = set(s.lower() for s in job_skills)
-        matched = list(user_set.intersection(job_set))
-        missing = list(job_set.difference(user_set))
-        skill_pct = int((len(matched) / len(job_set)) * 100) if job_set else 50
+        matched_disp, missing_disp = [], []
+        matched_count = 0
+        
+        for raw_jskill in job_skills:
+            jskill_lower = raw_jskill.lower()
+            if "/" in jskill_lower:
+                # Treat as an "OR" condition
+                sub_skills = [s.strip() for s in jskill_lower.split("/")]
+                if any(sub in user_set for sub in sub_skills):
+                    matched_count += 1
+                    matched_disp.append(raw_jskill)
+                else:
+                    missing_disp.append(raw_jskill)
+            else:
+                if jskill_lower in user_set:
+                    matched_count += 1
+                    matched_disp.append(raw_jskill)
+                else:
+                    missing_disp.append(raw_jskill)
 
-        original_map = {s.lower(): s for s in job_skills}
-        matched_disp = [original_map.get(m, m) for m in matched]
-        missing_disp = [original_map.get(m, m) for m in missing]
+        skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
 
     # ── Experience (25%) ──
     user_exp = str(user.get("experience_level", "0"))
