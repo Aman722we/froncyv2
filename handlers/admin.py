@@ -48,7 +48,12 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     lines = [line.strip() for line in text.split("\n") if line.strip()]
 
     if len(lines) < 5:
-        await update.message.reply_text("⚠️ Not enough lines. Please follow the format.")
+        await update.message.reply_text(
+            "⚠️ <b>Not enough lines.</b>\n\n"
+            "The job needs to be at least 5 lines long.\n"
+            "👉 <b>Paste the corrected job again</b>, or type /cancel to abort.",
+            parse_mode="HTML"
+        )
         return WAITING_FOR_JOB_TEXT
 
     try:
@@ -142,13 +147,16 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     except telegram.error.TimedOut:
         logger.warning("Telegram timeout while replying to /addjob, but job might be saved.")
-        # End conversation because job was likely saved
         return ConversationHandler.END
     except Exception as e:
         logger.error(f"Error parsing manual job: {e}")
-        await update.message.reply_text(f"⚠️ Error parsing job: {str(e)}")
+        await update.message.reply_text(
+            f"⚠️ <b>Format Error:</b> {str(e)}\n\n"
+            "Please check the formatting (make sure there are | dividers, etc).\n"
+            "👉 <b>Paste the corrected job again</b>, or type /cancel to abort.",
+            parse_mode="HTML"
+        )
         return WAITING_FOR_JOB_TEXT
-
 
 async def cancel_addjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel /addjob."""
