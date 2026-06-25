@@ -48,7 +48,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     await update.message.reply_text(
         "✅ *Thank you\\!*\n\n"
-        "Your feedback has been sent directly to the developer\\. We appreciate your help in making ApplixyBot better\\!",
+        "Your feedback has been sent directly to the developer\\. We appreciate your help in making FroncyBot better\\!",
         parse_mode="MarkdownV2",
     )
     return ConversationHandler.END

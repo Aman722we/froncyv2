@@ -32,7 +32,7 @@ async def _get_or_create_plan(client: razorpay.Client, db_pool, is_early_adopter
         return existing_plan_id
         
     # Create the plan on Razorpay
-    plan_name = "ApplixyBot Pro (Early Adopter)" if is_early_adopter else "ApplixyBot Pro (Regular)"
+    plan_name = "FroncyBot Pro (Early Adopter)" if is_early_adopter else "FroncyBot Pro (Regular)"
     amount_paise = amount * 100
     
     logger.info(f"Creating Razorpay plan dynamically: {plan_name} for ₹{amount}")

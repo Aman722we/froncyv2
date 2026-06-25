@@ -1,5 +1,5 @@
 """
-Niche configuration — single source of truth for ApplixyBot's active focus.
+Niche configuration — single source of truth for FroncyBot's active focus.
 To expand scope in future: add to these lists and uncomment disabled code.
 """
 

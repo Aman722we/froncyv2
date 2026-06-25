@@ -1,5 +1,5 @@
 """
-Admin handlers for ApplixyBot.
+Admin handlers for FroncyBot.
 Includes the /addjob command to manually curate jobs.
 """
 import telegram

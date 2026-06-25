@@ -1,5 +1,5 @@
 """
-Message templates for ApplixyBot — MarkdownV2 formatted.
+Message templates for FroncyBot — MarkdownV2 formatted.
 All bot-facing text lives here to keep handlers clean.
 """
 from utils.helpers import escape_md
@@ -14,7 +14,7 @@ def welcome_message(first_name: str = "there") -> str:
     return (
         f"👋 Hey {safe_name}\\!\n\n"
         "Struggling to land your first frontend job?\n\n"
-        "Applixy curates the best frontend jobs & internships for freshers, "
+        "Froncy curates the best frontend jobs & internships for freshers, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
         "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
@@ -82,7 +82,7 @@ def main_menu(user: dict, pricing: dict | None = None) -> str:
         date_str = expires_at.strftime("%b %d") if expires_at else "soon"
         early_tag = " \\(Early Adopter 🔒\\)" if user.get("is_early_adopter") else ""
         return (
-            "🏠 *Applixy*\n"
+            "🏠 *Froncy*\n"
             f"Plan: ⭐ Pro{early_tag} \\(Unlimited jobs · 10 cover letters · 5 ATS checks/day\\)\n"
             f"Renews: {escape_md(date_str)}\n"
         )
@@ -98,19 +98,19 @@ def main_menu(user: dict, pricing: dict | None = None) -> str:
             if hours_left > 0:
                 time_str = f"{hours_left}h remaining"
                 return (
-                    "🏠 *Applixy*\n"
+                    "🏠 *Froncy*\n"
                     f"⚡ Pro Trial — {escape_md(time_str)}\n"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
-                "🏠 *Applixy*\n"
+                "🏠 *Froncy*\n"
                 f"⚡ Pro Trial — active\n"
             )
 
     # Free plan — no upgrade text in message body (keyboard has the button)
     return (
-        "🏠 *Applixy*\n"
+        "🏠 *Froncy*\n"
         "Plan: Free \\(5 jobs · 1 cover letter · 1 ATS check/day\\)"
     )
 
@@ -865,7 +865,7 @@ def upgrade_regular_message(pricing: dict) -> str:
     """Dynamic upgrade message after early adopter period ends."""
     price = pricing.get('current_price', 499)
     return (
-        f"💎 *Applixy Pro — ₹{price}/month*\n\n"
+        f"💎 *Froncy Pro — ₹{price}/month*\n\n"
         "*What you unlock:*\n"
         "✅ Unlimited web dev jobs daily\n"
         "✅ Full match scores on every listing\n"
@@ -1028,7 +1028,7 @@ def error_subscription_expired() -> str:
 
 def help_message() -> str:
     return (
-        "ℹ️ *ApplixyBot Help*\n\n"
+        "ℹ️ *FroncyBot Help*\n\n"
         "*Commands:*\n"
         "/start — Open bot / main menu\n"
         "/menu — Show main menu\n"

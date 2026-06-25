@@ -29,7 +29,7 @@ set_bot_app(bot_app)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI."""
-    logger.info("🚀 Starting ApplixyBot...")
+    logger.info("🚀 Starting FroncyBot...")
 
     # 1. Init Database
     await init_db()
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown sequence
-    logger.info("🛑 Shutting down ApplixyBot...")
+    logger.info("🛑 Shutting down FroncyBot...")
     stop_scheduler()
     
     
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
 
 # FastAPI App
-app = FastAPI(title="ApplixyBot API", lifespan=lifespan)
+app = FastAPI(title="FroncyBot API", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)
@@ -96,7 +96,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health_check():
     """Railway healthcheck endpoint."""
-    return {"status": "ok", "bot": "ApplixyBot"}
+    return {"status": "ok", "bot": "FroncyBot"}
 
 
 from fastapi.responses import HTMLResponse
@@ -211,7 +211,7 @@ async def razorpay_webhook(request: Request):
 @app.get("/health")
 def health_check():
     """Simple health check endpoint."""
-    return {"status": "healthy", "service": "applixybot"}
+    return {"status": "healthy", "service": "froncybot"}
 
 if __name__ == "__main__":
     import uvicorn

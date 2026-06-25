@@ -81,7 +81,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     )
 
     try:
-        with open("assets/images/Applixy_banner.png", "rb") as banner:
+        with open("assets/images/Froncy_banner.png", "rb") as banner:
             await update.message.reply_photo(
                 photo=banner,
                 caption=messages.welcome_message(user.first_name),
@@ -89,7 +89,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 parse_mode="MarkdownV2",
             )
     except FileNotFoundError:
-        logger.warning("Applixy_banner.png not found, falling back to text.")
+        logger.warning("Froncy_banner.png not found, falling back to text.")
         await update.message.reply_text(
             messages.welcome_message(user.first_name),
             reply_markup=keyboards.onboarding_welcome_keyboard(),
@@ -420,7 +420,7 @@ async def _complete_onboarding(
                         chat_id=referrer_id,
                         text=(
                             f"🎉 <b>Referral Reward!</b>\n\n"
-                            f"Your friend <b>{new_name}</b> just joined Applixy using your link!\n"
+                            f"Your friend <b>{new_name}</b> just joined Froncy using your link!\n"
                             f"You've earned <b>{REFERRAL_BONUS_DAYS} free Pro days</b>. Keep it up! 🚀"
                         ),
                         parse_mode="HTML",

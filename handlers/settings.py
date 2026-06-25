@@ -473,7 +473,7 @@ async def cancel_subscription_prompt(update: Update, context: ContextTypes.DEFAU
     
     await query.edit_message_text(
         "⚠️ *Cancel Subscription*\n\n"
-        "Are you sure you want to cancel your Applixy Pro subscription?\n"
+        "Are you sure you want to cancel your Froncy Pro subscription?\n"
         "• You will not be billed again\\.\n"
         "• You will keep your Pro benefits until the end of your current billing cycle\\.",
         reply_markup=kb,
@@ -496,7 +496,7 @@ async def cancel_subscription_confirm(update: Update, context: ContextTypes.DEFA
         logger.info(f"User {user_id} cancelled their subscription.")
         await query.edit_message_text(
             "✅ *Subscription Cancelled*\n\n"
-            "Your Applixy Pro subscription has been cancelled and will not renew\\.\n"
+            "Your Froncy Pro subscription has been cancelled and will not renew\\.\n"
             "You can continue using Pro features until your current cycle ends\\.",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]])

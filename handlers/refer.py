@@ -11,7 +11,7 @@ from config import settings
 from db.connection import get_pool
 from services.referral_service import get_referral_stats, REFERRAL_BONUS_DAYS, REFERRAL_MAX_DAYS
 
-BOT_USERNAME = "ApplixyBot"
+BOT_USERNAME = "FroncyBot"
 
 
 async def _build_refer_message(user_id: int) -> tuple[str, InlineKeyboardMarkup]:

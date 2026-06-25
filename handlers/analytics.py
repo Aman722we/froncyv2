@@ -60,7 +60,7 @@ async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_jobs   = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
 
     msg = (
-        "📊 <b>ApplixyBot Analytics</b>\n"
+        "📊 <b>FroncyBot Analytics</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "👥 <b>Users</b>\n"
         f"  • Total registered : <b>{total_users}</b>\n"
