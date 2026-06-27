@@ -212,9 +212,13 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     context.user_data["experience_level"] = "0"
 
     # Jump straight to location (skipping Role and Experience steps)
+    step2_bar = messages.escape_md("[🟢🟢⚪⚪] Step 2 of 4")
     await query.edit_message_text(
-        "\U0001F30D Where are you looking for work?",
+        f"{step2_bar}\n\n"
+        "*Pick your location* 📍\n"
+        "Where are you looking for work?",
         reply_markup=keyboards.location_keyboard(),
+        parse_mode="MarkdownV2",
     )
     return LOCATION
 
@@ -266,7 +270,11 @@ async def location_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update_user_profile(user_id, location_pref=location)
     context.user_data["location"] = location
 
-    text = messages.escape_md("🎓 What year did you (or will you) graduate? (e.g. 2025)\n\nPlease type a 4-digit year:")
+    step3_bar = messages.escape_md("[🟢🟢🟢⚪] Step 3 of 4")
+    text = (
+        f"{step3_bar}\n\n"
+        + messages.escape_md("*Your graduation year* 🎓\nWhat year did you (or will you) graduate? (e.g. 2025)\n\nPlease type a 4-digit year:")
+    )
     await query.edit_message_text(text, parse_mode="MarkdownV2")
     return BATCH_YEAR
 
@@ -286,9 +294,10 @@ async def batch_year_received(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update_user_profile(user_id, batch_year=batch_year)
     context.user_data["batch_year"] = batch_year
 
+    step4_bar = messages.escape_md("[🟢🟢🟢🟢] Step 4 of 4 — Almost there!")
     await update.message.reply_text(
-        "📄 Almost done\\!\n\n"
-        "Upload your resume \\(PDF\\) so I can write personalised cover letters for you\\.\n\n"
+        f"{step4_bar}\n\n"
+        "📄 *Upload your resume* \\(PDF\\) so I can write personalised cover letters for you\.\n\n"
         "You can skip this and upload later with /resume",
         reply_markup=keyboards.resume_prompt_keyboard(),
         parse_mode="MarkdownV2",

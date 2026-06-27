@@ -9,6 +9,15 @@ from utils.helpers import escape_md
 # Onboarding
 # ──────────────────────────────────────────────
 
+ONBOARDING_STEPS = 4
+
+def _step_bar(current: int) -> str:
+    """Generate a visual progress bar for onboarding. current is 1-indexed."""
+    filled = "🟢"
+    empty  = "⚪"
+    bar = "".join(filled if i < current else empty for i in range(ONBOARDING_STEPS))
+    return f"\\[{bar}\\] Step {escape_md(str(current))} of {ONBOARDING_STEPS}"
+
 def welcome_message(first_name: str = "there") -> str:
     safe_name = escape_md(first_name)
     return (
@@ -24,7 +33,13 @@ def welcome_message(first_name: str = "there") -> str:
 
 
 def skills_prompt() -> str:
-    return "Great\\! Which frontend technologies do you work with?\n\\(Select all that apply, then tap *Done*\\)"
+    bar = _step_bar(1)
+    return (
+        f"{bar}\n\n"
+        "*Pick your skills* 🛠️\n"
+        "Which frontend technologies do you work with?\n"
+        "\\(Select all that apply, then tap *Done*\\)"
+    )
 
 
 def trial_activated_message(trial_expires_at) -> str:
