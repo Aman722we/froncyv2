@@ -3,6 +3,7 @@
 Flow: Welcome → Skills → Location → Resume Prompt → Complete
 """
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
@@ -88,8 +89,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 reply_markup=keyboards.onboarding_welcome_keyboard(),
                 parse_mode="MarkdownV2",
             )
-    except FileNotFoundError:
-        logger.warning("Froncy_banner.png not found, falling back to text.")
+    except (FileNotFoundError, BadRequest) as e:
+        logger.warning(f"Could not send banner photo ({e}), falling back to text.")
         await update.message.reply_text(
             messages.welcome_message(user.first_name),
             reply_markup=keyboards.onboarding_welcome_keyboard(),
