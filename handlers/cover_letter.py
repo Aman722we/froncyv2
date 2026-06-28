@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from loguru import logger
 
 from db.users import get_user, increment_cover_letters_today
+from db.tracker import log_ai_usage
 from db.jobs import get_job_by_id
 from db.manual_jobs import get_manual_job_by_id
 from db.connection import get_pool
@@ -112,6 +113,7 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         letter = await generate_cover_letter(user["resume_text"], jd, mode=mode, tone=tone)
 
         await increment_cover_letters_today(user_id)
+        await log_ai_usage(user_id, "cover_letter")
         
         remaining = limit - (cover_letters_today + 1)
         if plan == "free":

@@ -97,7 +97,75 @@ async def update_application_status(telegram_id: int, app_id: int, new_status: s
         )
         return result == "UPDATE 1"
 
+async def log_ai_usage(telegram_id: int, feature_type: str) -> None:
+    """Log a single AI feature use event (cover_letter or ats_check)."""
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO ai_usage_logs (telegram_id, feature_type) VALUES ($1, $2)",
+                telegram_id, feature_type
+            )
+    except Exception as e:
+        logger.warning(f"Could not log AI usage (non-critical): {e}")
+
+
+async def get_ai_usage_stats() -> dict:
+    """Get cover letter and ATS check counts: today, this week, this month, total."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        for feature in ("cover_letter", "ats_check"):
+            pass  # Pre-warm
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                feature_type,
+                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '1 day' 
+                                  AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC'))
+                    AS today,
+                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '7 days') AS week,
+                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '30 days') AS month,
+                COUNT(*) AS total
+            FROM ai_usage_logs
+            GROUP BY feature_type
+            """
+        )
+
+    result = {
+        "cover_letter": {"today": 0, "week": 0, "month": 0, "total": 0},
+        "ats_check":    {"today": 0, "week": 0, "month": 0, "total": 0},
+    }
+    for row in rows:
+        ft = row["feature_type"]
+        if ft in result:
+            result[ft] = {
+                "today": row["today"],
+                "week":  row["week"],
+                "month": row["month"],
+                "total": row["total"],
+            }
+    return result
+
+
+async def get_application_funnel_stats() -> dict:
+    """Get counts of all application statuses across all users (admin view)."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        total = await conn.fetchval("SELECT COUNT(*) FROM applications")
+        rows = await conn.fetch(
+            "SELECT status, COUNT(*) AS cnt FROM applications GROUP BY status"
+        )
+    stats = {"total": total or 0, "applied": 0, "interviewing": 0, "rejected": 0, "offer": 0}
+    for row in rows:
+        s = row["status"]
+        if s in stats:
+            stats[s] = row["cnt"]
+    return stats
+
+
 async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
+
     """Get a specific application for managing."""
     pool = get_pool()
     async with pool.acquire() as conn:

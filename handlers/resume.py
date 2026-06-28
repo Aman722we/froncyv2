@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from loguru import logger
 
 from db.users import get_user, check_ats_limit, increment_ats_check
+from db.tracker import log_ai_usage
 from db.jobs import get_job_by_id
 from db.manual_jobs import get_manual_job_by_id
 from services.ats_analyzer import analyze_resume_match
@@ -138,6 +139,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         # Increment counter AFTER successful analysis
         await increment_ats_check(user_id)
+        await log_ai_usage(user_id, "ats_check")
 
         # Build keyboard — upsell for free users, always show Back button
         if plan not in PRO_PLANS:
@@ -274,6 +276,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
         msg = ats_result(result)
         
         await increment_ats_check(user_id)
+        await log_ai_usage(user_id, "ats_check")
 
         from utils.keyboards import InlineKeyboardMarkup as KB, InlineKeyboardButton as IKB
         

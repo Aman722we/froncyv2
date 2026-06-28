@@ -1,6 +1,6 @@
 """
 Admin analytics handlers.
-/analytics  — dashboard stats
+/analytics  — multi-page dashboard stats (3 pages, Next/Prev buttons)
 /users      — paginated list of all users (name + ID)
 /user <id>  — full profile of a specific user
 All commands are admin-only.
@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from loguru import logger
 from config import settings
 from db.connection import get_pool
+from db.tracker import get_ai_usage_stats, get_application_funnel_stats
 
 
 # ─────────────────────────────────────────────
@@ -25,42 +26,33 @@ def _is_admin(update: Update) -> bool:
 
 
 # ─────────────────────────────────────────────
-# /analytics
+# Page builders
 # ─────────────────────────────────────────────
 
-async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show key dashboard stats to admin."""
-    if not _is_admin(update):
-        return
-
-    pool = get_pool()
+async def _build_page_1(pool) -> str:
+    """Page 1: Growth & Users."""
     async with pool.acquire() as conn:
-        # Core counts
-        total_users      = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted IS NOT TRUE")
-        onboarded        = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_onboarded = TRUE AND is_deleted IS NOT TRUE")
-        with_resume      = await conn.fetchval("SELECT COUNT(*) FROM users WHERE resume_text IS NOT NULL AND is_deleted IS NOT TRUE")
-        deleted_count    = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted = TRUE")
+        total_users   = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted IS NOT TRUE")
+        onboarded     = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_onboarded = TRUE AND is_deleted IS NOT TRUE")
+        with_resume   = await conn.fetchval("SELECT COUNT(*) FROM users WHERE resume_text IS NOT NULL AND is_deleted IS NOT TRUE")
+        deleted_count = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_deleted = TRUE")
 
-        # Plan breakdown
-        free_count       = await conn.fetchval("SELECT COUNT(*) FROM users WHERE plan = 'free' AND (is_deleted IS NOT TRUE)")
-        pro_count        = await conn.fetchval("SELECT COUNT(*) FROM users WHERE plan = 'pro'  AND (is_deleted IS NOT TRUE)")
-        trial_count      = await conn.fetchval(
+        free_count    = await conn.fetchval("SELECT COUNT(*) FROM users WHERE plan = 'free' AND (is_deleted IS NOT TRUE)")
+        pro_count     = await conn.fetchval("SELECT COUNT(*) FROM users WHERE plan = 'pro'  AND (is_deleted IS NOT TRUE)")
+        trial_count   = await conn.fetchval(
             "SELECT COUNT(*) FROM users WHERE is_trial = TRUE AND trial_expires_at > NOW() AND is_deleted IS NOT TRUE"
         )
 
-        # Time-based
-        now = datetime.now(timezone.utc)
+        now         = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start  = today_start - timedelta(days=7)
 
-        new_today    = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= $1 AND is_deleted IS NOT TRUE", today_start)
-        new_week     = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= $1 AND is_deleted IS NOT TRUE", week_start)
+        new_today  = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= $1 AND is_deleted IS NOT TRUE", today_start)
+        new_week   = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= $1 AND is_deleted IS NOT TRUE", week_start)
+        total_jobs = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
 
-        # Jobs posted
-        total_jobs   = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
-
-    msg = (
-        "📊 <b>FroncyBot Analytics</b>\n"
+    return (
+        "📊 <b>FroncyBot Analytics</b>  <i>— Page 1 of 3</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "👥 <b>Users</b>\n"
         f"  • Total registered : <b>{total_users}</b>\n"
@@ -78,7 +70,96 @@ async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"  • Active listings  : <b>{total_jobs}</b>\n"
     )
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+
+async def _build_page_2() -> str:
+    """Page 2: AI Engine usage stats."""
+    stats = await get_ai_usage_stats()
+    cl = stats["cover_letter"]
+    ats = stats["ats_check"]
+
+    return (
+        "🤖 <b>AI Engine Analytics</b>  <i>— Page 2 of 3</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "✍️ <b>Cover Letters Generated</b>\n"
+        f"  • Today            : <b>{cl['today']}</b>\n"
+        f"  • This week        : <b>{cl['week']}</b>\n"
+        f"  • This month       : <b>{cl['month']}</b>\n"
+        f"  • All time total   : <b>{cl['total']}</b>\n\n"
+        "📊 <b>ATS Resume Checks</b>\n"
+        f"  • Today            : <b>{ats['today']}</b>\n"
+        f"  • This week        : <b>{ats['week']}</b>\n"
+        f"  • This month       : <b>{ats['month']}</b>\n"
+        f"  • All time total   : <b>{ats['total']}</b>\n"
+    )
+
+
+async def _build_page_3() -> str:
+    """Page 3: Application Tracker Kanban funnel."""
+    stats = await get_application_funnel_stats()
+
+    tracker_active = stats["total"] > 0
+    usage_line = "✅ <b>Yes — users are actively tracking applications!</b>" if tracker_active else "❌ Not yet — no applications tracked."
+
+    return (
+        "📋 <b>Application Tracker</b>  <i>— Page 3 of 3</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔍 <b>Tracker Being Used?</b>  {usage_line}\n\n"
+        "📈 <b>Application Funnel</b>\n"
+        f"  • 📥 Total tracked  : <b>{stats['total']}</b>\n"
+        f"  • 🔵 Applied        : <b>{stats['applied']}</b>\n"
+        f"  • 🟡 Interviewing   : <b>{stats['interviewing']}</b>\n"
+        f"  • 🔴 Rejected       : <b>{stats['rejected']}</b>\n"
+        f"  • 🟢 Got Offer!     : <b>{stats['offer']}</b>\n"
+    )
+
+
+def _analytics_keyboard(page: int) -> InlineKeyboardMarkup:
+    """Build Next/Prev navigation for analytics pages."""
+    row = []
+    if page > 1:
+        row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"analytics_page_{page - 1}"))
+    if page < 3:
+        row.append(InlineKeyboardButton("Next ▶️", callback_data=f"analytics_page_{page + 1}"))
+    return InlineKeyboardMarkup([row]) if row else None
+
+
+# ─────────────────────────────────────────────
+# /analytics
+# ─────────────────────────────────────────────
+
+async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show analytics page 1 to admin."""
+    if not _is_admin(update):
+        return
+
+    pool = get_pool()
+    msg = await _build_page_1(pool)
+    kb  = _analytics_keyboard(1)
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
+
+
+async def analytics_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle Next/Prev page navigation for /analytics."""
+    query = update.callback_query
+    if not _is_admin(update):
+        await query.answer()
+        return
+
+    await query.answer()
+    page = int(query.data.split("_")[-1])
+    pool = get_pool()
+
+    if page == 1:
+        msg = await _build_page_1(pool)
+    elif page == 2:
+        msg = await _build_page_2()
+    elif page == 3:
+        msg = await _build_page_3()
+    else:
+        return
+
+    kb = _analytics_keyboard(page)
+    await query.edit_message_text(msg, parse_mode="HTML", reply_markup=kb)
 
 
 # ─────────────────────────────────────────────
@@ -142,7 +223,6 @@ async def _send_users_page(update: Update, context, page: int, edit: bool = Fals
 
     msg = "\n".join(lines)
 
-    # Pagination keyboard
     nav = []
     if page > 1:
         nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"{cb_prefix}_{page - 1}"))
@@ -203,7 +283,6 @@ async def user_detail_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     u = dict(row)
 
-    # Build readable fields
     name        = html.escape(u.get("first_name") or "Unknown")
     username    = f"@{html.escape(u['username'])}" if u.get("username") else "—"
     plan        = (u.get("plan") or "free").upper()
@@ -217,7 +296,6 @@ async def user_detail_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     alert_time  = html.escape(str(u.get("alert_time") or "—"))
     joined      = u["created_at"].strftime("%d %b %Y, %H:%M UTC") if u.get("created_at") else "—"
 
-    # Trial info
     trial_line = ""
     if u.get("is_trial"):
         exp_at = u.get("trial_expires_at")
