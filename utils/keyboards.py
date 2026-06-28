@@ -3,6 +3,7 @@ Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from config import settings
 
 
 # ──────────────────────────────────────────────
@@ -302,7 +303,7 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False) -> InlineKeyboardMarkup:
+def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None) -> InlineKeyboardMarkup:
     """Actions for a single job detail view."""
     is_manual = job.get("is_manual", False)
     prefix = "manual" if is_manual else "job"
@@ -317,11 +318,19 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     else:
         top_row.append(InlineKeyboardButton("💾 Save", callback_data=f"job_save_{job['id']}"))
 
+    # Build the apply URL: use redirector in production, raw URL in dev
+    raw_url = job.get("url", "https://t.me/FroncyJobsBot")
+    base = (settings.WEBHOOK_URL or "").rstrip("/")
+    if base and user_id and job.get("is_manual"):
+        apply_url = f"{base}/r/{job['id']}?uid={user_id}"
+    else:
+        apply_url = raw_url
+
     buttons = [
         top_row,
         [
             InlineKeyboardButton("✅ Mark as Applied", callback_data=f"applied_{job['id']}"),
-            InlineKeyboardButton("🔗 Open Link", url=job["url"]),
+            InlineKeyboardButton("🔗 Open Link", url=apply_url),
         ]
     ]
 

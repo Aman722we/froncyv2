@@ -140,6 +140,8 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer("Sending raw text for copying...")
 
+    user_id = update.effective_user.id
+
     # Extract the letter from the message text
     msg_parts = query.message.text.split("─────────────────────────")
     if len(msg_parts) > 1:
@@ -153,7 +155,10 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             if len(parts) > 1:
                 # Remove the last parenthetical if it looks like a limit
                 letter_body = "(".join(parts[:-1]).strip()
-        
+
+        # Log copy intent — best proxy for "did they actually use this letter?"
+        await log_ai_usage(user_id, "cover_letter_copied")
         await query.message.reply_text(letter_body)
     else:
         await query.message.reply_text("Error extracting text.")
+

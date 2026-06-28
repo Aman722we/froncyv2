@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from loguru import logger
 from config import settings
 from db.connection import get_pool
-from db.tracker import get_ai_usage_stats, get_application_funnel_stats
+from db.tracker import get_ai_usage_stats, get_application_funnel_stats, get_retention_stats, get_click_stats
 
 
 # ─────────────────────────────────────────────
@@ -101,7 +101,7 @@ async def _build_page_3() -> str:
     usage_line = "✅ <b>Yes — users are actively tracking applications!</b>" if tracker_active else "❌ Not yet — no applications tracked."
 
     return (
-        "📋 <b>Application Tracker</b>  <i>— Page 3 of 3</i>\n"
+        "📋 <b>Application Tracker</b>  <i>— Page 3 of 4</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🔍 <b>Tracker Being Used?</b>  {usage_line}\n\n"
         "📈 <b>Application Funnel</b>\n"
@@ -113,12 +113,49 @@ async def _build_page_3() -> str:
     )
 
 
+async def _build_page_4() -> str:
+    """Page 4: Retention & Application Intent."""
+    retention = await get_retention_stats()
+    clicks    = await get_click_stats()
+
+    # Cover letter copy rate from ai_usage_logs
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        cl_generated = await conn.fetchval(
+            "SELECT COUNT(*) FROM ai_usage_logs WHERE feature_type = 'cover_letter'"
+        )
+        cl_copied = await conn.fetchval(
+            "SELECT COUNT(*) FROM ai_usage_logs WHERE feature_type = 'cover_letter_copied'"
+        )
+    copy_rate = f"{round((cl_copied / cl_generated) * 100)}%" if cl_generated else "N/A"
+
+    return (
+        "🔄 <b>Retention &amp; Intent</b>  <i>— Page 4 of 4</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📅 <b>Activity &amp; Retention</b>\n"
+        f"  • DAU (today)        : <b>{retention['dau']}</b>\n"
+        f"  • WAU (last 7 days)  : <b>{retention['wau']}</b>\n"
+        f"  • Returning users    : <b>{retention['returning']}</b>\n"
+        f"  • D7 retention       : <b>{retention['d7']}</b>\n"
+        f"  • D30 retention      : <b>{retention['d30']}</b>\n\n"
+        "🔗 <b>Job Link Clicks (Apply Intent)</b>\n"
+        f"  • Today              : <b>{clicks['today']}</b>\n"
+        f"  • This week          : <b>{clicks['week']}</b>\n"
+        f"  • This month         : <b>{clicks['month']}</b>\n"
+        f"  • All time           : <b>{clicks['total']}</b>\n\n"
+        "✍️ <b>Cover Letter Utility</b>\n"
+        f"  • Total generated    : <b>{cl_generated or 0}</b>\n"
+        f"  • Total copied       : <b>{cl_copied or 0}</b>\n"
+        f"  • Copy rate          : <b>{copy_rate}</b>\n"
+    )
+
+
 def _analytics_keyboard(page: int) -> InlineKeyboardMarkup:
-    """Build Next/Prev navigation for analytics pages."""
+    """Build Next/Prev navigation for analytics pages (1 through 4)."""
     row = []
     if page > 1:
         row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"analytics_page_{page - 1}"))
-    if page < 3:
+    if page < 4:
         row.append(InlineKeyboardButton("Next ▶️", callback_data=f"analytics_page_{page + 1}"))
     return InlineKeyboardMarkup([row]) if row else None
 
@@ -155,6 +192,8 @@ async def analytics_page_callback(update: Update, context: ContextTypes.DEFAULT_
         msg = await _build_page_2()
     elif page == 3:
         msg = await _build_page_3()
+    elif page == 4:
+        msg = await _build_page_4()
     else:
         return
 

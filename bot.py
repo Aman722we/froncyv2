@@ -2,7 +2,8 @@
 Application builder for python-telegram-bot.
 Assembles all handlers and returns the bot Application instance.
 """
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 from telegram.error import TelegramError
 from loguru import logger
 from config import settings
@@ -37,6 +38,7 @@ from handlers.analytics import (
     deleted_users_command, deleted_users_page_callback
 )
 from handlers.refer import refer_command, refer_callback
+from db.tracker import log_daily_active
 
 from utils.messages import help_message
 
@@ -85,7 +87,12 @@ def build_bot() -> Application:
     
     app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
 
-    # Onboarding Flow (ConversationHandler)
+    # ── Silent activity tracker (runs before all other handlers, group=-1) ──
+    async def _track_activity(update: Update, context) -> None:
+        """Log every user interaction as a daily active visit. Non-blocking."""
+        if update.effective_user:
+            await log_daily_active(update.effective_user.id)
+    app.add_handler(TypeHandler(Update, _track_activity), group=-1)
     app.add_handler(get_start_handler())
     app.add_handler(get_feedback_handler())
 

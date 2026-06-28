@@ -99,6 +99,33 @@ async def health_check():
     return {"status": "ok", "bot": "FroncyBot"}
 
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/r/{job_id}")
+async def apply_redirector(job_id: int, uid: int | None = None):
+    """
+    Job application link tracker + redirector.
+    When a user clicks 'Open Link', they hit this endpoint first.
+    We log the click then instantly redirect them to the real job URL.
+    """
+    from db.manual_jobs import get_manual_job_by_id
+    from db.tracker import log_link_click
+
+    # Log the click (completely non-blocking for the user)
+    if uid:
+        await log_link_click(uid, job_id)
+
+    # Fetch the real URL from the database
+    job = await get_manual_job_by_id(job_id)
+    if job and job.get("url"):
+        return RedirectResponse(url=job["url"], status_code=302)
+
+    # Fallback if job not found — send to bot
+    return RedirectResponse(url="https://t.me/FroncyJobsBot", status_code=302)
+
+
+
+
 from fastapi.responses import HTMLResponse
 
 @app.get("/", response_class=HTMLResponse)

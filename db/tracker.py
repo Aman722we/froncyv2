@@ -165,7 +165,6 @@ async def get_application_funnel_stats() -> dict:
 
 
 async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
-
     """Get a specific application for managing."""
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -180,3 +179,130 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
             telegram_id, app_id
         )
         return dict(row) if row else None
+
+
+# ─────────────────────────────────────────────
+# Retention & Activity Tracking
+# ─────────────────────────────────────────────
+
+async def log_daily_active(telegram_id: int) -> None:
+    """
+    Silently mark a user as active today.
+    Uses INSERT ... ON CONFLICT DO NOTHING so it is safe to call on every
+    single bot interaction without creating duplicates.
+    """
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO daily_active_users (telegram_id, active_date)
+                VALUES ($1, CURRENT_DATE)
+                ON CONFLICT (telegram_id, active_date) DO NOTHING
+                """,
+                telegram_id
+            )
+    except Exception as e:
+        logger.warning(f"Could not log daily active (non-critical): {e}")
+
+
+async def log_link_click(telegram_id: int, job_id: int | None) -> None:
+    """Log an Apply/Open Link click for a job."""
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO link_clicks (telegram_id, job_id) VALUES ($1, $2)",
+                telegram_id, job_id
+            )
+    except Exception as e:
+        logger.warning(f"Could not log link click (non-critical): {e}")
+
+
+async def get_retention_stats() -> dict:
+    """
+    Calculate DAU, WAU, returning users, and cohort-based D7/D30 retention.
+    D7 = what % of users who joined exactly 7 days ago are active today.
+    D30 = what % of users who joined exactly 30 days ago are active today.
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        dau = await conn.fetchval(
+            "SELECT COUNT(DISTINCT telegram_id) FROM daily_active_users WHERE active_date = CURRENT_DATE"
+        )
+        wau = await conn.fetchval(
+            "SELECT COUNT(DISTINCT telegram_id) FROM daily_active_users WHERE active_date >= CURRENT_DATE - INTERVAL '7 days'"
+        )
+        returning = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT telegram_id) FROM daily_active_users
+            WHERE active_date = CURRENT_DATE
+              AND telegram_id IN (
+                  SELECT telegram_id FROM daily_active_users
+                  WHERE active_date < CURRENT_DATE
+              )
+            """
+        )
+        d7_cohort_total = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE - INTERVAL '7 days' AND is_deleted IS NOT TRUE"
+        )
+        d7_cohort_active = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT telegram_id) FROM daily_active_users
+            WHERE active_date = CURRENT_DATE
+              AND telegram_id IN (
+                  SELECT telegram_id FROM users
+                  WHERE created_at::date = CURRENT_DATE - INTERVAL '7 days'
+              )
+            """
+        )
+        d30_cohort_total = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE - INTERVAL '30 days' AND is_deleted IS NOT TRUE"
+        )
+        d30_cohort_active = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT telegram_id) FROM daily_active_users
+            WHERE active_date = CURRENT_DATE
+              AND telegram_id IN (
+                  SELECT telegram_id FROM users
+                  WHERE created_at::date = CURRENT_DATE - INTERVAL '30 days'
+              )
+            """
+        )
+
+    def pct(active, total):
+        if not total:
+            return "N/A (no cohort yet)"
+        return f"{round((active / total) * 100)}%  ({active}/{total})"
+
+    return {
+        "dau":       dau or 0,
+        "wau":       wau or 0,
+        "returning": returning or 0,
+        "d7":        pct(d7_cohort_active, d7_cohort_total),
+        "d30":       pct(d30_cohort_active, d30_cohort_total),
+    }
+
+
+async def get_click_stats() -> dict:
+    """Get job link click counts: today, this week, this month, total."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        today = await conn.fetchval(
+            "SELECT COUNT(*) FROM link_clicks WHERE clicked_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')"
+        )
+        week = await conn.fetchval(
+            "SELECT COUNT(*) FROM link_clicks WHERE clicked_at >= NOW() - INTERVAL '7 days'"
+        )
+        month = await conn.fetchval(
+            "SELECT COUNT(*) FROM link_clicks WHERE clicked_at >= NOW() - INTERVAL '30 days'"
+        )
+        total = await conn.fetchval("SELECT COUNT(*) FROM link_clicks")
+
+    return {
+        "today": today or 0,
+        "week":  week  or 0,
+        "month": month or 0,
+        "total": total or 0,
+    }
+

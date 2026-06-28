@@ -254,7 +254,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     score = details["score"]
 
     msg = messages.job_detail_message(job, plan=plan, user=user)
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily)
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id)
 
     await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
