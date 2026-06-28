@@ -98,11 +98,41 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 parse_mode="MarkdownV2",
             )
         except BadRequest as e2:
-            logger.warning(f"Could not send welcome text to user {user.id} ({e2}). Chat unreachable — skipping.")
+            # Both photo and text failed — Telegram chat not ready yet.
+            # Schedule a one-shot retry in 5 seconds so the user is not left with a blank screen.
+            logger.warning(
+                f"Chat unreachable for user {user.id} ({e2}). "
+                "Scheduling a 5-second delayed welcome retry."
+            )
+
+            async def _retry_welcome(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+                """One-shot job: try sending the welcome message one final time."""
+                chat_id  = ctx.job.data["chat_id"]
+                name     = ctx.job.data["first_name"]
+                try:
+                    await ctx.bot.send_message(
+                        chat_id=chat_id,
+                        text=messages.welcome_message(name),
+                        reply_markup=keyboards.onboarding_welcome_keyboard(),
+                        parse_mode="MarkdownV2",
+                    )
+                    logger.info(f"Delayed welcome retry succeeded for user {chat_id}.")
+                except Exception as retry_err:
+                    logger.warning(
+                        f"Delayed welcome retry also failed for user {chat_id}: {retry_err}. "
+                        "User will need to send /start themselves."
+                    )
+
+            context.job_queue.run_once(
+                _retry_welcome,
+                when=5,  # seconds
+                data={"chat_id": update.effective_chat.id, "first_name": user.first_name},
+                name=f"welcome_retry_{user.id}",
+            )
             return WELCOME
 
-
     return WELCOME
+
 
 
 async def welcome_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
