@@ -3,6 +3,7 @@ Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from urllib.parse import urlparse
 from config import settings
 
 
@@ -319,9 +320,16 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
         top_row.append(InlineKeyboardButton("💾 Save", callback_data=f"job_save_{job['id']}"))
 
     # Build the apply URL: use redirector in production, raw URL in dev
+    # We parse out just the scheme+netloc (domain) from WEBHOOK_URL to avoid
+    # accidentally including any path like /telegram-webhook in the base.
     raw_url = job.get("url", "https://t.me/FroncyJobsBot")
-    base = (settings.WEBHOOK_URL or "").rstrip("/")
-    if base and user_id and job.get("is_manual"):
+    webhook_raw = settings.WEBHOOK_URL or ""
+    if webhook_raw:
+        parsed = urlparse(webhook_raw if webhook_raw.startswith("http") else f"https://{webhook_raw}")
+        base = f"{parsed.scheme}://{parsed.netloc}"
+    else:
+        base = ""
+    if base and user_id:
         apply_url = f"{base}/r/{job['id']}?uid={user_id}"
     else:
         apply_url = raw_url
@@ -370,6 +378,7 @@ def cover_letter_result_keyboard(job_id: int, is_manual: bool = False) -> Inline
     back_prefix = "manual_view" if is_manual else "job_view"
     return InlineKeyboardMarkup([
         [
+            InlineKeyboardButton("📋 Copy Text", callback_data=f"cl_copy_{job_id}"),
             InlineKeyboardButton("🔄 Regenerate", callback_data=f"{cl_prefix}_regen_{job_id}"),
         ],
         [
