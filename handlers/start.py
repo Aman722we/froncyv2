@@ -91,11 +91,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             )
     except (FileNotFoundError, BadRequest) as e:
         logger.warning(f"Could not send banner photo ({e}), falling back to text.")
-        await update.message.reply_text(
-            messages.welcome_message(user.first_name),
-            reply_markup=keyboards.onboarding_welcome_keyboard(),
-            parse_mode="MarkdownV2",
-        )
+        try:
+            await update.message.reply_text(
+                messages.welcome_message(user.first_name),
+                reply_markup=keyboards.onboarding_welcome_keyboard(),
+                parse_mode="MarkdownV2",
+            )
+        except BadRequest as e2:
+            logger.warning(f"Could not send welcome text to user {user.id} ({e2}). Chat unreachable — skipping.")
+            return WELCOME
+
 
     return WELCOME
 
