@@ -37,8 +37,7 @@ def skills_prompt(first_name: str = None) -> str:
     greeting = f"👋 Hey {escape_md(first_name)}\\! " if first_name else ""
     return (
         f"{bar}\n\n"
-        f"{greeting}*Pick your skills* 🛠️\n"
-        "Which frontend technologies do you work with?\n"
+        f"{greeting}*Pick your frontend skills* 🛠️\n"
         "\\(Select all that apply, then tap *Done*\\)"
     )
 

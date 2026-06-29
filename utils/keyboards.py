@@ -25,7 +25,7 @@ SKILL_CATEGORIES = {
     "🛠️ Core Front-End": ["HTML", "CSS", "JavaScript", "TypeScript"],
     # FUTURE (multi-role): "⚙️ Core Backend": ["Node.js", "Express", "MongoDB", "PostgreSQL", "MySQL"],
     "⚡ Frameworks": ["React", "Next.js", "Vue", "Angular", "Svelte", "React Native"],
-    "🎨 Styling & UI": ["Tailwind", "SCSS", "Figma", "Framer", "Bootstrap"],
+    "🎨 Styling & UI": ["Tailwind", "Bootstrap", "Figma", "Framer"],
     # FUTURE (multi-role): "⚙️ Tools & DevOps": ["Git", "GitHub", "GraphQL", "CI/CD", "Docker"]
 }
 
