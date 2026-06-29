@@ -9,7 +9,7 @@ from utils.helpers import escape_md
 # Onboarding
 # ──────────────────────────────────────────────
 
-ONBOARDING_STEPS = 4
+ONBOARDING_STEPS = 2
 
 def _step_bar(current: int) -> str:
     """Generate a visual progress bar for onboarding. current is 1-indexed."""

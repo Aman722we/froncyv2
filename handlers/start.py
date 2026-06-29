@@ -229,68 +229,48 @@ async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Save selected skills, silently set role=frontend & experience=fresher, move to location."""
+    """Save selected skills, auto-set role=frontend, then show the experience step."""
     query = update.callback_query
     await query.answer()
 
     selected = context.user_data.get("selected_skills", [])
-
-    # Save skills to DB
     user_id = update.effective_user.id
+
+    # Persist skills and always frontend role (fresher niche)
     await update_user_profile(user_id, skills=[s.lower() for s in selected])
-
-    # NICHE: Silently auto-set role=frontend and experience=0 (fresher)
-    # FUTURE (multi-role): Replace with role_keyboard prompt and ROLE state
     await update_user_profile(user_id, role_pref="frontend")
-    await update_user_profile(user_id, experience_level="0")
     context.user_data["role_pref"] = "frontend"
-    context.user_data["experience_level"] = "0"
 
-    # Jump straight to location (skipping Role and Experience steps)
-    step2_bar = messages.escape_md("[🟢🟢⚪⚪] Step 2 of 4")
+    step2_bar = messages.escape_md("[🟢⚪] Step 2 of 2")
     await query.edit_message_text(
         f"{step2_bar}\n\n"
-        "*Pick your location* 📍\n"
-        "Where are you looking for work?",
-        reply_markup=keyboards.location_keyboard(),
+        "*Your experience level* 📅\n"
+        "How many years of frontend experience do you have?",
+        reply_markup=keyboards.experience_keyboard(prefix="exp_"),
         parse_mode="MarkdownV2",
     )
-    return LOCATION
+    return EXPERIENCE
 
 
+async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Save experience level (Fresher=0 or 1 YOE=1) and complete onboarding immediately.
+    Location defaults to 'all', batch year and resume upload are collected later from Settings.
+    """
+    query = update.callback_query
+    await query.answer()
 
-# FUTURE (multi-role): Uncomment role_callback when expanding beyond frontend
-# async def role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-#     """Save role preference and prompt for experience."""
-#     query = update.callback_query
-#     await query.answer()
-#     role_val = query.data.replace("role_", "")
-#     user_id = update.effective_user.id
-#     await update_user_profile(user_id, role_pref=role_val)
-#     context.user_data["role_pref"] = role_val
-#     await query.edit_message_text(
-#         "\ud83e\udde0 How many years of professional experience do you have?",
-#         reply_markup=keyboards.experience_keyboard(),
-#         parse_mode="MarkdownV2",
-#     )
-#     return EXPERIENCE
+    exp_val = query.data.replace("exp_", "")   # '0' or '1'
+    user_id = update.effective_user.id
+
+    await update_user_profile(user_id, experience_level=exp_val)
+    await update_user_profile(user_id, location_pref="all")   # sensible default
+    context.user_data["experience_level"] = exp_val
+    context.user_data["location"] = "all"
+
+    return await _complete_onboarding(update, context, has_resume=False, query=query)
 
 
-# FUTURE (mid-senior): Uncomment experience_callback when expanding to 2+ yrs
-# async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-#     """Save experience level and prompt for location."""
-#     query = update.callback_query
-#     await query.answer()
-#     exp_val = query.data.replace("exp_", "")
-#     user_id = update.effective_user.id
-#     await update_user_profile(user_id, experience_level=exp_val)
-#     context.user_data["experience_level"] = exp_val
-#     await query.edit_message_text(
-#         "\ud83c\udf0d Where are you looking for work?",
-#         reply_markup=keyboards.location_keyboard(),
-#         parse_mode="MarkdownV2",
-#     )
-#     return LOCATION
 
 
 async def location_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -414,9 +394,9 @@ async def _complete_onboarding(
     user_tg = update.effective_user
     await set_onboarded(user_id)
 
-    skills = context.user_data.get("selected_skills", [])
-    location = context.user_data.get("location", "remote")
-    exp = context.user_data.get("experience_level", "?")
+    skills   = context.user_data.get("selected_skills", [])
+    location = context.user_data.get("location", "all")
+    exp      = context.user_data.get("experience_level", "0")
 
     # Activate 3-day free trial for new user
     db_pool = get_pool()
@@ -500,7 +480,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 def get_start_handler() -> ConversationHandler:
-    """Build the /start ConversationHandler."""
+    """Build the /start ConversationHandler — now a clean 2-step onboarding."""
     return ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -515,27 +495,18 @@ def get_start_handler() -> ConversationHandler:
             WAITING_CUSTOM_SKILL: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
-            ROLE: [
-                # FUTURE (multi-role): CallbackQueryHandler(role_callback, pattern="^role_"),
-                # State kept here so ConversationHandler states remain valid
-            ],
+            # Step 2: Experience (Fresher or 1 YOE) → completes onboarding directly
             EXPERIENCE: [
-                # FUTURE (mid-senior): CallbackQueryHandler(experience_callback, pattern="^exp_"),
-                # State kept here so ConversationHandler states remain valid
+                CallbackQueryHandler(experience_callback, pattern="^exp_"),
             ],
-            LOCATION: [
-                CallbackQueryHandler(location_callback, pattern="^loc_"),
-            ],
-            BATCH_YEAR: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, batch_year_received),
-            ],
-            RESUME_PROMPT: [
-                CallbackQueryHandler(resume_upload_prompt, pattern="^resume_upload$"),
-                CallbackQueryHandler(resume_skip, pattern="^resume_skip$"),
-            ],
-            WAITING_RESUME: [
-                MessageHandler(filters.Document.PDF, resume_received),
-            ],
+            # FUTURE (multi-role): ROLE state for role selection
+            ROLE: [],
+            # FUTURE: LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME kept as
+            # dead states for compatibility; users now set these in Settings.
+            LOCATION:      [],
+            BATCH_YEAR:    [],
+            RESUME_PROMPT: [],
+            WAITING_RESUME: [],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False,
