@@ -1,6 +1,7 @@
 """
 Cover letter generation handlers.
 """
+import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 from loguru import logger
@@ -100,39 +101,83 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         await query.message.reply_text(messages.error_job_not_found(), parse_mode="MarkdownV2")
         return
 
-    if mode == LLMMode.FAST:
-        status_msg = "⚡ Generating with Llama 3 8B (~3s)..."
+    jd = f"{job.get('title')} at {job.get('company')} - {job.get('location')}. Skills: {', '.join(job.get('skills', []))}"
+
+    # ── Animated progress loader ──────────────────────────────────────────
+    # Quality (70B) takes ~60-70s; Fast (8B) takes ~3-5s.
+    # We fire the generation task immediately and update the message every
+    # STAGE_INTERVAL seconds so the user always sees forward progress.
+    if mode == LLMMode.QUALITY:
+        stages = [
+            "🔍 *Analyzing job requirements\.\.\.*",
+            "📄 *Scanning your resume skills\.\.\.*",
+            "🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_",
+            "✨ *Polishing tone and structure\.\.\.*",
+            "⚡ *Optimizing for ATS keywords\.\.\.*",
+            "⏳ *Almost done\!* The AI is finishing up\.\.\.",
+        ]
+        stage_interval = 10  # seconds between each stage
     else:
-        status_msg = "✨ Generating with Llama 3 70B (~12s)..."
+        stages = [
+            "⚡ *Generating your cover letter\.\.\.*",
+            "✨ *Polishing up\.\.\.*",
+        ]
+        stage_interval = 6
 
-    await query.edit_message_text(messages.escape_md(status_msg), parse_mode="MarkdownV2")
+    # Show first stage immediately
+    await query.edit_message_text(stages[0], parse_mode="MarkdownV2")
 
-    # Generate
-    try:
-        jd = f"{job.get('title')} at {job.get('company')} - {job.get('location')}. Skills: {', '.join(job.get('skills', []))}"
-        letter = await generate_cover_letter(user["resume_text"], jd, mode=mode, tone=tone)
+    # Fire generation in the background
+    gen_task = asyncio.create_task(
+        generate_cover_letter(user["resume_text"], jd, mode=mode, tone=tone)
+    )
 
-        await increment_cover_letters_today(user_id)
-        await log_ai_usage(user_id, "cover_letter")
-        
-        remaining = limit - (cover_letters_today + 1)
-        if plan == "free":
-            footer = f"_\\({remaining} cover letters left today\\)_"
-        else:
-            footer = f"_\\({remaining} of 10 remaining today\\)_"
-            
-    except Exception as e:
-        logger.error(f"CL generation error: {e}")
+    letter = None
+    for stage_msg in stages[1:]:
+        try:
+            letter = await asyncio.wait_for(asyncio.shield(gen_task), timeout=stage_interval)
+            break  # Generation finished early — stop the loop
+        except asyncio.TimeoutError:
+            if gen_task.done():
+                break  # Done between intervals (exception case)
+            try:
+                await query.edit_message_text(stage_msg, parse_mode="MarkdownV2")
+            except Exception:
+                pass  # If Telegram rate-limits the edit, just skip it
+
+    # If we exhausted all stages but task still running, wait unconditionally
+    if letter is None:
+        try:
+            letter = await gen_task
+        except Exception as gen_err:
+            logger.error(f"CL generation error: {gen_err}")
+            letter = None
+    elif gen_task.done() and letter is None:
+        try:
+            letter = gen_task.result()
+        except Exception as gen_err:
+            logger.error(f"CL generation error: {gen_err}")
+            letter = None
+    # ─────────────────────────────────────────────────────────────────────
+
+    if not letter:
         letter = get_fallback_cover_letter(job.get('title', 'Developer'), job.get('company', 'the company'))
-        footer = ""
 
-    # Send result
+    await increment_cover_letters_today(user_id)
+    await log_ai_usage(user_id, "cover_letter")
+
+    remaining = limit - (cover_letters_today + 1)
+    if plan == "free":
+        footer = f"_\\({remaining} cover letters left today\\)_"
+    else:
+        footer = f"_\\({remaining} of 10 remaining today\\)_"
+
+    # Send the final result
     await query.edit_message_text(
         messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter, footer),
         reply_markup=keyboards.cover_letter_result_keyboard(job_id, is_manual=is_manual),
         parse_mode="MarkdownV2"
     )
-
 
 async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Since Telegram bots can't easily copy to the user's clipboard,

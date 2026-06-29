@@ -32,11 +32,12 @@ def welcome_message(first_name: str = "there") -> str:
     )
 
 
-def skills_prompt() -> str:
+def skills_prompt(first_name: str = None) -> str:
     bar = _step_bar(1)
+    greeting = f"👋 Hey {escape_md(first_name)}\\! " if first_name else ""
     return (
         f"{bar}\n\n"
-        "*Pick your skills* 🛠️\n"
+        f"{greeting}*Pick your skills* 🛠️\n"
         "Which frontend technologies do you work with?\n"
         "\\(Select all that apply, then tap *Done*\\)"
     )

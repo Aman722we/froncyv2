@@ -81,82 +81,56 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"🆔 ID: <code>{user.id}</code>"
     )
 
+    # 🎨 Send banner as branding (no buttons) — purely decorative
     try:
         with open("assets/images/Froncy_banner.png", "rb") as banner:
-            await update.message.reply_photo(
-                photo=banner,
-                caption=messages.welcome_message(user.first_name),
-                reply_markup=keyboards.onboarding_welcome_keyboard(),
-                parse_mode="MarkdownV2",
-            )
-    except (FileNotFoundError, BadRequest) as e:
-        logger.warning(f"Could not send banner photo ({e}), falling back to text.")
-        try:
-            await update.message.reply_text(
-                messages.welcome_message(user.first_name),
-                reply_markup=keyboards.onboarding_welcome_keyboard(),
-                parse_mode="MarkdownV2",
-            )
-        except BadRequest as e2:
-            # Both photo and text failed — Telegram chat not ready yet.
-            # Schedule a one-shot retry in 5 seconds so the user is not left with a blank screen.
-            logger.warning(
-                f"Chat unreachable for user {user.id} ({e2}). "
-                "Scheduling a 5-second delayed welcome retry."
-            )
-
-            async def _retry_welcome(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-                """One-shot job: try sending the welcome message one final time."""
-                chat_id  = ctx.job.data["chat_id"]
-                name     = ctx.job.data["first_name"]
-                try:
-                    await ctx.bot.send_message(
-                        chat_id=chat_id,
-                        text=messages.welcome_message(name),
-                        reply_markup=keyboards.onboarding_welcome_keyboard(),
-                        parse_mode="MarkdownV2",
-                    )
-                    logger.info(f"Delayed welcome retry succeeded for user {chat_id}.")
-                except Exception as retry_err:
-                    logger.warning(
-                        f"Delayed welcome retry also failed for user {chat_id}: {retry_err}. "
-                        "User will need to send /start themselves."
-                    )
-
-            context.job_queue.run_once(
-                _retry_welcome,
-                when=5,  # seconds
-                data={"chat_id": update.effective_chat.id, "first_name": user.first_name},
-                name=f"welcome_retry_{user.id}",
-            )
-            return WELCOME
-
-    return WELCOME
-
-
-
-async def welcome_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle 'Actively Hunting' / 'Just Exploring' selection."""
-    query = update.callback_query
-    await query.answer()
-
-    # Store user intent (not used for logic yet, but trackable)
-    context.user_data["intent"] = query.data  # onboard_hunting or onboard_exploring
-
-    # The welcome message may be a photo (banner) or text (fallback).
-    # We can't edit_message_text on a photo, so delete and send fresh.
-    try:
-        await query.message.delete()
+            await update.message.reply_photo(photo=banner)
     except Exception:
-        pass  # If delete fails, just continue
+        pass  # Banner is decorative — skip silently if missing
 
-    await context.bot.send_message(
-        chat_id=query.from_user.id,
-        text=messages.skills_prompt(),
-        reply_markup=keyboards.skills_keyboard([]),
-        parse_mode="MarkdownV2",
-    )
+    # Jump straight to Step 1: Skills
+    try:
+        await update.message.reply_text(
+            messages.skills_prompt(first_name=user.first_name),
+            reply_markup=keyboards.skills_keyboard([]),
+            parse_mode="MarkdownV2",
+        )
+    except BadRequest as e:
+        logger.warning(
+            f"Chat unreachable for user {user.id} ({e}). "
+            "Scheduling a 5-second delayed skills retry."
+        )
+
+        async def _retry_skills(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+            """One-shot job: try sending the skills screen one final time."""
+            chat_id   = ctx.job.data["chat_id"]
+            name      = ctx.job.data["first_name"]
+            try:
+                await ctx.bot.send_message(
+                    chat_id=chat_id,
+                    text=messages.skills_prompt(first_name=name),
+                    reply_markup=keyboards.skills_keyboard([]),
+                    parse_mode="MarkdownV2",
+                )
+                logger.info(f"Delayed skills retry succeeded for user {chat_id}.")
+            except Exception as retry_err:
+                logger.warning(
+                    f"Delayed skills retry also failed for user {chat_id}: {retry_err}."
+                )
+
+        context.job_queue.run_once(
+            _retry_skills,
+            when=5,
+            data={"chat_id": update.effective_chat.id, "first_name": user.first_name},
+            name=f"skills_retry_{user.id}",
+        )
+
     return SKILLS
+
+
+
+# welcome_callback removed — onboarding now goes directly to Skills from /start.
+
 
 
 async def skill_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -480,13 +454,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 def get_start_handler() -> ConversationHandler:
-    """Build the /start ConversationHandler — now a clean 2-step onboarding."""
+    """Build the /start ConversationHandler — 2-step onboarding, no welcome gate."""
     return ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
-            WELCOME: [
-                CallbackQueryHandler(welcome_callback, pattern="^onboard_"),
-            ],
             SKILLS: [
                 CallbackQueryHandler(skill_toggle, pattern="^skill_"),
                 CallbackQueryHandler(skills_done, pattern="^skills_done$"),
@@ -495,18 +466,16 @@ def get_start_handler() -> ConversationHandler:
             WAITING_CUSTOM_SKILL: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
-            # Step 2: Experience (Fresher or 1 YOE) → completes onboarding directly
             EXPERIENCE: [
                 CallbackQueryHandler(experience_callback, pattern="^exp_"),
             ],
-            # FUTURE (multi-role): ROLE state for role selection
-            ROLE: [],
-            # FUTURE: LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME kept as
-            # dead states for compatibility; users now set these in Settings.
+            # FUTURE placeholders kept for state-enum validity
+            WELCOME:       [],
+            ROLE:          [],
             LOCATION:      [],
             BATCH_YEAR:    [],
             RESUME_PROMPT: [],
-            WAITING_RESUME: [],
+            WAITING_RESUME:[],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False,

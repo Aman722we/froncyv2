@@ -5,7 +5,7 @@ import json
 async def check_users():
     await init_db()
     pool = get_pool()
-    user_ids = [1898914572, 5363088850]
+    user_ids = [5692824902]
     
     async with pool.acquire() as conn:
         for uid in user_ids:
