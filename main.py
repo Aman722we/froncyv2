@@ -109,6 +109,7 @@ async def apply_redirector(job_id: int, uid: int | None = None):
     We log the click then instantly redirect them to the real job URL.
     """
     from db.manual_jobs import get_manual_job_by_id
+    from db.jobs import get_job_by_id
     from db.tracker import log_link_click
 
     # Log the click (completely non-blocking for the user)
@@ -117,6 +118,9 @@ async def apply_redirector(job_id: int, uid: int | None = None):
 
     # Fetch the real URL from the database
     job = await get_manual_job_by_id(job_id)
+    if not job:
+        job = await get_job_by_id(job_id)
+        
     if job and job.get("url"):
         return RedirectResponse(url=job["url"], status_code=302)
 

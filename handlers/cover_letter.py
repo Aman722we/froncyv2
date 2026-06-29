@@ -188,22 +188,32 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_id = update.effective_user.id
 
     # Extract the letter from the message text
-    msg_parts = query.message.text.split("─────────────────────────")
-    if len(msg_parts) > 1:
-        letter_body = msg_parts[1].strip()
-        # Clean up any trailing usage limits
-        if "_(" in letter_body:
-            letter_body = letter_body.split("_(")[0].strip()
-        elif "(" in letter_body and "remaining" in letter_body.lower():
-            # In case italics formatting gets lost or weirdly parsed
-            parts = letter_body.split("(")
-            if len(parts) > 1:
-                # Remove the last parenthetical if it looks like a limit
-                letter_body = "(".join(parts[:-1]).strip()
+    raw_text = query.message.text
+    if raw_text:
+        lines = raw_text.split('\n')
+        start_idx = 0
+        end_idx = len(lines)
+        
+        # Find the start (after "Your Cover Letter — ...")
+        for i, line in enumerate(lines):
+            if "Your Cover Letter" in line:
+                start_idx = i + 1
+                break
+                
+        # Find the end (before "Tap the box ...")
+        for i in range(start_idx, len(lines)):
+            curr_line = lines[i]
+            if "Tap the box" in curr_line or (curr_line.strip().startswith("(") and "remaining" in curr_line.lower()):
+                end_idx = i
+                break
+                
+        letter_body = "\n".join(lines[start_idx:end_idx]).strip()
+        
+        if letter_body:
+            # Log copy intent — best proxy for "did they actually use this letter?"
+            await log_ai_usage(user_id, "cover_letter_copied")
+            await query.message.reply_text(letter_body)
+            return
 
-        # Log copy intent — best proxy for "did they actually use this letter?"
-        await log_ai_usage(user_id, "cover_letter_copied")
-        await query.message.reply_text(letter_body)
-    else:
-        await query.message.reply_text("Error extracting text.")
+    await query.message.reply_text("Error extracting text.")
 
