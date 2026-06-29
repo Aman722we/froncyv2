@@ -38,7 +38,7 @@ def skills_prompt(first_name: str = None) -> str:
     return (
         f"{bar}\n\n"
         f"{greeting}*Pick your frontend skills* 🛠️\n"
-        "\\(Select all that apply, then tap *Done*\\)"
+        "\\(Select all that apply, then tap *Next*\\)"
     )
 
 
