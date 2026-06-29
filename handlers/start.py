@@ -81,13 +81,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"🆔 ID: <code>{user.id}</code>"
     )
 
-    # 🎨 Send banner as branding (no buttons) — purely decorative
-    try:
-        with open("assets/images/Froncy_banner.png", "rb") as banner:
-            await update.message.reply_photo(photo=banner)
-    except Exception:
-        pass  # Banner is decorative — skip silently if missing
-
     # Jump straight to Step 1: Skills
     try:
         await update.message.reply_text(
