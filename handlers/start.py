@@ -28,6 +28,10 @@ WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, R
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle /start — begin onboarding or show main menu if already onboarded."""
     user = update.effective_user
+    
+    # Check if they existed before this exact /start click
+    is_new_user = (await get_user(user.id)) is None
+    
     db_user = await get_or_create_user(user.id, user.username, user.first_name)
 
     if db_user.get("is_deleted"):
@@ -70,16 +74,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 context.user_data["referrer_id"] = referrer_id
 
 
-    # 🔔 Notify admin about new user
-    import html
-    first_name_esc = html.escape(user.first_name) if user.first_name else "Unknown"
-    username_str = f"@{html.escape(user.username)}" if user.username else "(no username)"
-    await notify_admin(
-        context.bot,
-        f"🆕 <b>New User Joined!</b>\n"
-        f"👤 {first_name_esc} {username_str}\n"
-        f"🆔 ID: <code>{user.id}</code>"
-    )
+    # 🔔 Notify admin ONLY if this is their absolute first time clicking /start
+    if is_new_user:
+        import html
+        first_name_esc = html.escape(user.first_name) if user.first_name else "Unknown"
+        username_str = f"@{html.escape(user.username)}" if user.username else "(no username)"
+        await notify_admin(
+            context.bot,
+            f"🆕 <b>New User Joined!</b>\n"
+            f"👤 {first_name_esc} {username_str}\n"
+            f"🆔 ID: <code>{user.id}</code>"
+        )
 
     # Jump straight to Step 1: Skills
     try:
