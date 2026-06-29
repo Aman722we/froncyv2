@@ -345,13 +345,18 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         resume_text = extract_text_from_pdf(saved_path)
         await update_resume(user_id, resume_text, document.file_name)
 
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         await update.message.reply_text(
             messages.resume_uploaded_success(document.file_name),
-            parse_mode="MarkdownV2"
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            ])
         )
     except Exception as e:
         logger.error(f"Replace resume failed: {e}")
         await update.message.reply_text(
             "⚠️ Failed to process your resume\\. Please try again\\.",
-            parse_mode="MarkdownV2"
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
         )

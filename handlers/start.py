@@ -331,9 +331,11 @@ async def resume_received(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Update DB 
         await update_resume(user_id, resume_text, document.file_name)
 
+        from telegram import InlineKeyboardMarkup as IKM, InlineKeyboardButton as IKB
         await update.message.reply_text(
             messages.resume_uploaded_success(document.file_name),
             parse_mode="MarkdownV2",
+            reply_markup=IKM([[IKB("🔙 Back to Menu", callback_data="back_menu")]]),
         )
 
     except ValueError as e:
