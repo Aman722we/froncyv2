@@ -449,11 +449,7 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str) -> str:
         except Exception:
             pass
 
-    if url:
-        safe_url = url.replace("(", "%28").replace(")", "%29")
-        line = f"{num}  [{title}]({safe_url}) — {company}\n"
-    else:
-        line = f"{num}  *{title}* — {company}\n"
+    line = f"{num}  *{title}* — {company}\n"
         
     job_type = job.get("job_type", "full-time")
     duration = job.get("duration")
@@ -691,7 +687,6 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
         f"{match_section}\n"
-        f"*Job link:* [{escape_md(url)}]({url.replace('(', '%28').replace(')', '%29')})\n\n" if url else "*Job link:* Not available\n\n"
         "What would you like to do?"
     )
 
