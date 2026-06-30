@@ -120,7 +120,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    from db.manual_jobs import get_personalized_manual_jobs
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs
     
     # Get active filters
     filters = context.user_data.get("job_filters", {})
