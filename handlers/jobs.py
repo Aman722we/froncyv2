@@ -136,7 +136,18 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref") or "fullstack",
     }
+    import asyncio
+    
+    # Run independent DB queries concurrently to slash network latency
+    seen_jobs, total_active_jobs = await asyncio.gather(
+        get_seen_jobs(user_id),
+        count_manual_jobs()
+    )
+    
     all_jobs = await get_personalized_manual_jobs(user_dict, limit=100)
+    
+    # Filter out seen_jobs manually here (since we removed it from the args above)
+    all_jobs = [j for j in all_jobs if j["id"] not in seen_jobs]
     
     # Apply filters
     filtered_jobs = []

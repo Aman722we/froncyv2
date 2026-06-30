@@ -89,8 +89,15 @@ async def get_personalized_manual_jobs(
     if seen_job_ids is None:
         seen_job_ids = []
 
-    # Fetch a reasonable number of recent jobs to score (e.g., top 100 recent)
-    all_jobs = await get_manual_jobs(limit=100, offset=0)
+    import asyncio
+    tasks = [get_manual_jobs(limit=100, offset=0)]
+    
+    if exclude_sent_within_days is not None:
+        tasks.append(get_recently_sent_jobs(user.get("telegram_id"), days=exclude_sent_within_days))
+        
+    results = await asyncio.gather(*tasks)
+    all_jobs = results[0]
+    
     if not all_jobs:
         return []
         
@@ -103,7 +110,6 @@ async def get_personalized_manual_jobs(
         for j in all_jobs:
             posted = j.get("posted_at")
             if posted:
-                # Ensure it's aware
                 if posted.tzinfo is None:
                     posted = posted.replace(tzinfo=timezone.utc)
                 if (now - posted).days <= max_age_days:
@@ -112,15 +118,9 @@ async def get_personalized_manual_jobs(
         if not all_jobs:
             return []
 
-    # 2. Seen Filter (Permanently ignore if they clicked it)
-    if seen_job_ids:
-        all_jobs = [j for j in all_jobs if j["id"] not in seen_job_ids]
-        if not all_jobs:
-            return []
-            
-    # 3. 3-Day Cooldown Filter (Ignore if sent in Daily Feed recently)
-    if exclude_sent_within_days is not None:
-        recently_sent = await get_recently_sent_jobs(user.get("telegram_id"), days=exclude_sent_within_days)
+    # 2. 3-Day Cooldown Filter (Ignore if sent in Daily Feed recently)
+    if exclude_sent_within_days is not None and len(results) > 1:
+        recently_sent = results[1]
         if recently_sent:
             all_jobs = [j for j in all_jobs if j["id"] not in recently_sent]
             if not all_jobs:
