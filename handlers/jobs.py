@@ -43,10 +43,15 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref", "fullstack"),
     }
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, mark_jobs_seen
     
+    seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan == "free" else 12
-    jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
+    jobs = await get_personalized_manual_jobs(user_dict, seen_jobs, limit=feed_limit)
     total_active_jobs = await count_manual_jobs()
+    
+    if jobs:
+        await mark_jobs_seen(user_id, [j["id"] for j in jobs])
     
     if not jobs:
         msg = messages.error_no_jobs()
@@ -108,13 +113,13 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    from db.manual_jobs import get_personalized_manual_jobs
+    from db.manual_jobs import get_personalized_manual_jobs, mark_jobs_seen
     
     # Get active filters
     filters = context.user_data.get("job_filters", {})
     
     # Fetch top 100 personalized jobs to allow in-memory filtering
-    # user dict requires correct keys:
+    # For /jobs list, we DO NOT filter by seen_jobs to ensure pagination stays stable.
     user_dict = {
         "telegram_id": user.get("telegram_id"),
         "skills": user.get("skills") or [],
@@ -174,13 +179,16 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             
         filtered_jobs.append(job)
         
-    total_count = len(filtered_jobs)
+    total_filtered = len(filtered_jobs)
+    page_jobs = filtered_jobs[offset:offset+display_count]
     
-    # Paginate the filtered list
-    jobs = filtered_jobs[offset : offset + display_count]
+    # Mark the jobs on this specific page as seen so they don't appear in the Daily Feed
+    if page_jobs:
+        await mark_jobs_seen(user_id, [j["id"] for j in page_jobs])
 
-    if not jobs:
-        msg = messages.no_jobs_found()
+    if not page_jobs:
+        if page > 1: msg = messages.no_jobs_found()
+        else: msg = messages.no_jobs_found()
         back_kb = keyboards.InlineKeyboardMarkup([[
             keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
             keyboards.InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
@@ -192,8 +200,8 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
-    msg = messages.format_job_list_message(jobs, plan, total_count, user=user)
-    kb = keyboards.job_list_keyboard(jobs, plan, total_count, page)
+    msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user)
+    kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
 
     if update.callback_query:
         await update.callback_query.answer()
@@ -203,7 +211,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Only increment counter on first view of the day (not on re-views)
     if jobs_seen_today == 0 and page == 1:
-        await increment_jobs_seen(user_id, len(jobs))
+        await increment_jobs_seen(user_id, len(page_jobs))
 
 
 async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

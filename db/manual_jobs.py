@@ -75,15 +75,24 @@ async def get_manual_jobs(
         return result
 
 
-async def get_personalized_manual_jobs(user: dict, limit: int = 12) -> list[dict]:
+async def get_personalized_manual_jobs(user: dict, seen_job_ids: list[int] = None, limit: int = 12) -> list[dict]:
     """
     Fetch all active manual jobs, score them based on user skills/experience/batch,
-    filter to frontend/fresher niche, and return the top matching jobs.
+    filter to frontend/fresher niche, filter out seen_jobs, and return the top matching jobs.
     """
+    if seen_job_ids is None:
+        seen_job_ids = []
+
     # Fetch a reasonable number of recent jobs to score (e.g., top 100 recent)
     all_jobs = await get_manual_jobs(limit=100, offset=0)
     if not all_jobs:
         return []
+
+    # Filter out jobs the user has already seen
+    if seen_job_ids:
+        all_jobs = [j for j in all_jobs if j["id"] not in seen_job_ids]
+        if not all_jobs:
+            return []
 
     from utils.messages import compute_manual_job_match
 
@@ -137,6 +146,29 @@ async def count_manual_jobs() -> int:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT COUNT(*) AS cnt FROM manual_jobs WHERE is_active = TRUE")
         return row["cnt"] if row else 0
+
+
+async def get_seen_jobs(telegram_id: int) -> list[int]:
+    """Get a list of job IDs the user has already seen."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT job_id FROM user_seen_jobs WHERE telegram_id = $1", telegram_id)
+        return [r["job_id"] for r in rows]
+
+async def mark_jobs_seen(telegram_id: int, job_ids: list[int]) -> None:
+    """Mark a list of job IDs as seen by the user."""
+    if not job_ids:
+        return
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # Insert ignoring conflicts
+        query = """
+            INSERT INTO user_seen_jobs (telegram_id, job_id)
+            VALUES ($1, $2)
+            ON CONFLICT (telegram_id, job_id) DO NOTHING
+        """
+        await conn.executemany(query, [(telegram_id, jid) for jid in job_ids])
+
 
 
 async def cleanup_old_manual_jobs(days: int = 30) -> int:

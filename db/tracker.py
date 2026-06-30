@@ -46,7 +46,7 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
             return False
 
 async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
-    """Get active applications for a user with job details."""
+    """Get applications for a user — covers both scraped jobs and manual jobs."""
     pool = get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -56,7 +56,16 @@ async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
             WHERE a.telegram_id = $1
-            ORDER BY a.applied_at DESC
+
+            UNION ALL
+
+            SELECT a.id as app_id, a.status, a.applied_at,
+                   mj.id as job_id, mj.title, mj.company, mj.location, mj.url
+            FROM applications a
+            JOIN manual_jobs mj ON a.job_id = mj.id
+            WHERE a.telegram_id = $1
+
+            ORDER BY applied_at DESC
             LIMIT $2 OFFSET $3
             """,
             telegram_id, limit, offset

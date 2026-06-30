@@ -45,6 +45,23 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply DB migrations: {e}")
 
+        # Drop restrictive foreign keys so applications/saved_jobs can hold manual_jobs IDs
+        try:
+            await conn.execute("ALTER TABLE applications DROP CONSTRAINT IF EXISTS applications_job_id_fkey;")
+            await conn.execute("ALTER TABLE saved_jobs DROP CONSTRAINT IF EXISTS saved_jobs_job_id_fkey;")
+            
+            # Create user_seen_jobs for deduplication algorithm
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_seen_jobs (
+                    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    job_id INT,
+                    seen_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(telegram_id, job_id)
+                );
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply constraint/seen_jobs migrations: {e}")
+
         # Trial & pricing migrations
         try:
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;")
