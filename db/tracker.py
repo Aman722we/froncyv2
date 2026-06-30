@@ -184,6 +184,14 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
             WHERE a.telegram_id = $1 AND a.id = $2
+            
+            UNION ALL
+            
+            SELECT a.id as app_id, a.status, a.applied_at,
+                   mj.id as job_id, mj.title, mj.company, mj.location, mj.url
+            FROM applications a
+            JOIN manual_jobs mj ON a.job_id = mj.id
+            WHERE a.telegram_id = $1 AND a.id = $2
             """,
             telegram_id, app_id
         )

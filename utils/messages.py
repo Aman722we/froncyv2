@@ -687,7 +687,7 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
         f"{match_section}\n"
-        "─────────────────────────\n"
+        "───────────────\n"
         "What would you like to do?"
     )
 
