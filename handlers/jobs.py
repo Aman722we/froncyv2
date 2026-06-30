@@ -20,8 +20,8 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     user = await get_user(user_id)
     
-    if not user:
-        msg = "Please /start first."
+    if not user or not user.get("is_onboarded"):
+        msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg)
@@ -78,12 +78,13 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await check_and_reset_daily(user_id, get_pool())
     user = await get_user(user_id)
 
-    if not user:
+    if not user or not user.get("is_onboarded"):
+        msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.edit_message_text("Please /start first.")
+            await update.callback_query.edit_message_text(msg)
         else:
-            await update.message.reply_text("Please /start first.")
+            await update.message.reply_text(msg)
         return
 
     plan = get_effective_plan(user)

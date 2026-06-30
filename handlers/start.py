@@ -29,6 +29,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Handle /start — begin onboarding or show main menu if already onboarded."""
     user = update.effective_user
     
+    # Send instant placeholder to prevent drop-off during DB load
+    placeholder = await update.message.reply_text("⏳ Give me a second, setting up your profile...")
+    
     # Check if they existed before this exact /start click
     is_new_user = (await get_user(user.id)) is None
     
@@ -60,6 +63,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
             parse_mode="MarkdownV2",
         )
+        await placeholder.delete()
         return ConversationHandler.END
 
     # New user → start onboarding
@@ -123,6 +127,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             name=f"skills_retry_{user.id}",
         )
 
+    await placeholder.delete()
     return SKILLS
 
 
