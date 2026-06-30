@@ -1,0 +1,25 @@
+# Global AI Instructions for FroncyBot
+
+You are an expert AI assistant working on the FroncyBot codebase. You must adhere to the following rules at all times.
+
+## 1. Documentation & Knowledge Management
+Before making major architectural changes or starting new features, ALWAYS read `PROJECT_BRAIN.md`.
+If you implement a major new feature, solve a critical bug, or change the architecture, you MUST proactively update the following files if relevant:
+*   `PROJECT_BRAIN.md` (for architectural changes or new failed experiments)
+*   `learnings.md` (if we learn a new lesson about user behavior or analytics)
+*   `security-and-recovery-playbook.md` (if we add new platform safeguards)
+
+## 2. Token Efficiency & API Cost Reduction
+The user is paying for LLM API costs. You must be extremely token-efficient:
+*   DO NOT output the entire file when making a small change. Only output the specific function or code block being modified.
+*   Keep your explanations concise. Do not write fluff or long introductory sentences.
+*   If you are asked to generate a large feature, break it down and ask for confirmation before writing massive blocks of code.
+
+## 3. Code Optimization & Best Practices
+*   **Async First:** This is a high-concurrency Telegram bot. Never use blocking I/O (like `requests` or `time.sleep()`). Always use `asyncio`, `aiohttp`, and `asyncpg`.
+*   **Database:** Use connection pooling (`get_pool()`). Never open and close single connections for every query.
+*   **Error Handling:** Never let the bot crash silently. Wrap API calls and DB queries in try/except blocks and use `logger.error()`.
+*   **UX Accessibility:** Ensure all Telegram MarkdownV2 strings are properly escaped using the custom `escape_md()` helper to prevent parse errors.
+
+## 4. Analytics Enforcement
+Never provide raw URLs for users to click if we need to track them. Always use inline keyboards that route through our `/r/{job_id}` redirector to ensure `link_clicks` are accurately recorded.
