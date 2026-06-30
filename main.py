@@ -140,6 +140,18 @@ async def root():
     return html_path.read_text(encoding="utf-8")
 
 
+@app.get("/bot")
+async def redirect_to_bot():
+    """
+    Marketing link redirector. 
+    Users go to getfroncy.com/bot and it redirects them to the actual Telegram bot.
+    If the bot is ever deleted, you just update BOT_USERNAME in Railway variables.
+    """
+    import os
+    bot_username = os.getenv("BOT_USERNAME", "FroncyJobsBot")
+    return RedirectResponse(url=f"https://t.me/{bot_username}", status_code=302)
+
+
 @app.post("/telegram-webhook")
 async def telegram_webhook(request: Request):
     """Receive updates from Telegram in production."""
