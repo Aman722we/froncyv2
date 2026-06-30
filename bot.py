@@ -87,12 +87,23 @@ def build_bot() -> Application:
     
     app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
 
-    # ── Silent activity tracker (runs before all other handlers, group=-1) ──
-    async def _track_activity(update: Update, context) -> None:
-        """Log every user interaction as a daily active visit. Non-blocking."""
+    # ── Global Pre-Processor (runs before all other handlers, group=-1) ──
+    async def _global_pre_processor(update: Update, context) -> None:
+        """Instantly stop loading spinners, and log activity in the background."""
+        import asyncio
+        
+        # Instantly kill the 3-6 second loading spinner on ALL buttons globally
+        if update.callback_query:
+            try:
+                await update.callback_query.answer()
+            except Exception:
+                pass
+                
+        # Run DB tracking in the background so it doesn't block the next handler
         if update.effective_user:
-            await log_daily_active(update.effective_user.id)
-    app.add_handler(TypeHandler(Update, _track_activity), group=-1)
+            asyncio.create_task(log_daily_active(update.effective_user.id))
+            
+    app.add_handler(TypeHandler(Update, _global_pre_processor), group=-1)
     app.add_handler(get_start_handler())
     app.add_handler(get_feedback_handler())
 

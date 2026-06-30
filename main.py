@@ -171,10 +171,13 @@ async def telegram_webhook(request: Request):
     logger.info(f"Webhook received: {update_type} from user {update.effective_user.id if update.effective_user else '?'}")
     
     # Process update with error catching
+    import asyncio
     try:
-        await bot_app.process_update(update)
+        # Run in background so we instantly return 200 OK to Telegram.
+        # This stops Telegram from throttling the bot or queueing updates.
+        asyncio.create_task(bot_app.process_update(update))
     except Exception as e:
-        logger.error(f"Error processing update: {e}", exc_info=True)
+        logger.error(f"Error queueing update: {e}", exc_info=True)
         # bot_app error_handler will already fire — no double alert needed
         return {"status": "error", "message": str(e)}
     
