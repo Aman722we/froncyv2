@@ -25,9 +25,9 @@ Because Telegram users have a universal `telegram_id` that never changes, their 
 *   **What:** Collect user emails as an optional premium feature (e.g., "Enter email for weekly job digests").
 *   **Why:** If Telegram completely bans the project, having an email list is the ultimate safety net. You can email your entire user base with a link to a new bot or a web app.
 
-### 3. Smart Link Routing (Cloudflare & Custom Domains)
-*   **What:** Never use direct `t.me/FroncyJobsBot` links in marketing, ads, or LinkedIn posts. Route everything through a custom domain (e.g., `froncy.com/bot` or `linktr.ee`) managed by Cloudflare.
-*   **Why:** If the bot gets banned, all existing ads and links on the internet will break. By routing through Cloudflare, if a ban occurs, you simply update the Cloudflare redirect rules to point `froncy.com/bot` to the new bot handle (`t.me/FroncyV2Bot`). New users will never know the difference.
+### 3. Smart Link Routing (Custom Domain Redirect)
+*   **What:** Never use direct `t.me/FroncyJobsBot` links in marketing, ads, or LinkedIn posts. Route everything through the custom redirect link we built: `https://getfroncy.com/bot`.
+*   **Why:** If the bot gets banned, all existing ads and links on the internet will break. By sharing `getfroncy.com/bot`, the server handles the redirect. If a ban occurs, you simply update the `BOT_USERNAME` environment variable in Railway to point to the new bot handle. New users and old marketing links will never know the difference.
 
 ---
 
@@ -49,9 +49,9 @@ If the Telegram handle `@FroncyJobsBot` is suddenly banned or deleted, follow th
 3. **Update Webhooks (If applicable):**
    * If running in webhook mode, ensure the `WEBHOOK_URL` is still correctly pointing to your server domain, and the bot registers the new webhook path automatically on startup.
 
-4. **Migrate Users:**
+4. **Migrate Users & Links:**
    * Post an announcement in the Official Telegram Channel.
    * Send an email blast (if email collection is active).
-   * Update Cloudflare/custom domain redirects to point to the new `@FroncyAppBot` handle.
+   * **Crucial:** In your Railway variables, add/update the `BOT_USERNAME` variable and set its value to your new bot's handle (e.g., `FroncyBotV2`). This will instantly fix your `getfroncy.com/bot` marketing link.
 
 **The Result:** When an existing user clicks the link to the new bot and hits `/start`, the database will instantly recognize their `telegram_id`. All their data (Pro trials, saved jobs, resumes) will perfectly resume exactly as they left it.
