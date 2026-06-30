@@ -59,6 +59,17 @@ async def init_db() -> asyncpg.Pool:
                     UNIQUE(telegram_id, job_id)
                 );
             """)
+            
+            # Create jobs_sent_log to track daily feed history (3-day cooldowns)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS jobs_sent_log (
+                    id SERIAL PRIMARY KEY,
+                    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    job_id INT,
+                    sent_at TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_sent_log_user ON jobs_sent_log (telegram_id, job_id, sent_at DESC);")
         except Exception as e:
             logger.warning(f"Failed to apply constraint/seen_jobs migrations: {e}")
 

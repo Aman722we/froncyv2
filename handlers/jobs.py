@@ -43,15 +43,21 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref", "fullstack"),
     }
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, mark_jobs_seen
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
     seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan == "free" else 12
-    jobs = await get_personalized_manual_jobs(user_dict, seen_jobs, limit=feed_limit)
+    jobs = await get_personalized_manual_jobs(
+        user_dict, 
+        seen_job_ids=seen_jobs, 
+        limit=feed_limit,
+        exclude_sent_within_days=3,
+        max_age_days=10
+    )
     total_active_jobs = await count_manual_jobs()
     
     if jobs:
-        await mark_jobs_seen(user_id, [j["id"] for j in jobs])
+        await log_jobs_sent(user_id, [j["id"] for j in jobs])
     
     if not jobs:
         msg = messages.error_no_jobs()
@@ -113,7 +119,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    from db.manual_jobs import get_personalized_manual_jobs, mark_jobs_seen
+    from db.manual_jobs import get_personalized_manual_jobs
     
     # Get active filters
     filters = context.user_data.get("job_filters", {})
@@ -181,10 +187,6 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
     total_filtered = len(filtered_jobs)
     page_jobs = filtered_jobs[offset:offset+display_count]
-    
-    # Mark the jobs on this specific page as seen so they don't appear in the Daily Feed
-    if page_jobs:
-        await mark_jobs_seen(user_id, [j["id"] for j in page_jobs])
 
     if not page_jobs:
         if page > 1: msg = messages.no_jobs_found()
@@ -248,6 +250,10 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     user_id = update.effective_user.id
+    
+    # User actually clicked to view the job, so mark it permanently seen
+    from db.manual_jobs import mark_jobs_seen
+    await mark_jobs_seen(user_id, [job_id])
     user = await get_user(user_id)
     plan = get_effective_plan(user)
     user_skills = user.get("skills", [])

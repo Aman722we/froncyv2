@@ -75,10 +75,16 @@ async def get_manual_jobs(
         return result
 
 
-async def get_personalized_manual_jobs(user: dict, seen_job_ids: list[int] = None, limit: int = 12) -> list[dict]:
+async def get_personalized_manual_jobs(
+    user: dict, 
+    seen_job_ids: list[int] = None, 
+    limit: int = 12,
+    exclude_sent_within_days: int = None,
+    max_age_days: int = None
+) -> list[dict]:
     """
     Fetch all active manual jobs, score them based on user skills/experience/batch,
-    filter to frontend/fresher niche, filter out seen_jobs, and return the top matching jobs.
+    filter to frontend/fresher niche, filter out seen_jobs and recently sent jobs, and return the top matching jobs.
     """
     if seen_job_ids is None:
         seen_job_ids = []
@@ -87,6 +93,38 @@ async def get_personalized_manual_jobs(user: dict, seen_job_ids: list[int] = Non
     all_jobs = await get_manual_jobs(limit=100, offset=0)
     if not all_jobs:
         return []
+        
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    
+    # 1. Age Filter (10-Day Expiry)
+    if max_age_days is not None:
+        valid_jobs = []
+        for j in all_jobs:
+            posted = j.get("posted_at")
+            if posted:
+                # Ensure it's aware
+                if posted.tzinfo is None:
+                    posted = posted.replace(tzinfo=timezone.utc)
+                if (now - posted).days <= max_age_days:
+                    valid_jobs.append(j)
+        all_jobs = valid_jobs
+        if not all_jobs:
+            return []
+
+    # 2. Seen Filter (Permanently ignore if they clicked it)
+    if seen_job_ids:
+        all_jobs = [j for j in all_jobs if j["id"] not in seen_job_ids]
+        if not all_jobs:
+            return []
+            
+    # 3. 3-Day Cooldown Filter (Ignore if sent in Daily Feed recently)
+    if exclude_sent_within_days is not None:
+        recently_sent = await get_recently_sent_jobs(user.get("telegram_id"), days=exclude_sent_within_days)
+        if recently_sent:
+            all_jobs = [j for j in all_jobs if j["id"] not in recently_sent]
+            if not all_jobs:
+                return []
 
     # Filter out jobs the user has already seen
     if seen_job_ids:
@@ -168,6 +206,32 @@ async def mark_jobs_seen(telegram_id: int, job_ids: list[int]) -> None:
             ON CONFLICT (telegram_id, job_id) DO NOTHING
         """
         await conn.executemany(query, [(telegram_id, jid) for jid in job_ids])
+
+async def get_recently_sent_jobs(telegram_id: int, days: int = 3) -> list[int]:
+    """Get jobs sent to this user in the daily feed within the last X days."""
+    if not telegram_id:
+        return []
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        query = """
+            SELECT DISTINCT job_id FROM jobs_sent_log 
+            WHERE telegram_id = $1 AND sent_at >= NOW() - INTERVAL '1 day' * $2
+        """
+        rows = await conn.fetch(query, telegram_id, days)
+        return [r["job_id"] for r in rows]
+
+async def log_jobs_sent(telegram_id: int, job_ids: list[int]) -> None:
+    """Log that these jobs were sent in a daily feed to trigger the cooldown."""
+    if not job_ids or not telegram_id:
+        return
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        query = """
+            INSERT INTO jobs_sent_log (telegram_id, job_id)
+            VALUES ($1, $2)
+        """
+        await conn.executemany(query, [(telegram_id, jid) for jid in job_ids])
+
 
 
 
