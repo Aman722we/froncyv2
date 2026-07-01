@@ -33,11 +33,17 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle 'Back to Menu' callback button."""
+    import asyncio
     query = update.callback_query
-    await query.answer()
-    user = await get_user(update.effective_user.id)
+    
+    # Run get_user and pricing lookup concurrently
+    user, upgrade_price = await asyncio.gather(
+        get_user(update.effective_user.id),
+        _get_upgrade_price(),
+    )
     plan = user.get("plan", "free") if user else "free"
-    upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
+    if plan in ("pro",):
+        upgrade_price = None
 
     await query.edit_message_text(
         messages.main_menu(user),

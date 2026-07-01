@@ -85,7 +85,34 @@ def build_bot() -> Application:
     """Build and configure the Telegram bot application."""
     logger.info("Building Telegram bot application...")
     
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    from telegram.request import HTTPXRequest
+    
+    # Production-grade HTTP connection pool for Telegram API calls.
+    # Default connection_pool_size=1 is a MASSIVE bottleneck — every API call
+    # (query.answer, edit_message, send_message) queues behind a single TCP connection.
+    # Bumping to 100 allows concurrent API calls and eliminates queueing delays.
+    telegram_request = HTTPXRequest(
+        connection_pool_size=100,
+        pool_timeout=5.0,
+        connect_timeout=5.0,
+        read_timeout=10.0,
+    )
+    
+    builder = (
+        Application.builder()
+        .token(settings.TELEGRAM_BOT_TOKEN)
+        .request(telegram_request)
+        .get_updates_request(telegram_request)
+        .concurrent_updates(True)  # Process multiple user clicks simultaneously
+    )
+    
+    # In production we handle webhooks via FastAPI, so the built-in Updater
+    # (designed for polling) is dead weight. Disabling it saves memory and
+    # removes overhead from process_update().
+    if settings.ENVIRONMENT == "production":
+        builder = builder.updater(None)
+    
+    app = builder.build()
 
     # ── Global Pre-Processor (runs before all other handlers, group=-1) ──
     async def _global_pre_processor(update: Update, context) -> None:
@@ -95,7 +122,8 @@ def build_bot() -> Application:
         # Instantly kill the 3-6 second loading spinner on ALL buttons globally
         if update.callback_query:
             try:
-                await update.callback_query.answer()
+                # Fire and forget: don't block the actual handler waiting for Telegram's API response
+                asyncio.create_task(update.callback_query.answer())
             except Exception:
                 pass
                 

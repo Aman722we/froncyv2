@@ -17,20 +17,25 @@ from utils.helpers import get_effective_plan
 
 async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /daily_feed command or 'menu_daily' callback."""
+    import asyncio
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
+    
+    # Fire all independent queries in parallel
+    user, seen_jobs, total_active_jobs = await asyncio.gather(
+        get_user(user_id),
+        get_seen_jobs(user_id),
+        count_manual_jobs(),
+    )
     
     if not user or not user.get("is_onboarded"):
         msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
         if update.callback_query:
-            await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg)
         else:
             await update.message.reply_text(msg)
         return
-
-    if update.callback_query:
-        await update.callback_query.answer()
 
     plan = get_effective_plan(user)
     
@@ -43,9 +48,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref", "fullstack"),
     }
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
-    seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan == "free" else 12
     jobs = await get_personalized_manual_jobs(
         user_dict, 
@@ -54,7 +57,6 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         exclude_sent_within_days=3,
         max_age_days=10
     )
-    total_active_jobs = await count_manual_jobs()
     
     if jobs:
         await log_jobs_sent(user_id, [j["id"] for j in jobs])
@@ -74,14 +76,26 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /jobs command and 'View Jobs' / pagination buttons."""
+    import asyncio
     user_id = update.effective_user.id
-    await check_and_reset_daily(user_id, get_pool())
-    user = await get_user(user_id)
-
+    
+    # Fire ALL independent DB queries in a single parallel batch.
+    # This turns 5 sequential round trips (~1500ms with cross-ocean latency)
+    # into 1 parallel batch (~350ms).
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs
+    
+    reset_task = check_and_reset_daily(user_id, get_pool())
+    user_task = get_user(user_id)
+    seen_task = get_seen_jobs(user_id)
+    count_task = count_manual_jobs()
+    
+    _, user, seen_jobs, total_active_jobs = await asyncio.gather(
+        reset_task, user_task, seen_task, count_task
+    )
+    
     if not user or not user.get("is_onboarded"):
         msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
         if update.callback_query:
-            await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg)
         else:
             await update.message.reply_text(msg)
@@ -101,7 +115,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Free users: block pagination past their allowance
     if plan == "free":
-        max_viewable_offset = 6  # 6 additional jobs
+        max_viewable_offset = 6
         if offset >= max_viewable_offset:
             msg = (
                 "🔒 *100+ more personalized jobs available*\n\n"
@@ -113,20 +127,16 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
             ])
             if update.callback_query:
-                await update.callback_query.answer()
                 await update.callback_query.edit_message_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
             else:
                 await update.message.reply_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
             return
         display_count = min(5, max_viewable_offset - offset)
 
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs
-    
     # Get active filters
     filters = context.user_data.get("job_filters", {})
     
-    # Fetch top 100 personalized jobs to allow in-memory filtering
-    # For /jobs list, we DO NOT filter by seen_jobs to ensure pagination stays stable.
+    # Fetch top 100 personalized jobs
     user_dict = {
         "telegram_id": user.get("telegram_id"),
         "skills": user.get("skills") or [],
@@ -136,17 +146,9 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref") or "fullstack",
     }
-    import asyncio
-    
-    # Run independent DB queries concurrently to slash network latency
-    seen_jobs, total_active_jobs = await asyncio.gather(
-        get_seen_jobs(user_id),
-        count_manual_jobs()
-    )
-    
     all_jobs = await get_personalized_manual_jobs(user_dict, limit=100)
     
-    # Filter out seen_jobs manually here (since we removed it from the args above)
+    # Filter out seen jobs
     all_jobs = [j for j in all_jobs if j["id"] not in seen_jobs]
     
     # Apply filters
