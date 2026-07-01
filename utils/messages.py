@@ -36,6 +36,7 @@ def skills_prompt(first_name: str = None) -> str:
     bar = _step_bar(1)
     greeting = f"👋 Hey {escape_md(first_name)}\\! " if first_name else ""
     return (
+        f"🧪 *\\[DEV MODE\\]* 🧪\n\n"
         f"{bar}\n\n"
         f"{greeting}*Pick your frontend skills* 🛠️\n"
         "\\(Select all that apply, then tap *Next*\\)"
@@ -687,7 +688,7 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
         f"{match_section}\n"
-        "───────────────\n"
+        "──────────────────\n"
         "What would you like to do?"
     )
 
