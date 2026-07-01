@@ -77,21 +77,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="FroncyBot API", lifespan=lifespan)
 
 
-# ── Latency Monitoring Middleware ──
-import time as _time
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class LatencyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        start = _time.perf_counter()
-        response = await call_next(request)
-        duration_ms = (_time.perf_counter() - start) * 1000
-        if request.url.path == "/telegram-webhook":
-            logger.info(f"⏱️ Webhook processed in {duration_ms:.0f}ms")
-        return response
-
-app.add_middleware(LatencyMiddleware)
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Catch-all FastAPI exception handler — alerts admin on any unhandled API error."""
