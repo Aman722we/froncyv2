@@ -103,7 +103,6 @@ def build_bot() -> Application:
         .token(settings.TELEGRAM_BOT_TOKEN)
         .request(telegram_request)
         .get_updates_request(telegram_request)
-        .concurrent_updates(True)  # Process multiple user clicks simultaneously
     )
     
     # In production we handle webhooks via FastAPI, so the built-in Updater
@@ -119,13 +118,8 @@ def build_bot() -> Application:
         """Instantly stop loading spinners, and log activity in the background."""
         import asyncio
         
-        # Instantly kill the 3-6 second loading spinner on ALL buttons globally
         if update.callback_query:
-            try:
-                # Fire and forget: don't block the actual handler waiting for Telegram's API response
-                asyncio.create_task(update.callback_query.answer())
-            except Exception:
-                pass
+            pass
                 
         # Run DB tracking in the background so it doesn't block the next handler
         if update.effective_user:
