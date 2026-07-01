@@ -33,10 +33,12 @@ def welcome_message(first_name: str = "there") -> str:
 
 
 def skills_prompt(first_name: str = None) -> str:
+    from config import settings
     bar = _step_bar(1)
     greeting = f"👋 Hey {escape_md(first_name)}\\! " if first_name else ""
+    dev_badge = f"🧪 *\\[DEV MODE\\]* 🧪\n\n" if settings.ENVIRONMENT != "production" else ""
     return (
-        f"🧪 *\\[DEV MODE\\]* 🧪\n\n"
+        f"{dev_badge}"
         f"{bar}\n\n"
         f"{greeting}*Pick your frontend skills* 🛠️\n"
         "\\(Select all that apply, then tap *Next*\\)"
