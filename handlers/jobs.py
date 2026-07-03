@@ -60,7 +60,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await log_jobs_sent(user_id, [j["id"] for j in jobs])
     
     if not jobs:
-        msg = messages.error_no_jobs()
+        msg = messages.no_jobs_found()
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
     else:
         msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
