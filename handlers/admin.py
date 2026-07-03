@@ -1,6 +1,7 @@
 """
 Admin handlers for FroncyBot.
-Includes the /addjob command to manually curate jobs.
+Includes the /addjob command to manually curate jobs,
+and /send + /broadcast to message individual or all users.
 """
 import telegram
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -14,6 +15,7 @@ from telegram.ext import (
 from loguru import logger
 from config import settings
 from db.manual_jobs import add_manual_job
+from db.users import get_all_users
 
 WAITING_FOR_JOB_TEXT = 1
 
@@ -174,3 +176,97 @@ def get_addjob_handler() -> ConversationHandler:
         },
         fallbacks=[CommandHandler("cancel", cancel_addjob)],
     )
+
+
+async def send_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/send <user_id> <message> — Admin only. DM a specific user from the bot."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return  # Silently ignore unauthorized users
+
+    # Usage check
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /send &lt;user_id&gt; &lt;message&gt;\n\n"
+            "Example:\n<code>/send 7963303313 Hey! The bug is now fixed.</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    # Parse target ID and message
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID. It must be a number.")
+        return
+
+    message_text = " ".join(context.args[1:])
+
+    # Send the message
+    try:
+        await context.bot.send_message(chat_id=target_id, text=message_text)
+        await update.message.reply_text(
+            f"✅ Message sent successfully to <code>{target_id}</code>!",
+            parse_mode="HTML"
+        )
+        logger.info(f"Admin sent message to {target_id}: {message_text}")
+    except telegram.error.Forbidden:
+        await update.message.reply_text(
+            f"❌ Failed: User <code>{target_id}</code> has <b>blocked the bot</b> or never started it.",
+            parse_mode="HTML"
+        )
+    except telegram.error.BadRequest as e:
+        await update.message.reply_text(f"❌ Bad request: {e}")
+    except Exception as e:
+        logger.error(f"Error sending message to {target_id}: {e}")
+        await update.message.reply_text(f"❌ Unexpected error: {e}")
+
+
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/broadcast <message> — Admin only. Send a message to ALL onboarded users."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /broadcast &lt;message&gt;\n\n"
+            "Example:\n<code>/broadcast 🎉 New features just dropped! Check the bot now.</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    message_text = " ".join(context.args)
+    all_user_ids = await get_all_users()
+
+    if not all_user_ids:
+        await update.message.reply_text("⚠️ No onboarded users found in the database.")
+        return
+
+    status_msg = await update.message.reply_text(
+        f"📤 Broadcasting to <b>{len(all_user_ids)}</b> users...",
+        parse_mode="HTML"
+    )
+
+    sent = 0
+    failed = 0
+    blocked = 0
+
+    for tid in all_user_ids:
+        try:
+            await context.bot.send_message(chat_id=tid, text=message_text)
+            sent += 1
+        except telegram.error.Forbidden:
+            blocked += 1
+        except Exception as e:
+            logger.warning(f"Broadcast failed for {tid}: {e}")
+            failed += 1
+
+    await status_msg.edit_text(
+        f"✅ <b>Broadcast complete!</b>\n\n"
+        f"📨 Sent: <b>{sent}</b>\n"
+        f"🚫 Blocked: <b>{blocked}</b>\n"
+        f"❌ Failed: <b>{failed}</b>",
+        parse_mode="HTML"
+    )
+    logger.info(f"Broadcast done. Sent={sent}, Blocked={blocked}, Failed={failed}")

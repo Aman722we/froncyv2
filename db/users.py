@@ -341,3 +341,13 @@ async def increment_ats_check(telegram_id: int) -> None:
             """,
             telegram_id
         )
+
+
+async def get_all_users() -> list[int]:
+    """Return telegram_ids of all onboarded users (for broadcast)."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT telegram_id FROM users WHERE is_onboarded = TRUE"
+        )
+        return [row["telegram_id"] for row in rows]
