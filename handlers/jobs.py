@@ -382,3 +382,33 @@ async def handle_filter_toggle(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
     except Exception:
         pass # message not modified
+
+
+async def remind_me_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle ⏳ Remind Me for a regular (scraped) job.
+    Saves the job and confirms with a toast. The scheduler will nudge the user at 6:30 PM."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    # callback_data format: remind_job_<job_id>
+    job_id = int(query.data.split("_")[-1])
+
+    saved = await save_job(user_id, job_id)
+    if saved:
+        await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
+    else:
+        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)
+
+
+async def remind_me_manual_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle ⏳ Remind Me for a manual (admin-curated) job.
+    Saves the job and confirms with a toast. The scheduler will nudge the user at 6:30 PM."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    # callback_data format: remind_manual_<job_id>
+    job_id = int(query.data.split("_")[-1])
+
+    saved = await save_manual_job(user_id, job_id)
+    if saved:
+        await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
+    else:
+        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)

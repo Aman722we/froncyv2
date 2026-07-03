@@ -4,7 +4,8 @@ from datetime import datetime
 import json
 
 async def add_application(telegram_id: int, job_id: int) -> bool:
-    """Add a job to applications. Return True if added, False if already exists."""
+    """Add a job to applications. Return True if added, False if already exists.
+    Auto-removes the job from saved_jobs if it was saved there."""
     pool = get_pool()
     async with pool.acquire() as conn:
         try:
@@ -39,6 +40,19 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
                 )
             except Exception as e:
                 logger.warning(f"Could not create reminder (non-critical): {e}")
+
+            # Auto-cleanup: remove from saved_jobs (both scraped and manual)
+            try:
+                await conn.execute(
+                    "DELETE FROM saved_jobs WHERE telegram_id = $1 AND job_id = $2",
+                    telegram_id, job_id
+                )
+                await conn.execute(
+                    "DELETE FROM saved_jobs WHERE telegram_id = $1 AND manual_job_id = $2",
+                    telegram_id, job_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not auto-remove from saved_jobs (non-critical): {e}")
 
             return True
         except Exception as e:

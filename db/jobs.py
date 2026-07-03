@@ -289,3 +289,20 @@ async def deactivate_old_jobs(days: int = 30) -> int:
         count = int(result.split()[-1])
         logger.info(f"Deactivated {count} old jobs (>{days} days)")
         return count
+
+
+async def get_users_with_saved_jobs() -> list[dict]:
+    """Return all users who have at least one saved job.
+    Used by the daily 6:30 PM reminder scheduler."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT sj.telegram_id
+            FROM saved_jobs sj
+            JOIN users u ON sj.telegram_id = u.telegram_id
+            WHERE u.is_onboarded = TRUE
+            AND (u.is_deleted IS NULL OR u.is_deleted = FALSE)
+            """
+        )
+        return [dict(r) for r in rows]

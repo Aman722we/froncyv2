@@ -257,6 +257,64 @@ async def _cleanup_old_manual_jobs():
             except Exception:
                 pass
 
+
+async def _send_saved_jobs_reminder():
+    """Daily 6:30 PM IST reminder: nudge users who have saved jobs to apply."""
+    try:
+        from db.jobs import get_saved_jobs, get_users_with_saved_jobs
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        from utils.messages import escape_md
+
+        logger.info("⏰ Running saved jobs reminder...")
+
+        if not _bot_app:
+            logger.warning("Bot app not set — cannot send saved job reminders")
+            return
+
+        users = await get_users_with_saved_jobs()
+        sent_count = 0
+
+        for user_row in users:
+            telegram_id = user_row["telegram_id"]
+            try:
+                saved_jobs = await get_saved_jobs(telegram_id)
+                if not saved_jobs:
+                    continue
+
+                # Build message with list of saved jobs
+                lines = ["👋 *Hey\\! You asked me to remind you about these jobs:*\n"]
+                for i, job in enumerate(saved_jobs[:10], 1):
+                    title = escape_md(job.get("title", "Unknown"))
+                    company = escape_md(job.get("company", "Unknown"))
+                    lines.append(f"{i}\\. *{title}* — {company}")
+
+                lines.append("\n_Tap a job below to view it or remove it from your list\\._")
+                msg = "\n".join(lines)
+
+                # Keyboard: view each saved job + back
+                from utils.keyboards import saved_jobs_keyboard
+                kb = saved_jobs_keyboard(saved_jobs)
+
+                await _bot_app.bot.send_message(
+                    chat_id=telegram_id,
+                    text=msg,
+                    reply_markup=kb,
+                    parse_mode="MarkdownV2",
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send saved-jobs reminder to {telegram_id}: {e}")
+
+        logger.info(f"⏰ Saved jobs reminders sent to {sent_count}/{len(users)} users")
+
+    except Exception as e:
+        logger.error(f"❌ Saved jobs reminder job failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _send_saved_jobs_reminder", e)
+            except Exception:
+                pass
+
 from datetime import datetime
 
 def start_scheduler():
@@ -294,6 +352,15 @@ def start_scheduler():
         CronTrigger(hour=0, minute=0),
         id="cleanup_manual_jobs",
         name="Deactivate manual jobs older than 30 days",
+        replace_existing=True,
+    )
+
+    # Saved Jobs Reminder — Daily at 6:30 PM IST (13:00 UTC)
+    scheduler.add_job(
+        _send_saved_jobs_reminder,
+        CronTrigger(hour=13, minute=0),
+        id="saved_jobs_reminder",
+        name="Daily 6:30 PM reminder for saved jobs",
         replace_existing=True,
     )
 
