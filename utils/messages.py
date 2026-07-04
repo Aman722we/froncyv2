@@ -529,28 +529,58 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str) -> str:
     return line
 
 
-def format_daily_feed_message(jobs: list[dict], plan: str, total_count: int, user: dict) -> str:
-    """Format the 12-job curated daily alert feed."""
-    header = "📅 *Your Curated Daily Feed*\n"
+def format_daily_feed_message(
+    jobs: list[dict],
+    plan: str,
+    total_count: int,
+    user: dict,
+    new_jobs: dict | None = None,
+    skill_tip: str | None = None,
+) -> str:
+    """Format the 12-job curated daily alert feed.
+
+    Args:
+        jobs: list of job dicts to display.
+        plan: user's current plan (free/pro/trial).
+        total_count: total active jobs in the pool (for footer).
+        user: user dict (for match scoring display).
+        new_jobs: dict with keys 'total' and 'remote' — count of new jobs
+                  since the user's last visit. If total > 0 a FOMO header
+                  is injected at the top.
+        skill_tip: optional skill gap tip string to inject at the footer
+                   (e.g. "70% of your matched jobs require TypeScript").
+    """
+    # ── Freshness header (Phase 1) ──────────────────────────────────────
+    freshness_line = ""
+    if new_jobs and new_jobs.get("total", 0) > 0:
+        n = new_jobs["total"]
+        r = new_jobs.get("remote", 0)
+        remote_note = f", \\+{r} remote" if r > 0 else ""
+        freshness_line = (
+            f"🔔 *\\+{n} new job{'s' if n != 1 else ''} added since your last visit{remote_note}\\!*\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+        )
+
+    header = freshness_line + "📅 *Your Curated Daily Feed*\n"
     header += "━━━━━━━━━━━━━━━━━━\n\n"
-    
+
     top_picks = jobs[:5]
     good_matches = jobs[5:12]
-    
+
     lines = []
-    
+
     if top_picks:
         lines.append("🎯 *Top Picks*\n\n")
         for i, job in enumerate(top_picks, 1):
             lines.append(_render_job_line(i, job, user, plan))
-            
+
     if good_matches:
         lines.append("⚡ *Good Matches*\n\n")
         for i, job in enumerate(good_matches, len(top_picks) + 1):
             lines.append(_render_job_line(i, job, user, plan))
 
     footer = "━━━━━━━━━━━━━━━━━━\n"
-    
+
     remaining = max(0, total_count - 12)
     if plan == "free":
         footer += f"🔒 \\+{remaining} more jobs available today\n"
@@ -559,6 +589,10 @@ def format_daily_feed_message(jobs: list[dict], plan: str, total_count: int, use
         footer += f"✅ Showing top 12 matches\n"
         if remaining > 0:
             footer += f"\\+{remaining} more available \\(use /jobs command with filters to explore\\)\n"
+
+    # ── Skill gap Pro Tip (Phase 4) ─────────────────────────────────────
+    if skill_tip:
+        footer += f"\n💡 *Pro Tip:* {escape_md(skill_tip)}\n"
 
     return header + "".join(lines) + footer
 

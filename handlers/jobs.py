@@ -20,7 +20,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     import asyncio
     user_id = update.effective_user.id
     
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent, count_new_jobs_since
     
     # Fire all independent queries in parallel
     user, seen_jobs, total_active_jobs = await asyncio.gather(
@@ -50,22 +50,51 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     }
     
     feed_limit = 8 if plan == "free" else 12
-    jobs = await get_personalized_manual_jobs(
-        user_dict, 
-        seen_job_ids=seen_jobs, 
-        limit=feed_limit,
-        exclude_sent_within_days=3,
-        max_age_days=10
+
+    # Fetch jobs + freshness count in parallel
+    jobs, new_jobs = await asyncio.gather(
+        get_personalized_manual_jobs(
+            user_dict,
+            seen_job_ids=seen_jobs,
+            limit=feed_limit,
+            exclude_sent_within_days=3,
+            max_age_days=10
+        ),
+        count_new_jobs_since(user.get("jobs_reset_at")),
     )
-    
+
     if jobs:
         await log_jobs_sent(user_id, [j["id"] for j in jobs])
-    
+
+    # Build optional skill tip (Phase 4) — compute from last 20 matched jobs
+    skill_tip = None
+    try:
+        from db.manual_jobs import get_manual_jobs
+        from utils.messages import compute_manual_job_match
+        import random
+        # Only show the tip ~30% of the time to avoid repetition
+        if random.random() < 0.30:
+            sample_jobs = await get_manual_jobs(limit=20)
+            missing_skills: dict[str, int] = {}
+            user_skills_lower = {s.lower() for s in (user_dict.get("skills") or [])}
+            for job in sample_jobs:
+                job_skills = [s.lower() for s in (job.get("skills") or [])]
+                for sk in job_skills:
+                    if sk not in user_skills_lower:
+                        missing_skills[sk] = missing_skills.get(sk, 0) + 1
+            if missing_skills:
+                top_skill, count = max(missing_skills.items(), key=lambda x: x[1])
+                pct = round((count / len(sample_jobs)) * 100)
+                if pct >= 30:  # only show if meaningful
+                    skill_tip = f"{pct}% of your matched jobs require {top_skill.title()}. Adding it could unlock more matches!"
+    except Exception:
+        skill_tip = None  # non-critical, never crash the feed
+
     if not jobs:
         msg = messages.no_jobs_found()
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
     else:
-        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
+        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs, skill_tip=skill_tip)
         kb = keyboards.daily_feed_keyboard(jobs, plan)
 
     if update.callback_query:

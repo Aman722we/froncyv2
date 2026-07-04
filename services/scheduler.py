@@ -1,12 +1,12 @@
 """
-APScheduler setup — daily alerts, weekly digest, and follow-up reminders.
+APScheduler setup — daily alerts, evening digest, weekly scorecard.
 Scraping has been removed. All jobs are manually curated via the admin panel.
 """
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 from utils.error_alert import send_error_alert
+from db.connection import get_pool
 
 
 scheduler = AsyncIOScheduler()
@@ -86,11 +86,15 @@ async def _send_daily_alerts():
                 if not jobs:
                     continue
 
+                # Freshness count since the user's last alert reset time
+                from db.manual_jobs import count_new_jobs_since
+                new_jobs = await count_new_jobs_since(user_record.get("jobs_reset_at"))
+
                 # Format alert message with the new Daily Feed UI
                 from utils.messages import format_daily_feed_message
                 from utils import keyboards
-                
-                msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
+
+                msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs)
                 kb = keyboards.daily_feed_keyboard(jobs, plan)
 
                 await _bot_app.bot.send_message(
@@ -184,43 +188,96 @@ async def _process_reminders():
                 pass
 
 async def _send_weekly_digest():
-    """Send weekly application digest to PRO users on Fridays."""
+    """Friday scorecard: rich weekly stats for ALL onboarded users.
+    Shows jobs viewed, saved, applied this week + top skill gap tip."""
     try:
         from db.connection import get_pool
+        from db.tracker import get_weekly_scorecard
+        from db.manual_jobs import get_manual_jobs
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        
-        logger.info("📊 Sending weekly digest...")
+        from utils.messages import escape_md
+
+        logger.info("📊 Sending Friday scorecard...")
         pool = get_pool()
-        
+
         async with pool.acquire() as conn:
-            users = await conn.fetch("SELECT telegram_id FROM users WHERE plan = 'pro' AND is_onboarded = TRUE")
-            
+            users = await conn.fetch(
+                """SELECT telegram_id, skills, first_name
+                   FROM users
+                   WHERE is_onboarded = TRUE
+                   AND (is_deleted IS NULL OR is_deleted = FALSE)"""
+            )
+
         if not _bot_app:
             return
-            
+
+        # Pre-load sample jobs for skill gap analysis (once, shared across all users)
+        try:
+            sample_jobs = await get_manual_jobs(limit=30)
+        except Exception:
+            sample_jobs = []
+
         sent = 0
         for u in users:
             telegram_id = u["telegram_id"]
-            
-            async with pool.acquire() as conn:
-                count = await conn.fetchval(
-                    """
-                    SELECT count(*) FROM applications 
-                    WHERE telegram_id = $1 
-                    AND applied_at >= NOW() - INTERVAL '7 days'
-                    """,
-                    telegram_id
-                )
-                
-            msg = (
-                "📊 *Your Weekly Pipeline*\n\n"
-                f"You submitted {count or 0} applications this week\\.\n"
-                "Review your tracker to plan your follow\\-ups\\!"
-            )
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📋 Open Tracker", callback_data="tracker")]
-            ])
+            first_name  = escape_md(u["first_name"] or "there")
+            user_skills  = {s.lower() for s in (u["skills"] or [])}
             try:
+                stats = await get_weekly_scorecard(telegram_id)
+                viewed  = stats["viewed"]
+                saved   = stats["saved"]
+                applied = stats["applied"]
+
+                # Skip users who weren't active at all this week
+                if viewed == 0 and saved == 0 and applied == 0:
+                    continue
+
+                # ── Skill gap tip ────────────────────────────────────────
+                skill_tip_line = ""
+                try:
+                    missing: dict[str, int] = {}
+                    for job in sample_jobs:
+                        for sk in [s.lower() for s in (job.get("skills") or [])]:
+                            if sk not in user_skills:
+                                missing[sk] = missing.get(sk, 0) + 1
+                    if missing and sample_jobs:
+                        top_sk, cnt = max(missing.items(), key=lambda x: x[1])
+                        pct = round((cnt / len(sample_jobs)) * 100)
+                        if pct >= 30:
+                            skill_tip_line = (
+                                f"\n💡 *Skill Insight:* {pct}% of current openings require "
+                                f"*{escape_md(top_sk.title())}*\. "
+                                "Adding it could unlock significantly more matches\."
+                            )
+                except Exception:
+                    pass
+
+                # ── Build scorecard message ──────────────────────────────
+                msg = (
+                    f"📊 *Hey {first_name}\! Your Week in Review* 🎯\n"
+                    "━━━━━━━━━━━━━━━━━━\n\n"
+                    f"👀 *{viewed}* jobs viewed\n"
+                    f"💾 *{saved}* jobs saved\n"
+                    f"✅ *{applied}* applications tracked\n"
+                    "━━━━━━━━━━━━━━━━━━\n"
+                )
+
+                if applied >= 5:
+                    msg += "\n🔥 *Incredible hustle this week\! Keep it up\.* 🚀"
+                elif applied >= 2:
+                    msg += "\n💪 *Solid week\! Consistency is what gets you hired\.*"
+                elif applied == 1:
+                    msg += "\n🌱 *Good start\! Try to track 3\+ applications next week\.*"
+                else:
+                    msg += "\n👋 *Don't forget to track your applications\! Every tap counts\.*"
+
+                msg += skill_tip_line
+
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📅 Open Daily Feed",  callback_data="menu_daily")],
+                    [InlineKeyboardButton("📋 Open Tracker",     callback_data="tracker")],
+                ])
+
                 await _bot_app.bot.send_message(
                     chat_id=telegram_id,
                     text=msg,
@@ -229,10 +286,10 @@ async def _send_weekly_digest():
                 )
                 sent += 1
             except Exception as e:
-                logger.error(f"Failed to send weekly digest to {telegram_id}: {e}")
-                
-        logger.info(f"📊 Weekly digest sent to {sent} PRO users.")
-        
+                logger.error(f"Failed to send Friday scorecard to {telegram_id}: {e}")
+
+        logger.info(f"📊 Friday scorecard sent to {sent} users.")
+
     except Exception as e:
         logger.error(f"❌ Send weekly digest failed: {e}")
         if _bot_app:
@@ -258,42 +315,77 @@ async def _cleanup_old_manual_jobs():
                 pass
 
 
-async def _send_saved_jobs_reminder():
-    """Daily 6:30 PM IST reminder: nudge users who have saved jobs to apply."""
+
+async def _send_evening_digest():
+    """Daily 6:30 PM IST consolidated digest.
+    Bundles saved jobs reminders (#5 Unfinished Business) AND due follow-ups
+    into a SINGLE message per user — replaces the old hourly _process_reminders."""
     try:
         from db.jobs import get_saved_jobs, get_users_with_saved_jobs
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        from db.tracker import get_due_followups, mark_reminders_sent
         from utils.messages import escape_md
+        from utils.keyboards import saved_jobs_keyboard
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
-        logger.info("⏰ Running saved jobs reminder...")
+        logger.info("🌆 Running 6:30 PM evening digest...")
 
         if not _bot_app:
-            logger.warning("Bot app not set — cannot send saved job reminders")
+            logger.warning("Bot app not set — cannot send evening digest")
             return
 
-        users = await get_users_with_saved_jobs()
-        sent_count = 0
+        pool = get_pool()
 
-        for user_row in users:
-            telegram_id = user_row["telegram_id"]
+        # Collect ALL users who have either saved jobs OR due follow-ups
+        async with pool.acquire() as conn:
+            candidate_rows = await conn.fetch(
+                """
+                SELECT DISTINCT u.telegram_id
+                FROM users u
+                WHERE u.is_onboarded = TRUE
+                  AND (u.is_deleted IS NULL OR u.is_deleted = FALSE)
+                  AND (
+                      EXISTS (SELECT 1 FROM saved_jobs sj WHERE sj.telegram_id = u.telegram_id)
+                   OR EXISTS (SELECT 1 FROM reminders r WHERE r.telegram_id = u.telegram_id AND r.sent = FALSE AND r.remind_at <= NOW())
+                  )
+                """
+            )
+
+        sent_count = 0
+        for row in candidate_rows:
+            telegram_id = row["telegram_id"]
             try:
                 saved_jobs = await get_saved_jobs(telegram_id)
-                if not saved_jobs:
+                followups  = await get_due_followups(telegram_id)
+
+                if not saved_jobs and not followups:
                     continue
 
-                # Build message with list of saved jobs
-                lines = ["👋 *Hey\\! You asked me to remind you about these jobs:*\n"]
-                for i, job in enumerate(saved_jobs[:10], 1):
-                    title = escape_md(job.get("title", "Unknown"))
-                    company = escape_md(job.get("company", "Unknown"))
-                    lines.append(f"{i}\\. *{title}* — {company}")
+                lines = ["👋 *Hey\\! Here's your evening checklist:*\n"]
 
-                lines.append("\n_Tap a job below to view it or remove it from your list\\._")
+                # ── Section 1: Jobs to apply ─────────────────────────────
+                if saved_jobs:
+                    lines.append("\n🔥 *Jobs to apply for:*")
+                    for i, job in enumerate(saved_jobs[:10], 1):
+                        title   = escape_md(job.get("title",   "Unknown"))
+                        company = escape_md(job.get("company", "Unknown"))
+                        lines.append(f"{i}\\. *{title}* — {company}")
+
+                # ── Section 2: Follow-ups due ────────────────────────────
+                if followups:
+                    lines.append("\n⏰ *Follow\\-ups due today:*")
+                    for f in followups:
+                        title   = escape_md(f.get("title",   "Unknown"))
+                        company = escape_md(f.get("company", "Unknown"))
+                        lines.append(f"• *{title}* — {company}")
+                    lines.append("_Consider sending a quick follow\\-up email to stand out\\!_")
+
+                lines.append("\n_Tap a job to view or remove it\\._")
                 msg = "\n".join(lines)
 
-                # Keyboard: view each saved job + back
-                from utils.keyboards import saved_jobs_keyboard
-                kb = saved_jobs_keyboard(saved_jobs)
+                # Use saved_jobs_keyboard so each job has a view + delete button
+                kb = saved_jobs_keyboard(saved_jobs) if saved_jobs else InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📋 Open Tracker", callback_data="tracker")]
+                ])
 
                 await _bot_app.bot.send_message(
                     chat_id=telegram_id,
@@ -301,19 +393,25 @@ async def _send_saved_jobs_reminder():
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
                 )
+
+                # Mark those follow-up reminders as sent
+                if followups:
+                    await mark_reminders_sent([f["id"] for f in followups])
+
                 sent_count += 1
             except Exception as e:
-                logger.error(f"Failed to send saved-jobs reminder to {telegram_id}: {e}")
+                logger.error(f"Failed to send evening digest to {telegram_id}: {e}")
 
-        logger.info(f"⏰ Saved jobs reminders sent to {sent_count}/{len(users)} users")
+        logger.info(f"🌆 Evening digest sent to {sent_count} users")
 
     except Exception as e:
-        logger.error(f"❌ Saved jobs reminder job failed: {e}")
+        logger.error(f"❌ Evening digest failed: {e}")
         if _bot_app:
             try:
-                await send_error_alert(_bot_app.bot, "Scheduler — _send_saved_jobs_reminder", e)
+                await send_error_alert(_bot_app.bot, "Scheduler — _send_evening_digest", e)
             except Exception:
                 pass
+
 
 from datetime import datetime
 
@@ -328,24 +426,15 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Follow-up reminders — every hour
-    scheduler.add_job(
-        _process_reminders,
-        IntervalTrigger(hours=1),
-        id="process_reminders",
-        name="Process follow-up reminders",
-        replace_existing=True,
-    )
-    
-    # Weekly Application Digest — Fridays 10 AM IST (04:30 UTC)
+    # Weekly Application Digest / Friday Scorecard — Fridays 4 PM IST (10:30 UTC)
     scheduler.add_job(
         _send_weekly_digest,
-        CronTrigger(day_of_week="fri", hour=4, minute=30),
+        CronTrigger(day_of_week="fri", hour=10, minute=30),
         id="weekly_digest",
-        name="Send weekly application digest",
+        name="Send Friday scorecard to all active users",
         replace_existing=True,
     )
-    
+
     # Cleanup old manual jobs — Runs every day at midnight UTC
     scheduler.add_job(
         _cleanup_old_manual_jobs,
@@ -355,12 +444,13 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Saved Jobs Reminder — Daily at 6:30 PM IST (13:00 UTC)
+    # Evening Digest — Daily at 6:30 PM IST (13:00 UTC)
+    # Consolidates: saved-jobs reminder + due follow-ups into ONE message
     scheduler.add_job(
-        _send_saved_jobs_reminder,
+        _send_evening_digest,
         CronTrigger(hour=13, minute=0),
-        id="saved_jobs_reminder",
-        name="Daily 6:30 PM reminder for saved jobs",
+        id="evening_digest",
+        name="Daily 6:30 PM evening digest (saved jobs + follow-ups)",
         replace_existing=True,
     )
 

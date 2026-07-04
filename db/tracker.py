@@ -337,3 +337,70 @@ async def get_click_stats() -> dict:
         "total": total or 0,
     }
 
+
+async def get_weekly_scorecard(telegram_id: int) -> dict:
+    """Return this week's activity stats for a user.
+    Used by the Friday Scorecard digest.
+    Returns: jobs_viewed, jobs_saved, jobs_applied this week."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        jobs_viewed = await conn.fetchval(
+            """SELECT COUNT(*) FROM user_seen_jobs
+               WHERE telegram_id = $1 AND seen_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+        jobs_saved = await conn.fetchval(
+            """SELECT COUNT(*) FROM saved_jobs
+               WHERE telegram_id = $1 AND saved_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+        jobs_applied = await conn.fetchval(
+            """SELECT COUNT(*) FROM applications
+               WHERE telegram_id = $1 AND applied_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+    return {
+        "viewed":  int(jobs_viewed),
+        "saved":   int(jobs_saved),
+        "applied": int(jobs_applied),
+    }
+
+
+async def get_due_followups(telegram_id: int) -> list[dict]:
+    """Return all follow-up reminders due today for this user (sent=FALSE).
+    Used by the 6:30 PM evening consolidation digest."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT r.id, r.application_id,
+                   COALESCE(j.title,  mj.title)   AS title,
+                   COALESCE(j.company, mj.company) AS company,
+                   a.applied_at
+            FROM reminders r
+            JOIN applications a ON r.application_id = a.id
+            LEFT JOIN jobs j       ON a.job_id = j.id
+            LEFT JOIN manual_jobs mj ON a.job_id = mj.id
+            WHERE r.telegram_id = $1
+              AND r.sent = FALSE
+              AND r.remind_at <= NOW()
+            ORDER BY r.remind_at
+            """,
+            telegram_id
+        )
+        return [dict(r) for r in rows]
+
+
+async def mark_reminders_sent(reminder_ids: list[int]) -> None:
+    """Mark a list of reminder IDs as sent."""
+    if not reminder_ids:
+        return
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE reminders SET sent = TRUE WHERE id = ANY($1::int[])",
+            reminder_ids
+        )
