@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler
+from handlers.admin import get_addjob_handler, send_message_command
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
     analytics_command, analytics_page_callback, users_command, user_detail_command, users_page_callback,
@@ -150,6 +150,8 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))
     app.add_handler(CommandHandler("deletedusers", deleted_users_command))
+    app.add_handler(CommandHandler("send",      send_message_command))
+
     app.add_handler(CallbackQueryHandler(users_page_callback, pattern="^adm_users_\\d+$"))
     app.add_handler(CallbackQueryHandler(deleted_users_page_callback, pattern="^adm_delusers_\\d+$"))
     app.add_handler(CallbackQueryHandler(analytics_page_callback, pattern="^analytics_page_\\d+$"))

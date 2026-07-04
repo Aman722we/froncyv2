@@ -158,6 +158,33 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return WAITING_FOR_JOB_TEXT
 
+
+async def send_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a direct message to a user. Format: /send <telegram_id> <message>"""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: `/send <telegram_id> <message>`", parse_mode="MarkdownV2")
+        return
+
+    try:
+        target_id = int(context.args[0])
+        message_text = " ".join(context.args[1:])
+        
+        await context.bot.send_message(
+            chat_id=target_id,
+            text=message_text
+        )
+        await update.message.reply_text(f"✅ Message sent successfully to `{target_id}`.", parse_mode="MarkdownV2")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid Telegram ID format.")
+    except Exception as e:
+        logger.error(f"Error sending message to {target_id}: {e}")
+        await update.message.reply_text(f"❌ Failed to send message: {e}")
+
+
 async def cancel_addjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel /addjob."""
     await update.message.reply_text("❌ Cancelled adding job.")
