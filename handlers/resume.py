@@ -334,6 +334,10 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
 
     context.user_data["waiting_for_replace_resume"] = False
 
+    # Import BEFORE the try block so both try AND except can use them
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+
     try:
         from services.resume_parser import save_resume_file, extract_text_from_pdf
         from db.users import update_resume
@@ -343,20 +347,23 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         file_bytes = await file.download_as_bytearray()
         saved_path = save_resume_file(user_id, bytes(file_bytes), document.file_name)
         resume_text = extract_text_from_pdf(saved_path)
+
+        # Strip lone surrogate characters that PostgreSQL UTF-8 cannot encode.
+        # These appear in some PDFs that contain emoji or special glyphs.
+        if resume_text:
+            resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
+
         await update_resume(user_id, resume_text, document.file_name)
 
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         await update.message.reply_text(
             messages.resume_uploaded_success(document.file_name),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-            ])
+            reply_markup=back_kb,
         )
     except Exception as e:
         logger.error(f"Replace resume failed: {e}")
         await update.message.reply_text(
             "⚠️ Failed to process your resume\\. Please try again\\.",
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+            reply_markup=back_kb,
         )
