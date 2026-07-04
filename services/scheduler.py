@@ -30,11 +30,11 @@ async def _send_daily_alerts():
         from datetime import datetime
         from zoneinfo import ZoneInfo
 
-        # Get current time in IST (e.g. "09:00")
+        # Get current time in IST (e.g. "13:00")
         ist = ZoneInfo('Asia/Kolkata')
         now_ist = datetime.now(ist)
-        # To make it align perfectly with 10-minute intervals
-        minute = (now_ist.minute // 10) * 10
+        # ⚠️ TEST MODE: round to nearest 5-minute slot (normally 10)
+        minute = (now_ist.minute // 5) * 5
         current_time_str = f"{now_ist.hour:02d}:{minute:02d}"
 
         logger.info(f"📬 Checking daily job alerts for time slot: {current_time_str} IST...")
@@ -417,21 +417,33 @@ from datetime import datetime
 
 def start_scheduler():
     """Start all scheduled jobs."""
-    # Daily alerts — Runs every 10 minutes to support granular alert times
+    # ⚠️ TEST MODE on develop: all jobs fire every 5 minutes for rapid testing.
+    # Revert to production times before merging to main.
+
+    # Daily alerts — every 5 min (TEST: normally every 10 min)
     scheduler.add_job(
         _send_daily_alerts,
-        CronTrigger(minute="0,10,20,30,40,50"),
+        CronTrigger(minute="*/5"),
         id="daily_alerts",
-        name="Send daily job alerts based on user settings",
+        name="[TEST] Send daily job alerts every 5 min",
         replace_existing=True,
     )
 
-    # Weekly Application Digest / Friday Scorecard — Fridays 4 PM IST (10:30 UTC)
+    # Evening Digest — 07:37 UTC = 1:07 PM IST (TEST)
+    scheduler.add_job(
+        _send_evening_digest,
+        CronTrigger(hour=7, minute=37),
+        id="evening_digest",
+        name="[TEST] Evening digest at 1:07 PM IST",
+        replace_existing=True,
+    )
+
+    # Friday Scorecard — 07:42 UTC = 1:12 PM IST (TEST, fires daily not just Fridays)
     scheduler.add_job(
         _send_weekly_digest,
-        CronTrigger(day_of_week="fri", hour=10, minute=30),
+        CronTrigger(hour=7, minute=42),
         id="weekly_digest",
-        name="Send Friday scorecard to all active users",
+        name="[TEST] Friday scorecard at 1:12 PM IST",
         replace_existing=True,
     )
 
@@ -444,18 +456,8 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Evening Digest — Daily at 6:30 PM IST (13:00 UTC)
-    # Consolidates: saved-jobs reminder + due follow-ups into ONE message
-    scheduler.add_job(
-        _send_evening_digest,
-        CronTrigger(hour=13, minute=0),
-        id="evening_digest",
-        name="Daily 6:30 PM evening digest (saved jobs + follow-ups)",
-        replace_existing=True,
-    )
-
     scheduler.start()
-    logger.info("📅 Scheduler started with jobs")
+    logger.info("📅 Scheduler started — ⚠️ TEST MODE (5-min intervals)")
 
 
 def stop_scheduler():
