@@ -263,13 +263,13 @@ async def _send_weekly_digest():
                 )
 
                 if applied >= 5:
-                    msg += r"\n🔥 *Incredible hustle this week\! Keep it up\.* 🚀"
+                    msg += "\n" r"🔥 *Incredible hustle this week\! Keep it up\.* 🚀"
                 elif applied >= 2:
-                    msg += r"\n💪 *Solid week\! Consistency is what gets you hired\.*"
+                    msg += "\n" r"💪 *Solid week\! Consistency is what gets you hired\.*"
                 elif applied == 1:
-                    msg += r"\n🌱 *Good start\! Try to track 3\+ applications next week\.*"
+                    msg += "\n" r"🌱 *Good start\! Try to track 3\+ applications next week\.*"
                 else:
-                    msg += r"\n👋 *Don't forget to track your applications\! Every tap counts\.*"
+                    msg += "\n" r"👋 *Don't forget to track your applications\! Every tap counts\.*"
 
                 msg += skill_tip_line
 

@@ -432,7 +432,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     filename = f"{name_slug}_ats_optimized.pdf"
 
     await query.edit_message_text(
-        r"✅ *Your ATS\-optimized resume is ready\!*\n\n"
+        r"✅ *Your ATS\-optimized resume is ready\!*" "\n\n"
         r"_Your bullet points have been rewritten to match this job's keywords\._",
         parse_mode="MarkdownV2"
     )

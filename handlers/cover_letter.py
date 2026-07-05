@@ -111,7 +111,7 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         stages = [
             r"🔍 *Analyzing job requirements\.\.\.*",
             r"📄 *Scanning your resume skills\.\.\.*",
-            r"🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_",
+            r"🧠 *Generating your cover letter\.\.\.*" "\n" r"_\(Quality AI · takes ~60 seconds\)_",
             r"✨ *Polishing tone and structure\.\.\.*",
             r"⚡ *Optimizing for ATS keywords\.\.\.*",
             r"⏳ *Almost done\!* The AI is finishing up\.\.\.",
