@@ -1,0 +1,143 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[a4paper,margin=0.23in]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{fontawesome5}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage[normalem]{ulem}
+
+\pagenumbering{gobble}
+\setstretch{0.5}
+\setlength{\parindent}{0pt}
+\renewcommand{\baselinestretch}{1}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=black
+}
+
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{2pt}{2pt}
+\titleformat{\section}{\bfseries\large}{}{0em}{}[\titlerule]
+\titlespacing*{\section}
+  {0pt}  % left margin
+  {6pt}  % space before section
+  {6pt}  % space after section
+
+
+\begin{document}
+
+%----------------------------------------
+% Name & Contact
+%----------------------------------------
+\begin{center}
+    {\huge \bf ((( name )))}\\[0.4em]
+    {\bf ((( headline )))}\\[0.6em]
+    {\small
+    \begin{tabular}{@{\hskip 10pt}l@{\hskip 25pt}l@{\hskip 25pt}l@{\hskip 25pt}l}
+        \faEnvelope\ 
+        \href{mailto:((( email )))}{((( email )))} &
+        ((* if github *))
+        \faGithub\ 
+        \href{((( github )))}{GitHub} &
+        ((* endif *))
+        ((* if linkedin *))
+        \faLinkedin\ 
+        \href{((( linkedin )))}{LinkedIn} &
+        ((* endif *))
+        ((* if phone *))
+        \faPhone\ ((( phone )))
+        ((* endif *))
+    \end{tabular}
+    }
+\end{center}
+
+
+%----------------------------------------
+% Education
+%----------------------------------------
+\section*{Education}
+((* for edu in education *))
+\textbf{((( edu.institution )))} \hfill ((( edu.years )))\\
+((( edu.degree )))
+((* endfor *))
+
+((* if experience *))
+%----------------------------------------
+% Experience
+%----------------------------------------
+\section*{Experience}
+\begin{itemize}[leftmargin=*]
+((* for exp in experience *))
+    \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} 
+((* if exp.link *))
+{\href{((( exp.link )))}{{\textcolor{blue}{\uline{Live}}}}} \hfill
+((* endif *))
+\hfill \textit{((( exp.duration )))}
+
+    \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
+((* for bullet in exp.bullets *))
+        \item \textbf{--} ((( bullet )))
+((* endfor *))
+    \end{itemize}
+((* endfor *))
+\end{itemize}
+((* endif *))
+
+((* if projects *))
+%----------------------------------------
+% Projects
+%----------------------------------------
+\section*{Projects}
+\begin{itemize}[leftmargin=*]
+
+((* for proj in projects *))
+\item \textbf{((( proj.name )))} 
+((* if proj.live_link *))
+{\href{((( proj.live_link )))}{{\textcolor{blue}{\uline{Live}}}}} \hfill
+((* endif *))
+((* if proj.code_link *))
+{\href{((( proj.code_link )))}{\uline{Code}}}
+((* endif *))
+\hfill \textit{((( proj.duration )))}
+
+\begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
+((* for bullet in proj.bullets *))
+    \item \textbf{--} ((( bullet )))
+((* endfor *))
+\end{itemize}
+
+((* endfor *))
+\end{itemize}
+((* endif *))
+
+%----------------------------------------
+% Technical Skills
+%----------------------------------------
+
+\section*{Technical Skills}
+\begin{tabular}{@{}ll}
+((* for skill_group in skills *))
+\textbf{((( skill_group.category ))):} & ((( skill_group.items )))\\
+((* endfor *))
+
+\end{tabular}
+
+((* if coding_profiles *))
+%----------------------------------------
+% Coding Profile
+%----------------------------------------
+\section*{Coding Profile}
+\begin{tabular}{@{}ll}
+((* for profile in coding_profiles *))
+\textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} & ((( profile.stats )))\\
+((* endfor *))
+
+\end{tabular}
+((* endif *))
+
+\end{document}

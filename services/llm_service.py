@@ -228,3 +228,193 @@ Analyze the match and provide the JSON:"""
                 raise
 
     raise RuntimeError("ATS generation failed after retries")
+
+
+RESUME_EXTRACTION_SYSTEM_PROMPT = """You are an expert resume parser. Extract all information from the provided resume text into a structured JSON format.
+
+CRITICAL RULES:
+- Return ONLY valid JSON, no markdown, no code blocks, just raw JSON.
+- If a field is not present, use null or an empty array [].
+- For links: check both the text content AND any section labelled "[EMBEDDED LINKS FROM PDF]" at the bottom.
+- GitHub links usually contain "github.com". LinkedIn links contain "linkedin.com". Project live links contain vercel.app, netlify.app, or a custom domain.
+- Escape ALL special LaTeX characters in text: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}, ~ → \\textasciitilde{}, ^ → \\textasciicircum{}
+- For bullet points: write clean, impactful sentences. Each bullet should be a COMPLETE sentence with a strong action verb.
+- Include at most 3 projects. If there are more, pick the 3 most impressive.
+- For experience: include ALL jobs found.
+
+Return JSON in EXACTLY this format:
+{
+  "name": "Full Name",
+  "headline": "Role Title (e.g. Frontend Developer)",
+  "email": "email@example.com",
+  "phone": "+91-XXXXXXXXXX or null",
+  "github": "https://github.com/username or null",
+  "linkedin": "https://linkedin.com/in/username or null",
+  "education": [
+    {
+      "institution": "University Name",
+      "degree": "Bachelor of Technology",
+      "years": "2021--2025"
+    }
+  ],
+  "experience": [
+    {
+      "company": "Company Name",
+      "title": "Job Title",
+      "duration": "Month Year -- Month Year",
+      "link": "https://live-link-or-null",
+      "bullets": ["Bullet 1 describing impact.", "Bullet 2 with metrics if available."]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Project Name",
+      "duration": "Month Year -- Present",
+      "live_link": "https://live-url-or-null",
+      "code_link": "https://github-url-or-null",
+      "bullets": ["Bullet 1 describing tech and impact.", "Bullet 2."]
+    }
+  ],
+  "skills": [
+    {"category": "Frontend Engineering", "items": "React, Next.js, TypeScript"},
+    {"category": "Backend & Tools", "items": "Node.js, PostgreSQL, Git"}
+  ],
+  "coding_profiles": [
+    {"platform": "LeetCode", "link": "https://leetcode.com/...", "stats": "400+ problems solved | max rating 1750"}
+  ]
+}"""
+
+
+async def extract_resume_json(resume_text: str) -> dict:
+    """
+    Parse raw resume text (including embedded URLs section) into a structured dict
+    ready to be injected into the LaTeX Jinja2 template.
+
+    Args:
+        resume_text: Full extracted text from PDF (including [EMBEDDED LINKS FROM PDF] section)
+
+    Returns:
+        Parsed resume dict, or raises RuntimeError on failure
+    """
+    import json as _json
+    client, model = _get_client(LLMMode.QUALITY)
+
+    user_message = f"""Parse this resume into the exact JSON format specified:
+
+{resume_text[:4000]}
+
+Return the JSON now:"""
+
+    for attempt in range(2):
+        try:
+            logger.info(f"Extracting resume JSON with {model} (attempt {attempt + 1})")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": RESUME_EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.1,
+                max_tokens=2000,
+                top_p=1,
+            )
+            result = response.choices[0].message.content.strip()
+            # Strip any accidental markdown wrappers
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+            data = _json.loads(result.strip())
+            logger.info(f"Resume JSON extracted: {len(data.get('projects', []))} projects, {len(data.get('experience', []))} jobs")
+            return data
+        except Exception as e:
+            logger.error(f"Resume extraction error (attempt {attempt + 1}): {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+            else:
+                raise RuntimeError(f"Failed to extract resume JSON: {e}")
+
+    raise RuntimeError("Resume extraction failed after retries")
+
+
+BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer. You will be given:
+1. A structured resume JSON
+2. A job description
+
+Your task: Rewrite the bullet points in the "experience" and "projects" sections to naturally incorporate the missing ATS keywords from the job description.
+
+CRITICAL RULES:
+- Return ONLY the updated JSON in the EXACT same format as the input. Do NOT change ANY other field.
+- Only modify the "bullets" arrays inside experience and project items.
+- Keep bullets truthful — only add keywords where they genuinely fit the described work.
+- Bullets should be strong, action-oriented sentences (start with a verb).
+- Escape ALL special LaTeX characters: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}
+- Each bullet must be a complete sentence.
+- Do NOT add or remove any jobs or projects — keep the same structure.
+- No markdown, no code blocks. Return raw JSON only."""
+
+
+async def optimize_resume_bullets(resume_json: dict, job_description: str, missing_keywords: list[str]) -> dict:
+    """
+    Rewrite experience and project bullets in resume_json to naturally incorporate
+    the ATS keywords that are missing for a specific job description.
+
+    Args:
+        resume_json: Structured resume dict from extract_resume_json()
+        job_description: The target job description text
+        missing_keywords: List of missing keywords identified by the ATS analyzer
+
+    Returns:
+        Updated resume_json with optimized bullet points
+    """
+    import json as _json
+    client, model = _get_client(LLMMode.QUALITY)
+
+    keywords_str = ", ".join(missing_keywords) if missing_keywords else "general ATS optimization"
+
+    user_message = f"""Resume JSON:
+{_json.dumps(resume_json, indent=2)[:3000]}
+
+Job Description:
+{job_description[:1500]}
+
+Missing ATS keywords to incorporate: {keywords_str}
+
+Rewrite the bullet points to include these keywords naturally. Return the complete updated JSON:"""
+
+    for attempt in range(2):
+        try:
+            logger.info(f"Optimizing resume bullets with {model} (attempt {attempt + 1})")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": BULLET_OPTIMIZATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.3,
+                max_tokens=2500,
+                top_p=1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+            updated = _json.loads(result.strip())
+            logger.info("Resume bullets optimized successfully")
+            return updated
+        except Exception as e:
+            logger.error(f"Bullet optimization error (attempt {attempt + 1}): {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+            else:
+                # Return original as fallback — better to send unoptimized PDF than fail
+                logger.warning("Returning original resume JSON as fallback")
+                return resume_json
+
+    return resume_json
+

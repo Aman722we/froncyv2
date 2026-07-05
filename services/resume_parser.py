@@ -19,26 +19,49 @@ def ensure_resumes_dir():
 def extract_text_from_pdf(filepath: str) -> str:
     """
     Extract plain text from a PDF file located on disk using pypdf.
+    Also extracts embedded hyperlinks (GitHub, LinkedIn, portfolio URLs)
+    from the PDF's annotation layer so we don't lose clickable links.
 
     Args:
         filepath: Path to the PDF file
 
     Returns:
-        Extracted text string
+        Extracted text string (with appended URLs section if any found)
     """
     try:
         reader = PdfReader(filepath)
         text_parts = []
+        found_urls = []
 
         for page in reader.pages:
             text = page.extract_text()
             if text:
                 text_parts.append(text)
 
+            # Extract hyperlinks from the annotation layer
+            if "/Annots" in page:
+                for annotation in page["/Annots"]:
+                    try:
+                        obj = annotation.get_object()
+                        if obj.get("/Subtype") == "/Link":
+                            uri_obj = obj.get("/A")
+                            if uri_obj and "/URI" in uri_obj:
+                                url = uri_obj["/URI"]
+                                if url and url not in found_urls:
+                                    found_urls.append(url)
+                    except Exception:
+                        pass  # Skip malformed annotations silently
+
         full_text = "\n".join(text_parts).strip()
 
         if not full_text:
             raise ValueError("Could not extract any text from the PDF. It may be image-based.")
+
+        # Append URLs section so the LLM can see them for template filling
+        if found_urls:
+            url_section = "\n\n[EMBEDDED LINKS FROM PDF]\n" + "\n".join(found_urls)
+            full_text += url_section
+            logger.info(f"Extracted {len(found_urls)} hyperlinks from PDF annotations")
 
         logger.info(f"Extracted {len(full_text)} chars from PDF ({len(reader.pages)} pages)")
         return full_text
@@ -48,6 +71,7 @@ def extract_text_from_pdf(filepath: str) -> str:
             raise
         logger.error(f"PDF extraction error: {e}")
         raise ValueError(f"Failed to process PDF: {str(e)}")
+
 
 
 def save_resume_file(telegram_id: int, file_bytes: bytes, filename: str) -> str:

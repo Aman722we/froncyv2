@@ -1,6 +1,7 @@
 """
 Resume and ATS Analyzer handlers.
 """
+import io
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
 from loguru import logger
@@ -153,6 +154,9 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
             ])
         await update.message.reply_text(msg, parse_mode="MarkdownV2", reply_markup=result_kb)
+        # Store JD in context for the PDF generator (manual ATS flow)
+        context.user_data["last_ats_jd"] = jd_text if 'jd_text' in dir() else update.message.text
+        context.user_data["last_ats_result"] = result
 
     except Exception as e:
         logger.exception(f"ATS analysis failed: {e}")
@@ -279,19 +283,30 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
         await log_ai_usage(user_id, "ats_check")
 
         from utils.keyboards import InlineKeyboardMarkup as KB, InlineKeyboardButton as IKB
-        
+
         # Correct 'Back to Job' callback depending on scraped vs manual
         back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+        pdf_cb = f"gen_ats_pdf_manual_{job_id}" if is_manual else f"gen_ats_pdf_{job_id}"
 
-        # Add upsell only for free users
+        # Store ATS result and JD in context for the PDF generator
+        context.user_data["last_ats_jd"] = jd_text
+        context.user_data["last_ats_result"] = result
+        context.user_data["last_ats_job_id"] = job_id
+        context.user_data["last_ats_is_manual"] = is_manual
+
+        # Add upsell only for free users; always add the PDF generator button
         if plan not in PRO_PLANS:
             back_kb = KB([
+                [IKB("✨ Apply these changes — Generate PDF", callback_data=pdf_cb)],
                 [IKB("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
                 [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
-            back_kb = KB([[IKB("🔙 Back to Job", callback_data=back_cb)]])
-            
+            back_kb = KB([
+                [IKB("✨ Apply these changes — Generate PDF", callback_data=pdf_cb)],
+                [IKB("🔙 Back to Job", callback_data=back_cb)]
+            ])
+
         await query.edit_message_text(msg, parse_mode="MarkdownV2", reply_markup=back_kb)
     except Exception as e:
         logger.exception(f"ATS job analysis failed: {e}")
@@ -299,6 +314,140 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             "⚠️ Analysis failed\\. Please try again\\.",
             parse_mode="MarkdownV2"
         )
+
+
+async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle '✨ Apply these changes — Generate PDF' button from the ATS result screen.
+    Extracts resume JSON, optimizes bullets with the job's missing keywords,
+    compiles a PDF via LaTeX, and sends it directly to the user in Telegram.
+    """
+    query = update.callback_query
+    await query.answer("🚀 Starting PDF generation...")
+
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+
+    if not user or not user.get("resume_text"):
+        await query.message.reply_text(
+            "📄 Please upload your resume first with /resume\\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # Parse job_id from callback: gen_ats_pdf_<job_id> or gen_ats_pdf_manual_<job_id>
+    data = query.data  # e.g. "gen_ats_pdf_42" or "gen_ats_pdf_manual_42"
+    is_manual = "manual" in data
+    job_id = int(data.split("_")[-1])
+
+    # Retrieve cached ATS result and JD from context
+    ats_result = context.user_data.get("last_ats_result", {})
+    jd_text = context.user_data.get("last_ats_jd", "")
+    missing_keywords = ats_result.get("missing_keywords", []) + ats_result.get("tech_match", {}).get("missing", [])
+
+    # If no cached JD, fall back to fetching the job from DB
+    if not jd_text:
+        if is_manual:
+            job = await get_manual_job_by_id(job_id)
+        else:
+            job = await get_job_by_id(job_id)
+        if job:
+            jd_text = (
+                f"Job Title: {job.get('title', '')}\n"
+                f"Company: {job.get('company', '')}\n"
+                f"Skills: {', '.join(job.get('skills', []))}"
+            )
+
+    # ── Stage 1: Extract resume JSON ──────────────────────────────────────
+    await query.edit_message_text(
+        "⚙️ *Step 1 of 3: Parsing your resume profile\.\.\.*",
+        parse_mode="MarkdownV2"
+    )
+
+    from services.llm_service import extract_resume_json, optimize_resume_bullets
+    from services.resume_builder import compile_resume_pdf
+
+    try:
+        resume_json = await extract_resume_json(user["resume_text"])
+    except Exception as e:
+        logger.error(f"Resume JSON extraction failed: {e}")
+        await query.edit_message_text(
+            "⚠️ Couldn't parse your resume\\. Please try re\-uploading your PDF with /resume\\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # Check for missing critical fields and ask user
+    missing_fields = []
+    if not resume_json.get("email"):
+        missing_fields.append("email address")
+    if not resume_json.get("name"):
+        missing_fields.append("full name")
+
+    if missing_fields:
+        fields_str = " and ".join(missing_fields)
+        context.user_data["resume_json_draft"] = resume_json
+        context.user_data["pdf_jd_text"] = jd_text
+        context.user_data["pdf_missing_keywords"] = missing_keywords
+        context.user_data["pdf_job_id"] = job_id
+        context.user_data["pdf_is_manual"] = is_manual
+        await query.edit_message_text(
+            f"👋 Your resume is missing your {fields_str}\."
+            f" Please reply with: `Your Name | your@email.com`",
+            parse_mode="MarkdownV2"
+        )
+        context.user_data["waiting_for_resume_details"] = True
+        return
+
+    # ── Stage 2: Optimize bullets ─────────────────────────────────────────
+    await query.edit_message_text(
+        "🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*",
+        parse_mode="MarkdownV2"
+    )
+
+    try:
+        optimized_json = await optimize_resume_bullets(resume_json, jd_text, missing_keywords)
+    except Exception as e:
+        logger.warning(f"Bullet optimization failed, using original: {e}")
+        optimized_json = resume_json  # Graceful fallback
+
+    # ── Stage 3: Compile PDF ──────────────────────────────────────────────
+    await query.edit_message_text(
+        "📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._",
+        parse_mode="MarkdownV2"
+    )
+
+    try:
+        pdf_bytes = await compile_resume_pdf(optimized_json)
+    except Exception as e:
+        logger.error(f"PDF compilation failed: {e}")
+        await query.edit_message_text(
+            "⚠️ PDF generation failed\\. Our team has been notified\\. Please try again in a few minutes\\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # ── Send PDF ──────────────────────────────────────────────────────────
+    name_slug = resume_json.get("name", "resume").replace(" ", "_").lower()
+    filename = f"{name_slug}_ats_optimized.pdf"
+
+    await query.edit_message_text(
+        "✅ *Your ATS\-optimized resume is ready\!*\n\n"
+        "_Your bullet points have been rewritten to match this job's keywords\._",
+        parse_mode="MarkdownV2"
+    )
+
+    await query.message.reply_document(
+        document=io.BytesIO(pdf_bytes),
+        filename=filename,
+        caption=(
+            f"🎯 ATS-Optimized Resume\n"
+            f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
+            "Good luck with your application! 🚀"
+        )
+    )
+
+    logger.info(f"ATS PDF sent to user {user_id}: {filename} ({len(pdf_bytes)} bytes)")
 
 
 # ──────────────────────────────────────────────

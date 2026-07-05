@@ -36,5 +36,8 @@ pydantic-settings
 # Utilities
 loguru
 
+# Resume PDF generation
+jinja2
+
 # NLP (ATS analyzer)
 scikit-learn
