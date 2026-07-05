@@ -72,11 +72,7 @@
 \section*{Experience}
 \begin{itemize}[leftmargin=*]
 ((* for exp in experience *))
-    \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} 
-((* if exp.link *))
-{\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} \hfill
-((* endif *))
-\hfill \textit{((( exp.duration )))}
+    \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} ((* if exp.link *)) {\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) \hfill \textit{((( exp.duration )))}
 
     \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
 ((* for bullet in exp.bullets *))
@@ -95,14 +91,7 @@
 \begin{itemize}[leftmargin=*]
 
 ((* for proj in projects *))
-\item \textbf{((( proj.name )))} 
-((* if proj.live_link *))
-{\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live}}}}} \hfill
-((* endif *))
-((* if proj.code_link *))
-{\href{((( proj.code_link )))}{\underline{Code}}}
-((* endif *))
-\hfill \textit{((( proj.duration )))}
+\item \textbf{((( proj.name )))} ((* if proj.live_link *)) {\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) ((* if proj.code_link *)) {\href{((( proj.code_link )))}{\underline{Code}}} ((* endif *)) \hfill \textit{((( proj.duration )))}
 
 \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
 ((* for bullet in proj.bullets *))
@@ -121,7 +110,7 @@
 \section*{Technical Skills}
 \begin{tabular}{@{}ll}
 ((* for skill_group in skills *))
-\textbf{((( skill_group.category ))):} & ((( skill_group.items )))\\
+\textbf{((( skill_group.category ))):} & ((( skill_group['items'] )))\\
 ((* endfor *))
 
 \end{tabular}
