@@ -7,7 +7,6 @@
 \usepackage{fontawesome5}
 \usepackage{setspace}
 \usepackage{parskip}
-\usepackage[normalem]{ulem}
 
 \pagenumbering{gobble}
 \setstretch{0.5}
@@ -75,7 +74,7 @@
 ((* for exp in experience *))
     \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} 
 ((* if exp.link *))
-{\href{((( exp.link )))}{{\textcolor{blue}{\uline{Live}}}}} \hfill
+{\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} \hfill
 ((* endif *))
 \hfill \textit{((( exp.duration )))}
 
@@ -98,10 +97,10 @@
 ((* for proj in projects *))
 \item \textbf{((( proj.name )))} 
 ((* if proj.live_link *))
-{\href{((( proj.live_link )))}{{\textcolor{blue}{\uline{Live}}}}} \hfill
+{\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live}}}}} \hfill
 ((* endif *))
 ((* if proj.code_link *))
-{\href{((( proj.code_link )))}{\uline{Code}}}
+{\href{((( proj.code_link )))}{\underline{Code}}}
 ((* endif *))
 \hfill \textit{((( proj.duration )))}
 
