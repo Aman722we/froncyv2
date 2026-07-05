@@ -11,6 +11,7 @@ import os
 import asyncio
 import tempfile
 import subprocess
+import re
 from pathlib import Path
 from loguru import logger
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -35,11 +36,41 @@ def _get_jinja_env() -> Environment:
     )
 
 
+LATEX_SUBS = (
+    (re.compile(r'\\'), r'\\textbackslash '),
+    (re.compile(r'([{}_#%&$])'), r'\\\1'),
+    (re.compile(r'~'), r'\~{}'),
+    (re.compile(r'\^'), r'\^{}'),
+    (re.compile(r'"'), r"''"),
+    (re.compile(r'\.\.\.'), r'\\dots '),
+)
+
+def escape_latex(value: str) -> str:
+    """Escapes special characters for LaTeX."""
+    if not isinstance(value, str):
+        return value
+    newval = value
+    for pattern, replacement in LATEX_SUBS:
+        newval = pattern.sub(replacement, newval)
+    return newval
+
+def escape_dict_for_latex(data):
+    """Recursively escape strings in a dict/list for LaTeX."""
+    if isinstance(data, dict):
+        return {k: escape_dict_for_latex(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [escape_dict_for_latex(v) for v in data]
+    elif isinstance(data, str):
+        return escape_latex(data)
+    else:
+        return data
+
 def _render_latex(resume_data: dict) -> str:
     """Render the Jinja2 template with the given resume data."""
+    escaped_data = escape_dict_for_latex(resume_data)
     env = _get_jinja_env()
     template = env.get_template(TEMPLATE_NAME)
-    return template.render(**resume_data)
+    return template.render(**escaped_data)
 
 
 async def compile_resume_pdf(resume_data: dict) -> bytes:

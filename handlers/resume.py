@@ -360,7 +360,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
 
     # ── Stage 1: Extract resume JSON ──────────────────────────────────────
     await query.edit_message_text(
-        "⚙️ *Step 1 of 3: Parsing your resume profile\.\.\.*",
+        r"⚙️ *Step 1 of 3: Parsing your resume profile\.\.\.*",
         parse_mode="MarkdownV2"
     )
 
@@ -372,7 +372,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logger.error(f"Resume JSON extraction failed: {e}")
         await query.edit_message_text(
-            "⚠️ Couldn't parse your resume\\. Please try re\-uploading your PDF with /resume\\.",
+            r"⚠️ Couldn't parse your resume\. Please try re\-uploading your PDF with /resume\.",
             parse_mode="MarkdownV2"
         )
         return
@@ -392,8 +392,8 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         context.user_data["pdf_job_id"] = job_id
         context.user_data["pdf_is_manual"] = is_manual
         await query.edit_message_text(
-            f"👋 Your resume is missing your {fields_str}\."
-            f" Please reply with: `Your Name | your@email.com`",
+            rf"👋 Your resume is missing your {fields_str}\."
+            r" Please reply with: `Your Name | your@email.com`",
             parse_mode="MarkdownV2"
         )
         context.user_data["waiting_for_resume_details"] = True
@@ -401,7 +401,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
 
     # ── Stage 2: Optimize bullets ─────────────────────────────────────────
     await query.edit_message_text(
-        "🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*",
+        r"🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*",
         parse_mode="MarkdownV2"
     )
 
@@ -413,7 +413,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
 
     # ── Stage 3: Compile PDF ──────────────────────────────────────────────
     await query.edit_message_text(
-        "📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._",
+        r"📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._",
         parse_mode="MarkdownV2"
     )
 
@@ -432,8 +432,8 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     filename = f"{name_slug}_ats_optimized.pdf"
 
     await query.edit_message_text(
-        "✅ *Your ATS\-optimized resume is ready\!*\n\n"
-        "_Your bullet points have been rewritten to match this job's keywords\._",
+        r"✅ *Your ATS\-optimized resume is ready\!*\n\n"
+        r"_Your bullet points have been rewritten to match this job's keywords\._",
         parse_mode="MarkdownV2"
     )
 

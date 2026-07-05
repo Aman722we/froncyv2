@@ -109,18 +109,18 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     # STAGE_INTERVAL seconds so the user always sees forward progress.
     if mode == LLMMode.QUALITY:
         stages = [
-            "🔍 *Analyzing job requirements\.\.\.*",
-            "📄 *Scanning your resume skills\.\.\.*",
-            "🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_",
-            "✨ *Polishing tone and structure\.\.\.*",
-            "⚡ *Optimizing for ATS keywords\.\.\.*",
-            "⏳ *Almost done\!* The AI is finishing up\.\.\.",
+            r"🔍 *Analyzing job requirements\.\.\.*",
+            r"📄 *Scanning your resume skills\.\.\.*",
+            r"🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_",
+            r"✨ *Polishing tone and structure\.\.\.*",
+            r"⚡ *Optimizing for ATS keywords\.\.\.*",
+            r"⏳ *Almost done\!* The AI is finishing up\.\.\.",
         ]
         stage_interval = 10  # seconds between each stage
     else:
         stages = [
-            "⚡ *Generating your cover letter\.\.\.*",
-            "✨ *Polishing up\.\.\.*",
+            r"⚡ *Generating your cover letter\.\.\.*",
+            r"✨ *Polishing up\.\.\.*",
         ]
         stage_interval = 6
 

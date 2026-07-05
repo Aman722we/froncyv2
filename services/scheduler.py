@@ -246,15 +246,15 @@ async def _send_weekly_digest():
                         if pct >= 30:
                             skill_tip_line = (
                                 f"\n💡 *Skill Insight:* {pct}% of current openings require "
-                                f"*{escape_md(top_sk.title())}*\. "
-                                "Adding it could unlock significantly more matches\."
+                                rf"*{escape_md(top_sk.title())}*\. "
+                                r"Adding it could unlock significantly more matches\."
                             )
                 except Exception:
                     pass
 
                 # ── Build scorecard message ──────────────────────────────
                 msg = (
-                    f"📊 *Hey {first_name}\! Your Week in Review* 🎯\n"
+                    rf"📊 *Hey {first_name}\! Your Week in Review* 🎯\n"
                     "━━━━━━━━━━━━━━━━━━\n\n"
                     f"👀 *{viewed}* jobs viewed\n"
                     f"💾 *{saved}* jobs saved\n"
@@ -263,13 +263,13 @@ async def _send_weekly_digest():
                 )
 
                 if applied >= 5:
-                    msg += "\n🔥 *Incredible hustle this week\! Keep it up\.* 🚀"
+                    msg += r"\n🔥 *Incredible hustle this week\! Keep it up\.* 🚀"
                 elif applied >= 2:
-                    msg += "\n💪 *Solid week\! Consistency is what gets you hired\.*"
+                    msg += r"\n💪 *Solid week\! Consistency is what gets you hired\.*"
                 elif applied == 1:
-                    msg += "\n🌱 *Good start\! Try to track 3\+ applications next week\.*"
+                    msg += r"\n🌱 *Good start\! Try to track 3\+ applications next week\.*"
                 else:
-                    msg += "\n👋 *Don't forget to track your applications\! Every tap counts\.*"
+                    msg += r"\n👋 *Don't forget to track your applications\! Every tap counts\.*"
 
                 msg += skill_tip_line
 
