@@ -74,11 +74,13 @@
 ((* for exp in experience *))
     \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} ((* if exp.link *)) {\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) \hfill \textit{((( exp.duration )))}
 
+((* if exp.bullets *))
     \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
 ((* for bullet in exp.bullets *))
         \item \textbf{--} ((( bullet )))
 ((* endfor *))
     \end{itemize}
+((* endif *))
 ((* endfor *))
 \end{itemize}
 ((* endif *))
@@ -93,11 +95,13 @@
 ((* for proj in projects *))
 \item \textbf{((( proj.name )))} ((* if proj.live_link *)) {\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) ((* if proj.code_link *)) {\href{((( proj.code_link )))}{\underline{Code}}} ((* endif *)) \hfill \textit{((( proj.duration )))}
 
+((* if proj.bullets *))
 \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
 ((* for bullet in proj.bullets *))
     \item \textbf{--} ((( bullet )))
 ((* endfor *))
 \end{itemize}
+((* endif *))
 
 ((* endfor *))
 \end{itemize}
