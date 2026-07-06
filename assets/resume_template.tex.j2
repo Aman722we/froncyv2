@@ -112,18 +112,18 @@
 %----------------------------------------
 
 \section*{Technical Skills}
-((* for skill_group in skills *))
-\textbf{((( skill_group.category ))):} ((( skill_group['items'] )))\\[2pt]
-((* endfor *))
+((*- for skill_group in skills -*))
+\textbf{((( skill_group.category ))):} ((( skill_group['items'] ))) \\
+((*- endfor -*))
 
 ((* if coding_profiles *))
 %----------------------------------------
 % Coding Profile
 %----------------------------------------
 \section*{Coding Profile}
-((* for profile in coding_profiles *))
-\textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} ((( profile.stats )))\\[2pt]
-((* endfor *))
+((*- for profile in coding_profiles -*))
+\textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} ((( profile.stats ))) \\
+((*- endfor -*))
 ((* endif *))
 
 \end{document}
