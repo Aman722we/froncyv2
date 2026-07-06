@@ -13,7 +13,7 @@ from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback
+from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -191,6 +191,7 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
     app.add_handler(CallbackQueryHandler(generate_ats_pdf_callback, pattern="^gen_ats_pdf_"))
+    app.add_handler(CallbackQueryHandler(get_latex_code_callback, pattern="^get_latex_"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     async def text_router(update, context):
         if context.user_data.get("awaiting_settings_custom_skill"):

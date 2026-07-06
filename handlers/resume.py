@@ -359,8 +359,15 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
             )
 
     # ── Stage 1: Extract resume JSON ──────────────────────────────────────
+    back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+    loading_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔙 Explore Other Jobs", callback_data=back_cb)
+    ]])
     await query.edit_message_text(
-        r"⚙️ *Step 1 of 3: Parsing your resume profile\.\.\.*",
+        r"⚙️ *Generating your ATS Resume\.\.\.*" "\n\n"
+        r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
+        r"You don't need to wait here—feel free to explore other jobs, and we'll send the PDF here when it's ready\!_",
+        reply_markup=loading_kb,
         parse_mode="MarkdownV2"
     )
 
@@ -400,10 +407,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     # ── Stage 2: Optimize bullets ─────────────────────────────────────────
-    await query.edit_message_text(
-        r"🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*",
-        parse_mode="MarkdownV2"
-    )
+    # Removed intermediate status update to prevent loading screen flicker
 
     try:
         optimized_json = await optimize_resume_bullets(resume_json, jd_text, missing_keywords)
@@ -412,10 +416,10 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         optimized_json = resume_json  # Graceful fallback
 
     # ── Stage 3: Compile PDF ──────────────────────────────────────────────
-    await query.edit_message_text(
-        r"📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._",
-        parse_mode="MarkdownV2"
-    )
+    # Removed intermediate status update to prevent loading screen flicker
+    
+    # Save optimized json for LaTeX export
+    context.user_data["last_optimized_json"] = optimized_json
 
     try:
         pdf_bytes = await compile_resume_pdf(optimized_json)
@@ -428,8 +432,9 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     # ── Send PDF ──────────────────────────────────────────────────────────
-    name_slug = resume_json.get("name", "resume").replace(" ", "_").lower()
-    filename = f"{name_slug}_ats_optimized.pdf"
+    name_slug = resume_json.get("name", "resume").replace(" ", "_")
+    company_name = job.get("company", "Company").replace(" ", "_").replace("/", "_")
+    filename = f"{name_slug}_ATS_{company_name}.pdf"
 
     await query.edit_message_text(
         r"✅ *Your ATS\-optimized resume is ready\!*" "\n\n"
@@ -437,23 +442,49 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         parse_mode="MarkdownV2"
     )
 
+    latex_cb = f"get_latex_{job_id}"
     back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
-    reply_markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)
-    ]])
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Get LaTeX Code", callback_data=latex_cb)],
+        [InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)]
+    ])
 
     await query.message.reply_document(
         document=io.BytesIO(pdf_bytes),
         filename=filename,
         caption=(
-            f"🎯 ATS-Optimized Resume\n"
+            f"🎯 ATS-Optimized Resume for {job.get('company', 'Company')}\n"
             f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
-            "Good luck with your application! 🚀"
+            "Good luck with your application! 🚀\n\n"
+            "Need to make a tiny tweak? Click 'Get LaTeX Code' below and paste it into Overleaf."
         ),
         reply_markup=reply_markup
     )
 
     logger.info(f"ATS PDF sent to user {user_id}: {filename} ({len(pdf_bytes)} bytes)")
+
+async def get_latex_code_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the raw LaTeX source code to the user."""
+    query = update.callback_query
+    await query.answer("Preparing LaTeX code...")
+
+    optimized_json = context.user_data.get("last_optimized_json")
+    if not optimized_json:
+        await query.message.reply_text("LaTeX code expired. Please generate the PDF again.")
+        return
+
+    from services.resume_builder import _render_latex
+    import io
+    latex_source = _render_latex(optimized_json, font_size="11pt")
+    
+    name_slug = optimized_json.get("name", "resume").replace(" ", "_")
+    filename = f"{name_slug}_resume_source.tex"
+    
+    await query.message.reply_document(
+        document=io.BytesIO(latex_source.encode("utf-8")),
+        filename=filename,
+        caption="📄 Here is your raw LaTeX source code! Paste this into Overleaf.com to make manual adjustments."
+    )
 
 
 # ──────────────────────────────────────────────
