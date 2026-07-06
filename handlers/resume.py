@@ -362,17 +362,31 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         )
 
     # ── Stage 1: Extract resume JSON ──────────────────────────────────────
-    back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+    back_cb = f"explore_loading_jobs"
     loading_kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("🔙 Explore Other Jobs", callback_data=back_cb)
     ]])
-    await query.edit_message_text(
-        r"⚙️ *Generating your ATS Resume\.\.\.*" "\n\n"
-        r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
-        r"You don't need to wait here—feel free to explore other jobs, and we'll send the PDF here when it's ready\!_",
-        reply_markup=loading_kb,
-        parse_mode="MarkdownV2"
-    )
+    
+    # Reset navigation state
+    context.user_data["navigated_away_from_loading"] = False
+    
+    async def update_loading_msg(step_text: str):
+        if not context.user_data.get("navigated_away_from_loading"):
+            try:
+                full_text = (
+                    f"⚙️ *Generating your ATS Resume\.\.\.*\n\n{step_text}\n\n"
+                    r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
+                    r"You don't need to wait here, feel free to explore other jobs, and we'll send the PDF here when it's ready\!_"
+                )
+                await query.edit_message_text(
+                    full_text,
+                    reply_markup=loading_kb,
+                    parse_mode="MarkdownV2"
+                )
+            except Exception:
+                pass
+
+    await update_loading_msg(r"✅ *Step 1 of 3: Parsing your resume profile\.\.\.*")
 
     from services.llm_service import extract_resume_json, optimize_resume_bullets
     from services.resume_builder import compile_resume_pdf
@@ -410,7 +424,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     # ── Stage 2: Optimize bullets ─────────────────────────────────────────
-    # Removed intermediate status update to prevent loading screen flicker
+    await update_loading_msg(r"🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*")
 
     try:
         optimized_json = await optimize_resume_bullets(resume_json, jd_text, missing_keywords)
@@ -419,10 +433,12 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         optimized_json = resume_json  # Graceful fallback
 
     # ── Stage 3: Compile PDF ──────────────────────────────────────────────
-    # Removed intermediate status update to prevent loading screen flicker
+    await update_loading_msg(r"📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._")
     
     # Save optimized json for LaTeX export
     context.user_data["last_optimized_json"] = optimized_json
+    context.user_data["pdf_job_id"] = job_id
+    context.user_data["pdf_is_manual"] = is_manual
 
     try:
         pdf_bytes = await compile_resume_pdf(optimized_json)
@@ -471,9 +487,15 @@ async def get_latex_code_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer("Preparing LaTeX code...")
 
+    # Remove the buttons from the original PDF message
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception as e:
+        logger.warning(f"Failed to remove markup from PDF: {e}")
+
     optimized_json = context.user_data.get("last_optimized_json")
     if not optimized_json:
-        await query.message.reply_text("LaTeX code expired. Please generate the PDF again.")
+        await context.bot.send_message(chat_id=query.message.chat_id, text="LaTeX code expired. Please generate the PDF again.")
         return
 
     from services.resume_builder import _render_latex
@@ -483,11 +505,40 @@ async def get_latex_code_callback(update: Update, context: ContextTypes.DEFAULT_
     name_slug = optimized_json.get("name", "resume").replace(" ", "_")
     filename = f"{name_slug}_resume_source.tex"
     
-    await query.message.reply_document(
+    job_id = context.user_data.get("pdf_job_id")
+    is_manual = context.user_data.get("pdf_is_manual", False)
+    
+    reply_markup = None
+    if job_id:
+        back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)
+        ]])
+
+    await context.bot.send_document(
+        chat_id=query.message.chat_id,
         document=io.BytesIO(latex_source.encode("utf-8")),
         filename=filename,
-        caption="📄 Here is your raw LaTeX source code! Paste this into Overleaf.com to make manual adjustments."
+        caption="📄 Here is your raw LaTeX source code! Paste this into Overleaf.com to make manual adjustments.",
+        reply_markup=reply_markup
     )
+
+async def explore_loading_jobs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the 'Explore Other Jobs' button during ATS loading."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Remove the explore button so the loading message becomes static text
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+        
+    context.user_data["navigated_away_from_loading"] = True
+    context.user_data["force_new_message"] = True
+    
+    from handlers.jobs import view_jobs
+    await view_jobs(update, context)
 
 
 # ──────────────────────────────────────────────

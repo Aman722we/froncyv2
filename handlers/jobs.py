@@ -231,6 +231,8 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     total_filtered = len(filtered_jobs)
     page_jobs = filtered_jobs[offset:offset+display_count]
 
+    force_new = context.user_data.pop("force_new_message", False)
+    
     if not page_jobs:
         if page > 1: msg = messages.no_jobs_found()
         else: msg = messages.no_jobs_found()
@@ -238,21 +240,29 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
             keyboards.InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
         ]])
-        if update.callback_query:
+        if update.callback_query and not force_new:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         else:
-            await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
+            if update.callback_query:
+                await update.callback_query.answer()
+                await context.bot.send_message(chat_id=update.callback_query.message.chat_id, text=msg, reply_markup=back_kb, parse_mode="MarkdownV2")
+            else:
+                await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
     msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user)
     kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
 
-    if update.callback_query:
+    if update.callback_query and not force_new:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
     else:
-        await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        if update.callback_query:
+            await update.callback_query.answer()
+            await context.bot.send_message(chat_id=update.callback_query.message.chat_id, text=msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        else:
+            await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
     # Only increment counter on first view of the day (not on re-views)
     if jobs_seen_today == 0 and page == 1:
