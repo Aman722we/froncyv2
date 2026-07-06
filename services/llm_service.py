@@ -340,19 +340,21 @@ Return the JSON now:"""
 
 
 BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer. You will be given:
-1. A structured resume JSON
+1. A JSON object containing "experience" and "projects" arrays.
 2. A job description
 
-Your task: Rewrite the bullet points in the "experience" and "projects" sections to naturally incorporate the missing ATS keywords from the job description.
+Your task: Rewrite the bullet points in the "experience" and "projects" sections to naturally incorporate the missing ATS keywords.
 
 CRITICAL RULES:
-- Return ONLY the updated JSON in the EXACT same format as the input. Do NOT change ANY other field.
+- Return ONLY the updated JSON containing the "experience" and "projects" arrays.
 - Only modify the "bullets" arrays inside experience and project items.
-- Keep bullets truthful — only add keywords where they genuinely fit the described work.
-- Bullets should be strong, action-oriented sentences (start with a verb).
+- DO NOT KEYWORD STUFF. Do not mindlessly append the exact same phrase (e.g. "incorporating responsive design") to the end of every bullet. That is robotic and gets rejected.
+- Weave the missing keywords naturally across the ENTIRE resume. A maximum of 1 or 2 bullets should be changed in total.
+- GOOD EXAMPLE: "Engineered a Next.js PWA using Zustand, optimizing performance and enforcing accessibility-driven development."
+- BAD EXAMPLE: "Engineered an installable Next.js PWA, prioritizing accessibility-driven development. Architected usage flow, prioritizing accessibility-driven development."
+- Keep bullets truthful — only add keywords where they genuinely fit.
+- Bullets should be strong, action-oriented sentences.
 - Escape ALL special LaTeX characters: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}
-- Each bullet must be a complete sentence.
-- Do NOT add or remove any jobs or projects — keep the same structure.
 - No markdown, no code blocks. Return raw JSON only."""
 
 
@@ -372,17 +374,24 @@ async def optimize_resume_bullets(resume_json: dict, job_description: str, missi
     import json as _json
     client, model = _get_client(LLMMode.QUALITY)
 
+    import copy
+    
+    partial_json = {
+        "experience": resume_json.get("experience", []),
+        "projects": resume_json.get("projects", [])
+    }
+
     keywords_str = ", ".join(missing_keywords) if missing_keywords else "general ATS optimization"
 
     user_message = f"""Resume JSON:
-{_json.dumps(resume_json, indent=2)[:3000]}
+{_json.dumps(partial_json, indent=2)}
 
 Job Description:
 {job_description[:1500]}
 
 Missing ATS keywords to incorporate: {keywords_str}
 
-Rewrite the bullet points to include these keywords naturally. Return the complete updated JSON:"""
+Rewrite the bullet points to include these keywords naturally. Return the updated JSON:"""
 
     for attempt in range(2):
         try:
@@ -404,9 +413,16 @@ Rewrite the bullet points to include these keywords naturally. Return the comple
                 result = result[3:]
             if result.endswith("```"):
                 result = result[:-3]
-            updated = _json.loads(result.strip())
+            updated_partial = _json.loads(result.strip())
+            
+            final_json = copy.deepcopy(resume_json)
+            if "experience" in updated_partial:
+                final_json["experience"] = updated_partial["experience"]
+            if "projects" in updated_partial:
+                final_json["projects"] = updated_partial["projects"]
+                
             logger.info("Resume bullets optimized successfully")
-            return updated
+            return final_json
         except Exception as e:
             logger.error(f"Bullet optimization error (attempt {attempt + 1}): {e}")
             if attempt == 0:
