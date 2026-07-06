@@ -24,8 +24,8 @@
 \titleformat{\section}{\bfseries\large}{}{0em}{}[\titlerule]
 \titlespacing*{\section}
   {0pt}  % left margin
-  {6pt}  % space before section
-  {6pt}  % space after section
+  {3pt}  % space before section
+  {3pt}  % space after section
 
 
 \begin{document}
@@ -93,8 +93,7 @@
 \begin{itemize}[leftmargin=*]
 
 ((* for proj in projects *))
-\item \textbf{((( proj.name )))} \hfill \textit{((( proj.duration )))}\\
-((* if proj.live_link *)){\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live Website}}}}} ((* endif *)) ((* if proj.live_link and proj.code_link *)) \textbar\ ((* endif *)) ((* if proj.code_link *)){\href{((( proj.code_link )))}{\underline{GitHub}}} ((* endif *))
+\item \textbf{((( proj.name )))} ((* if proj.live_link or proj.code_link *))\textbar\ ((* endif *)) ((* if proj.live_link *)){\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live Website}}}}} ((* endif *)) ((* if proj.live_link and proj.code_link *)) \textbar\ ((* endif *)) ((* if proj.code_link *)){\href{((( proj.code_link )))}{\underline{GitHub}}} ((* endif *)) \hfill \textit{((( proj.duration )))}
 
 ((* if proj.bullets *))
 \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
@@ -113,22 +112,18 @@
 %----------------------------------------
 
 \section*{Technical Skills}
-\begin{itemize}[leftmargin=*,label={},itemsep=0pt,topsep=0pt]
 ((* for skill_group in skills *))
-\item \textbf{((( skill_group.category ))):} ((( skill_group['items'] )))
+\textbf{((( skill_group.category ))):} ((( skill_group['items'] )))\\[2pt]
 ((* endfor *))
-\end{itemize}
 
 ((* if coding_profiles *))
 %----------------------------------------
 % Coding Profile
 %----------------------------------------
 \section*{Coding Profile}
-\begin{itemize}[leftmargin=*,label={},itemsep=0pt,topsep=0pt]
 ((* for profile in coding_profiles *))
-\item \textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} ((( profile.stats )))
+\textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} ((( profile.stats )))\\[2pt]
 ((* endfor *))
-\end{itemize}
 ((* endif *))
 
 \end{document}
