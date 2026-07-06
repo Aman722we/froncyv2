@@ -345,18 +345,21 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     jd_text = context.user_data.get("last_ats_jd", "")
     missing_keywords = ats_result.get("missing_keywords", []) + ats_result.get("tech_match", {}).get("missing", [])
 
+    if is_manual:
+        job = await get_manual_job_by_id(job_id)
+    else:
+        job = await get_job_by_id(job_id)
+        
+    if not job:
+        job = {}
+
     # If no cached JD, fall back to fetching the job from DB
-    if not jd_text:
-        if is_manual:
-            job = await get_manual_job_by_id(job_id)
-        else:
-            job = await get_job_by_id(job_id)
-        if job:
-            jd_text = (
-                f"Job Title: {job.get('title', '')}\n"
-                f"Company: {job.get('company', '')}\n"
-                f"Skills: {', '.join(job.get('skills', []))}"
-            )
+    if not jd_text and job:
+        jd_text = (
+            f"Job Title: {job.get('title', '')}\n"
+            f"Company: {job.get('company', '')}\n"
+            f"Skills: {', '.join(job.get('skills', []))}"
+        )
 
     # ── Stage 1: Extract resume JSON ──────────────────────────────────────
     back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
