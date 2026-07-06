@@ -12,6 +12,7 @@ import asyncio
 import tempfile
 import subprocess
 import re
+import pypdf
 from pathlib import Path
 from loguru import logger
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -65,33 +66,36 @@ def escape_dict_for_latex(data):
     else:
         return data
 
-def _render_latex(resume_data: dict) -> str:
+def _render_latex(resume_data: dict, font_size: str = "11pt") -> str:
     """Render the Jinja2 template with the given resume data."""
     escaped_data = escape_dict_for_latex(resume_data)
     env = _get_jinja_env()
     template = env.get_template(TEMPLATE_NAME)
-    return template.render(**escaped_data)
+    return template.render(**escaped_data, font_size=font_size)
 
 
 async def compile_resume_pdf(resume_data: dict) -> bytes:
     """
     Compile a resume PDF from structured data using Jinja2 + pdflatex.
-
-    Args:
-        resume_data: Structured resume dict (from extract_resume_json / optimize_resume_bullets)
-
-    Returns:
-        PDF file contents as bytes
-
-    Raises:
-        RuntimeError: If pdflatex fails or is not installed
+    Auto-scales dense resumes to 10pt if they span multiple pages.
     """
+    # Pass 1: Try compiling at default 11pt
+    pdf_bytes, page_count = await _compile_pdf_with_font(resume_data, "11pt")
+    
+    if page_count > 1:
+        logger.warning(f"Resume spilled onto {page_count} pages at 11pt. Auto-scaling down to 10pt.")
+        # Pass 2: Re-compile at 10pt to fit 1 page
+        pdf_bytes, _ = await _compile_pdf_with_font(resume_data, "10pt")
+        
+    return pdf_bytes
+
+async def _compile_pdf_with_font(resume_data: dict, font_size: str) -> tuple[bytes, int]:
+    """Helper to compile PDF and return (pdf_bytes, page_count)."""
     try:
-        latex_source = _render_latex(resume_data)
+        latex_source = _render_latex(resume_data, font_size)
     except Exception as e:
         raise RuntimeError(f"Template rendering failed: {e}")
 
-    # Run pdflatex in a temporary directory so temp files are self-contained
     with tempfile.TemporaryDirectory() as tmpdir:
         tex_path = Path(tmpdir) / "resume.tex"
         pdf_path = Path(tmpdir) / "resume.pdf"
@@ -99,10 +103,6 @@ async def compile_resume_pdf(resume_data: dict) -> bytes:
         tex_path.write_text(latex_source, encoding="utf-8")
         logger.info(f"LaTeX source written ({len(latex_source)} chars) to {tex_path}")
 
-        # pdflatex flags:
-        #   -interaction=nonstopmode  → don't pause on errors; keep compiling
-        #   -halt-on-error            → exit with non-zero code on fatal errors
-        #   -output-directory         → write all generated files to tmpdir
         cmd = [
             "pdflatex",
             "-interaction=nonstopmode",
@@ -112,7 +112,6 @@ async def compile_resume_pdf(resume_data: dict) -> bytes:
         ]
 
         try:
-            # Run in executor so we don't block the asyncio event loop
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None,
@@ -125,15 +124,11 @@ async def compile_resume_pdf(resume_data: dict) -> bytes:
                 )
             )
         except FileNotFoundError:
-            raise RuntimeError(
-                "pdflatex is not installed on this server. "
-                "Please add texlive to the Railway nixPkgsFilter."
-            )
+            raise RuntimeError("pdflatex is not installed on this server.")
         except subprocess.TimeoutExpired:
             raise RuntimeError("pdflatex timed out after 60 seconds.")
 
         if result.returncode != 0:
-            # Log the pdflatex output for debugging
             log_output = result.stdout[-3000:] if result.stdout else result.stderr[-3000:]
             logger.error(f"pdflatex failed (exit {result.returncode}):\n{log_output}")
             raise RuntimeError(f"pdflatex compilation failed. Exit code: {result.returncode}")
@@ -142,5 +137,14 @@ async def compile_resume_pdf(resume_data: dict) -> bytes:
             raise RuntimeError("pdflatex ran successfully but PDF output was not found.")
 
         pdf_bytes = pdf_path.read_bytes()
-        logger.info(f"PDF compiled successfully: {len(pdf_bytes)} bytes")
-        return pdf_bytes
+        
+        # Parse the PDF to count pages
+        try:
+            reader = pypdf.PdfReader(pdf_path)
+            page_count = len(reader.pages)
+        except Exception as e:
+            logger.error(f"Failed to read PDF page count: {e}")
+            page_count = 1  # Fallback to 1 on read error
+            
+        logger.info(f"PDF compiled successfully ({font_size}): {len(pdf_bytes)} bytes, {page_count} pages")
+        return pdf_bytes, page_count
