@@ -241,6 +241,7 @@ CRITICAL RULES:
 - For bullet points: write clean, impactful sentences. Each bullet should be a COMPLETE sentence with a strong action verb.
 - Include at most 3 projects. If there are more, pick the 3 most impressive.
 - For experience: include ALL jobs found.
+- CRITICAL: Do NOT duplicate entries. If a company/startup is extracted under "experience", DO NOT extract it again under "projects". Every entry must be unique to its category.
 
 Return JSON in EXACTLY this format:
 {
@@ -376,7 +377,9 @@ Look at the missing ATS keywords provided.
 Find the 1 or 2 most logically relevant bullets in the entire resume (from Pass 1), and restructure their core sentence to naturally incorporate the missing keywords.
 - DO NOT just tack the keywords onto the end of the sentence with a comma (e.g. "...using React, incorporating accessibility-driven development"). This is robotic and gets rejected.
 - Weave the missing keywords naturally into the core action verb or structure.
-- A maximum of 1 or 2 bullets should receive keywords. Do not keyword stuff the entire resume.
+- GOOD WEAVE: "Engineered a Next.js PWA using Zustand, optimizing performance and enforcing accessibility-driven development."
+- BAD TACK-ON (LAZY): "Engineered an installable Next.js PWA, prioritizing accessibility-driven development." (Do not just append phrases to the end).
+- A maximum of 1 or 2 bullets across the ENTIRE resume should receive keywords. Do not keyword stuff every section.
 
 CRITICAL RULES:
 - Return ONLY the updated JSON containing the "experience" and "projects" arrays.
