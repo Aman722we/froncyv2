@@ -164,7 +164,6 @@ CRITICAL INSTRUCTIONS:
 
 You must return EXACTLY and ONLY valid JSON matching this schema:
 {
-  "score": <0-100 integer. For freshers, a strong project portfolio with the right stack should score 65-85. Penalize missing CORE frontend skills, not missing backend tools>,
   "matching_keywords": [<list of max 8 highly relevant frontend skills or concepts the user HAS>],
   "missing_keywords": [<list of max 8 real frontend technical gaps that actually matter for this role>],
   "tech_found": [<list of exact frontend tools/libraries found in both resume and JD>],
@@ -339,21 +338,27 @@ Return the JSON now:"""
     raise RuntimeError("Resume extraction failed after retries")
 
 
-BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer. You will be given:
+BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer and Senior Technical Recruiter. You will be given:
 1. A JSON object containing "experience" and "projects" arrays.
 2. A job description
 
-Your task: Rewrite the bullet points in the "experience" and "projects" sections to naturally incorporate the missing ATS keywords.
+You will perform TWO passes over the resume:
+
+--- PASS 1 (The Quality Audit) ---
+Evaluate every single bullet point against strict quality standards (concise, action-oriented, metric-driven).
+- IF a bullet is poorly written (rambling, passive voice, missing impact), rewrite it to be strong and concise.
+- IF a bullet is already well-written (strong action verbs, concise, under 2 lines), DO NOT change it during this pass. Leave it exactly as is.
+
+--- PASS 2 (The Organic Keyword Weave) ---
+Look at the missing ATS keywords provided.
+Find the 1 or 2 most logically relevant bullets in the entire resume (from Pass 1), and restructure their core sentence to naturally incorporate the missing keywords.
+- DO NOT just tack the keywords onto the end of the sentence with a comma (e.g. "...using React, incorporating accessibility-driven development"). This is robotic and gets rejected.
+- Weave the missing keywords naturally into the core action verb or structure.
+- A maximum of 1 or 2 bullets should receive keywords. Do not keyword stuff the entire resume.
 
 CRITICAL RULES:
 - Return ONLY the updated JSON containing the "experience" and "projects" arrays.
-- Only modify the "bullets" arrays inside experience and project items.
-- DO NOT KEYWORD STUFF. Do not mindlessly append the exact same phrase (e.g. "incorporating responsive design") to the end of every bullet. That is robotic and gets rejected.
-- Weave the missing keywords naturally across the ENTIRE resume. A maximum of 1 or 2 bullets should be changed in total.
-- GOOD EXAMPLE: "Engineered a Next.js PWA using Zustand, optimizing performance and enforcing accessibility-driven development."
-- BAD EXAMPLE: "Engineered an installable Next.js PWA, prioritizing accessibility-driven development. Architected usage flow, prioritizing accessibility-driven development."
 - Keep bullets truthful — only add keywords where they genuinely fit.
-- Bullets should be strong, action-oriented sentences.
 - Escape ALL special LaTeX characters: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}
 - No markdown, no code blocks. Return raw JSON only."""
 

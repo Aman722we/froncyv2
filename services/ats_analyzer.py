@@ -41,12 +41,17 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         def _sanitize(val):
             return str(val).replace("~", "").replace("`", "")
 
-        score = data.get("score", 0)
         matching = [_sanitize(k) for k in data.get("matching_keywords", [])]
         missing = [_sanitize(k) for k in data.get("missing_keywords", [])]
         tech_found = [_sanitize(k) for k in data.get("tech_found", [])]
         tech_missing = [_sanitize(k) for k in data.get("tech_missing", [])]
         suggestions = [_sanitize(s) for s in data.get("suggestions", [])]
+
+        total_tech = len(tech_found) + len(tech_missing)
+        if total_tech > 0:
+            score = int((len(tech_found) / total_tech) * 100)
+        else:
+            score = 0
 
         result = {
             "score": score,
