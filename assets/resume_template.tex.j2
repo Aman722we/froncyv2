@@ -72,7 +72,7 @@
 \section*{Experience}
 \begin{itemize}[leftmargin=*]
 ((* for exp in experience *))
-    \item \textbf{((( exp.company ))) \textbar\ ((( exp.title )))} ((* if exp.link *)) {\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) \hfill \textit{((( exp.duration )))}
+    \item \textbf{((( exp.company )))} \textbar\ ((( exp.title ))) ((* if exp.link *)) \hfill {\href{((( exp.link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) \hfill \textit{((( exp.duration )))}
 
 ((* if exp.bullets *))
     \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
@@ -93,7 +93,8 @@
 \begin{itemize}[leftmargin=*]
 
 ((* for proj in projects *))
-\item \textbf{((( proj.name )))} ((* if proj.live_link *)) {\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live}}}}} ((* endif *)) ((* if proj.code_link *)) {\href{((( proj.code_link )))}{\underline{Code}}} ((* endif *)) \hfill \textit{((( proj.duration )))}
+\item \textbf{((( proj.name )))} \hfill \textit{((( proj.duration )))}\\
+((* if proj.live_link *)){\href{((( proj.live_link )))}{{\textcolor{blue}{\underline{Live Website}}}}} ((* endif *)) ((* if proj.live_link and proj.code_link *)) \textbar\ ((* endif *)) ((* if proj.code_link *)){\href{((( proj.code_link )))}{\underline{GitHub}}} ((* endif *))
 
 ((* if proj.bullets *))
 \begin{itemize}[leftmargin=*,label={},itemsep=-3pt,topsep=-6pt]
@@ -112,24 +113,22 @@
 %----------------------------------------
 
 \section*{Technical Skills}
-\begin{tabular}{@{}ll}
+\begin{itemize}[leftmargin=*,label={},itemsep=0pt,topsep=0pt]
 ((* for skill_group in skills *))
-\textbf{((( skill_group.category ))):} & ((( skill_group['items'] )))\\
+\item \textbf{((( skill_group.category ))):} ((( skill_group['items'] )))
 ((* endfor *))
-
-\end{tabular}
+\end{itemize}
 
 ((* if coding_profiles *))
 %----------------------------------------
 % Coding Profile
 %----------------------------------------
 \section*{Coding Profile}
-\begin{tabular}{@{}ll}
+\begin{itemize}[leftmargin=*,label={},itemsep=0pt,topsep=0pt]
 ((* for profile in coding_profiles *))
-\textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} & ((( profile.stats )))\\
+\item \textbf{\href{((( profile.link )))}{\textcolor{blue}{((( profile.platform )))}}:} ((( profile.stats )))
 ((* endfor *))
-
-\end{tabular}
+\end{itemize}
 ((* endif *))
 
 \end{document}
