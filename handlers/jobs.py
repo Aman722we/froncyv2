@@ -313,7 +313,17 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     msg = messages.job_detail_message(job, plan=plan, user=user)
     kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id)
 
-    await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+    if query.message and query.message.document:
+        await query.message.delete()
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=msg,
+            reply_markup=kb,
+            parse_mode="MarkdownV2",
+            disable_web_page_preview=True
+        )
+    else:
+        await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
 
 async def save_job_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
