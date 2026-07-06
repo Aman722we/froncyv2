@@ -314,7 +314,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id)
 
     if query.message and query.message.document:
-        await query.message.delete()
+        await query.edit_message_reply_markup(reply_markup=None)
         await context.bot.send_message(
             chat_id=user_id,
             text=msg,
