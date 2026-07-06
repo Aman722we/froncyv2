@@ -233,6 +233,7 @@ RESUME_EXTRACTION_SYSTEM_PROMPT = """You are an expert resume parser. Extract al
 
 CRITICAL RULES:
 - Return ONLY valid JSON, no markdown, no code blocks, just raw JSON.
+- CRITICAL JSON RULE: Ensure all internal double quotes inside strings are correctly escaped (e.g., \" ). Do NOT forget any commas between properties.
 - If a field is not present, use null or an empty array [].
 - For links: check both the text content AND any section labelled "[EMBEDDED LINKS FROM PDF]" at the bottom.
 - GitHub links usually contain "github.com". LinkedIn links contain "linkedin.com". Project live links contain vercel.app, netlify.app, or a custom domain.
@@ -314,18 +315,39 @@ Return the JSON now:"""
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.1,
-                max_tokens=2000,
+                max_tokens=3000,
                 top_p=1,
             )
             result = response.choices[0].message.content.strip()
-            # Strip any accidental markdown wrappers
             if result.startswith("```json"):
                 result = result[7:]
             if result.startswith("```"):
                 result = result[3:]
             if result.endswith("```"):
                 result = result[:-3]
-            data = _json.loads(result.strip())
+            result = result.strip()
+            
+            try:
+                data = _json.loads(result)
+            except _json.JSONDecodeError as je:
+                logger.warning(f"JSON syntax error: {je}. Attempting auto-repair with LLM...")
+                fast_client, fast_model = _get_client(LLMMode.FAST)
+                repair_prompt = f"The following JSON string is invalid. Fix the syntax errors (like missing commas or unescaped quotes) and return ONLY the valid raw JSON. Do not change the content.\n\n{result}"
+                repair_res = await fast_client.chat.completions.create(
+                    model=fast_model,
+                    messages=[{"role": "user", "content": repair_prompt}],
+                    temperature=0.0,
+                    max_tokens=3000
+                )
+                repaired = repair_res.choices[0].message.content.strip()
+                if repaired.startswith("```json"):
+                    repaired = repaired[7:]
+                if repaired.startswith("```"):
+                    repaired = repaired[3:]
+                if repaired.endswith("```"):
+                    repaired = repaired[:-3]
+                data = _json.loads(repaired.strip())
+                
             logger.info(f"Resume JSON extracted: {len(data.get('projects', []))} projects, {len(data.get('experience', []))} jobs")
             return data
         except Exception as e:
