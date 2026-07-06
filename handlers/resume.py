@@ -437,6 +437,11 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         parse_mode="MarkdownV2"
     )
 
+    back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+    reply_markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)
+    ]])
+
     await query.message.reply_document(
         document=io.BytesIO(pdf_bytes),
         filename=filename,
@@ -444,7 +449,8 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
             f"🎯 ATS-Optimized Resume\n"
             f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
             "Good luck with your application! 🚀"
-        )
+        ),
+        reply_markup=reply_markup
     )
 
     logger.info(f"ATS PDF sent to user {user_id}: {filename} ({len(pdf_bytes)} bytes)")
