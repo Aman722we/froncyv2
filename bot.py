@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command
+from handlers.admin import get_addjob_handler, send_message_command, broadcast_command
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
     analytics_command, analytics_page_callback, users_command, user_detail_command, users_page_callback,
