@@ -383,7 +383,7 @@ def cover_letter_result_keyboard(job_id: int, is_manual: bool = False) -> Inline
     back_prefix = "manual_view" if is_manual else "job_view"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 Copy Text", callback_data=f"cl_copy_{job_id}"),
+            InlineKeyboardButton("📋 Copy Text", callback_data=f"{cl_prefix}_copy_{job_id}"),
             InlineKeyboardButton("🔄 Regenerate", callback_data=f"{cl_prefix}_regen_{job_id}"),
         ],
         [

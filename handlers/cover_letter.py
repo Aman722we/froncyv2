@@ -211,7 +211,7 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer("Sending raw text for copying...")
 
-    is_manual = "manual_" in query.data
+    is_manual = query.data.startswith("manual_cl_copy_")
     job_id = int(query.data.split("_")[-1])
     back_prefix = "manual_view" if is_manual else "job_view"
 

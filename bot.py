@@ -181,7 +181,7 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(remind_me_manual_callback, pattern="^remind_manual_"))
 
     # Cover Letter Callbacks
-    app.add_handler(CallbackQueryHandler(copy_cover_letter, pattern="^cl_copy_"))
+    app.add_handler(CallbackQueryHandler(copy_cover_letter, pattern="^(manual_)?cl_copy_"))
     app.add_handler(CallbackQueryHandler(generate_cover_letter_callback, pattern="^(manual_)?cl_(generate|regen|tone)_"))
 
 
