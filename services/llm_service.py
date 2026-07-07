@@ -235,7 +235,10 @@ Analyze the match and provide the JSON:"""
     raise RuntimeError("ATS generation failed after retries")
 
 
-RESUME_EXTRACTION_SYSTEM_PROMPT = """You are an expert resume parser. Extract all information from the provided resume text into a structured JSON format.
+RESUME_EXTRACTION_SYSTEM_PROMPT = """You are a faithful resume data-entry clerk. Your ONLY job is to lift information out of the resume text and place it into a JSON structure. You are NOT a writer, editor, or advisor.
+
+GOLDEN RULE — READ THIS FIRST:
+Copy bullet points WORD-FOR-WORD exactly as they appear in the resume. Do NOT rephrase, summarize, shorten, or "improve" them. Treat each bullet like a legal document you are transcribing. Changing even one word is a critical failure.
 
 CRITICAL RULES:
 - Return ONLY valid JSON, no markdown, no code blocks, just raw JSON.
@@ -244,8 +247,7 @@ CRITICAL RULES:
 - For links: check both the text content AND any section labelled "[EMBEDDED LINKS FROM PDF]" at the bottom.
 - GitHub links usually contain "github.com". LinkedIn links contain "linkedin.com". Project live links contain vercel.app, netlify.app, or a custom domain.
 - Escape ALL special LaTeX characters in text: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}, ~ → \\textasciitilde{}, ^ → \\textasciicircum{}
-- For bullet points: write clean, impactful sentences. Each bullet should be a COMPLETE sentence with a strong action verb.
-- Include at most 3 projects. If there are more, pick the 3 most impressive.
+- Include ALL projects found — do NOT drop any project. Extract every single one.
 - For experience: include ALL jobs found.
 - CRITICAL: Do NOT duplicate entries. If a company/startup is extracted under "experience", DO NOT extract it again under "projects". Every entry must be unique to its category.
 
@@ -270,7 +272,7 @@ Return JSON in EXACTLY this format:
       "title": "Job Title",
       "duration": "Month Year -- Month Year",
       "link": "https://live-link-or-null",
-      "bullets": ["Bullet 1 describing impact.", "Bullet 2 with metrics if available."]
+      "bullets": ["Exact word-for-word copy of bullet 1.", "Exact word-for-word copy of bullet 2."]
     }
   ],
   "projects": [
@@ -279,7 +281,7 @@ Return JSON in EXACTLY this format:
       "duration": "Month Year -- Present",
       "live_link": "https://live-url-or-null",
       "code_link": "https://github-url-or-null",
-      "bullets": ["Bullet 1 describing tech and impact.", "Bullet 2."]
+      "bullets": ["Exact word-for-word copy of bullet 1.", "Exact word-for-word copy of bullet 2."]
     }
   ],
   "skills": [
@@ -368,72 +370,88 @@ Return the JSON now:"""
     raise RuntimeError("Resume extraction failed after retries")
 
 
-BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer and Senior Technical Recruiter. You will be given:
-1. A JSON object containing "experience" and "projects" arrays.
-2. A job description
+BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer. You will be given a list of bullet points from a candidate's resume, a job description, and a list of missing ATS keywords.
 
-You will perform TWO passes over the resume:
+Your task is to produce a DIFF PATCH — a tiny list of surgical replacements. You are NOT rewriting the entire resume.
 
---- PASS 1 (The Quality Audit) ---
-Evaluate every single bullet point against strict quality standards (concise, action-oriented, metric-driven).
-- IF a bullet is poorly written (rambling, passive voice, missing impact), rewrite it to be strong and concise.
-- IF a bullet is already well-written (strong action verbs, concise, under 2 lines), DO NOT change it during this pass. Leave it exactly as is.
+## STEP 1: Quality Audit
+Read all the bullets. Identify any bullets that are genuinely poorly written:
+- Poorly written = passive voice ("was responsible for"), vague ("worked on stuff"), or has zero technical detail.
+- Well-written = starts with a strong action verb, is specific, mentions technologies or metrics.
+- For EACH poorly written bullet: write a new, improved version that MUST preserve every single technical keyword, tool, and metric from the original. Just fix the grammar and structure.
+- For EACH well-written bullet: DO NOT touch it at all.
 
---- PASS 2 (The Organic Keyword Weave) ---
-Look at the missing ATS keywords provided.
-Find the 1 or 2 most logically relevant bullets in the entire resume (from Pass 1), and restructure their core sentence to naturally incorporate the missing keywords.
-- DO NOT just tack the keywords onto the end of the sentence with a comma (e.g. "...using React, incorporating accessibility-driven development"). This is robotic and gets rejected.
-- Weave the missing keywords naturally into the core action verb or structure.
-- GOOD WEAVE: "Engineered a Next.js PWA using Zustand, optimizing performance and enforcing accessibility-driven development."
-- BAD TACK-ON (LAZY): "Engineered an installable Next.js PWA, prioritizing accessibility-driven development." (Do not just append phrases to the end).
-- A maximum of 1 or 2 bullets across the ENTIRE resume should receive keywords. Do not keyword stuff every section.
+## STEP 2: Keyword Weave (max 1-2 bullets total)
+From all bullets (original or improved), find the 1 or 2 most logically relevant ones to weave the missing ATS keywords into naturally.
+- Weave organically into the sentence structure. Do NOT tack on at the end.
+- GOOD: "Engineered a Next.js PWA using Zustand for state management, enforcing accessibility-driven development."
+- BAD: "Engineered an installable Next.js PWA, incorporating accessibility-driven development."
 
-CRITICAL RULES:
-- Return ONLY the updated JSON containing the "experience" and "projects" arrays.
-- Keep bullets truthful — only add keywords where they genuinely fit.
-- Escape ALL special LaTeX characters: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}
-- No markdown, no code blocks. Return raw JSON only."""
+## OUTPUT FORMAT — CRITICAL:
+Return ONLY a JSON object with a single key "replacements" containing an array.
+Each item in the array represents ONE bullet you changed (quality fix OR keyword weave).
+Only include bullets you actually changed. If a bullet was already perfect and needed no changes, do NOT include it.
+
+{
+  "replacements": [
+    {
+      "original": "The exact original bullet text, copied character-for-character.",
+      "improved": "The new improved bullet text with keywords woven in."
+    }
+  ]
+}
+
+If no changes are needed at all, return: {"replacements": []}
+No markdown. No code blocks. Raw JSON only."""
 
 
 async def optimize_resume_bullets(resume_json: dict, job_description: str, missing_keywords: list[str]) -> dict:
     """
-    Rewrite experience and project bullets in resume_json to naturally incorporate
-    the ATS keywords that are missing for a specific job description.
+    Uses a Diff-Patch approach to apply surgical improvements to resume bullets.
+    The AI only outputs a list of (original -> improved) replacements.
+    Python then applies those replacements, making it impossible for the AI to
+    accidentally delete or hallucinate content across the rest of the resume.
 
     Args:
         resume_json: Structured resume dict from extract_resume_json()
         job_description: The target job description text
-        missing_keywords: List of missing keywords identified by the ATS analyzer
+        missing_keywords: List of missing soft-tech keywords from the ATS analyzer
 
     Returns:
-        Updated resume_json with optimized bullet points
+        Updated resume_json with only the patched bullet points changed
     """
     import json as _json
-    # Bullet optimization also outputs a large JSON — give it a longer timeout
-    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
-
     import copy
-    
-    partial_json = {
-        "experience": resume_json.get("experience", []),
-        "projects": resume_json.get("projects", [])
-    }
+
+    # Collect ALL bullets with metadata so we can patch by exact text match
+    all_bullets: list[str] = []
+    for exp in resume_json.get("experience", []):
+        all_bullets.extend(exp.get("bullets", []))
+    for proj in resume_json.get("projects", []):
+        all_bullets.extend(proj.get("bullets", []))
+
+    if not all_bullets:
+        logger.warning("No bullets found in resume — skipping optimization")
+        return resume_json
 
     keywords_str = ", ".join(missing_keywords) if missing_keywords else "general ATS optimization"
 
-    user_message = f"""Resume JSON:
-{_json.dumps(partial_json, indent=2)}
+    user_message = f"""Here are all the bullet points from the candidate's resume (one per line, numbered):
+
+{chr(10).join(f'{i+1}. {b}' for i, b in enumerate(all_bullets))}
 
 Job Description:
 {job_description[:1500]}
 
-Missing ATS keywords to incorporate: {keywords_str}
+Missing ATS keywords to weave in: {keywords_str}
 
-Rewrite the bullet points to include these keywords naturally. Return the updated JSON:"""
+Apply your two-step process and return the diff patch JSON:"""
+
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
 
     for attempt in range(2):
         try:
-            logger.info(f"Optimizing resume bullets with {model} (attempt {attempt + 1})")
+            logger.info(f"Generating bullet diff-patch with {model} (attempt {attempt + 1})")
             response = await client.chat.completions.create(
                 model=model,
                 messages=[
@@ -441,7 +459,7 @@ Rewrite the bullet points to include these keywords naturally. Return the update
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.3,
-                max_tokens=2500,
+                max_tokens=1500,  # Much smaller — we only need the patch, not the full resume
                 top_p=1,
             )
             result = response.choices[0].message.content.strip()
@@ -451,22 +469,53 @@ Rewrite the bullet points to include these keywords naturally. Return the update
                 result = result[3:]
             if result.endswith("```"):
                 result = result[:-3]
-            updated_partial = _json.loads(result.strip())
-            
+
+            patch = _json.loads(result.strip())
+            replacements = patch.get("replacements", [])
+
+            if not replacements:
+                logger.info("AI returned empty diff-patch — resume bullets are already optimal")
+                return resume_json
+
+            # Build a lookup map: original_text -> improved_text
+            patch_map: dict[str, str] = {}
+            for r in replacements:
+                orig = r.get("original", "").strip()
+                improved = r.get("improved", "").strip()
+                if orig and improved and orig != improved:
+                    patch_map[orig] = improved
+
+            logger.info(f"Applying {len(patch_map)} bullet patch(es) via Python — rest of resume untouched")
+
+            # Apply the patch: Python does a simple string match-and-replace
+            # The AI cannot touch anything outside the patch_map
             final_json = copy.deepcopy(resume_json)
-            if "experience" in updated_partial:
-                final_json["experience"] = updated_partial["experience"]
-            if "projects" in updated_partial:
-                final_json["projects"] = updated_partial["projects"]
-                
-            logger.info("Resume bullets optimized successfully")
+
+            def apply_patch_to_section(entries: list) -> list:
+                for entry in entries:
+                    new_bullets = []
+                    for bullet in entry.get("bullets", []):
+                        # Try exact match first
+                        if bullet in patch_map:
+                            new_bullets.append(patch_map[bullet])
+                        else:
+                            # Try trimmed match as a fallback
+                            trimmed = bullet.strip()
+                            new_bullets.append(patch_map.get(trimmed, bullet))
+                    entry["bullets"] = new_bullets
+                return entries
+
+            final_json["experience"] = apply_patch_to_section(final_json.get("experience", []))
+            final_json["projects"] = apply_patch_to_section(final_json.get("projects", []))
+
+            logger.info("Diff-patch applied successfully — resume integrity preserved")
             return final_json
+
         except Exception as e:
-            logger.error(f"Bullet optimization error (attempt {attempt + 1}): {e}")
+            logger.error(f"Bullet diff-patch error (attempt {attempt + 1}): {e}")
             if attempt == 0:
                 await asyncio.sleep(2)
             else:
-                # Return original as fallback — better to send unoptimized PDF than fail
                 logger.warning("Returning original resume JSON as fallback")
                 return resume_json
 
