@@ -29,12 +29,14 @@ def _get_client(mode: LLMMode) -> tuple[AsyncOpenAI, str]:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_70B,
+            timeout=30.0,
         )
         model = settings.NVIDIA_MODEL_70B
     else:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_8B,
+            timeout=15.0,
         )
         model = settings.NVIDIA_MODEL_8B
 

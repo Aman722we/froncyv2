@@ -828,6 +828,7 @@ def ats_result(result: dict) -> str:
 
     # Safely escape each keyword individually before joining
     def safe_list(items: list) -> str:
+        if not items: return ""
         return escape_md(", ".join(str(i) for i in items))
 
     matching = safe_list(result.get("matching_keywords", [])[:8])

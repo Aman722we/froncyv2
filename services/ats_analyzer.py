@@ -41,11 +41,11 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         def _sanitize(val):
             return str(val).replace("~", "").replace("`", "")
 
-        matching = [_sanitize(k) for k in data.get("matching_keywords", [])]
-        missing_hard = [_sanitize(k) for k in data.get("missing_hard_skills", [])]
-        missing_soft = [_sanitize(k) for k in data.get("missing_soft_tech_skills", [])]
-        tech_found = [_sanitize(k) for k in data.get("tech_found", [])]
-        suggestions = [_sanitize(s) for s in data.get("suggestions", [])]
+        matching = [_sanitize(k) for k in (data.get("matching_keywords") or [])]
+        missing_hard = [_sanitize(k) for k in (data.get("missing_hard_skills") or [])]
+        missing_soft = [_sanitize(k) for k in (data.get("missing_soft_tech_skills") or [])]
+        tech_found = [_sanitize(k) for k in (data.get("tech_found") or [])]
+        suggestions = [_sanitize(s) for s in (data.get("suggestions") or [])]
 
         total_tech = len(tech_found) + len(missing_hard) + len(missing_soft)
         if total_tech > 0:
@@ -70,7 +70,8 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         return {
             "score": 0,
             "matching_keywords": [],
-            "missing_keywords": [],
+            "missing_hard_skills": [],
+            "missing_soft_tech_skills": [],
             "suggestions": ["⚠️ Error analyzing resume. Please parse your resume again."],
-            "tech_match": {"found": [], "missing": []},
+            "tech_found": [],
         }
