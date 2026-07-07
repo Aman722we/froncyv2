@@ -3,15 +3,16 @@ from db.connection import get_pool
 from datetime import datetime
 import json
 
-async def add_application(telegram_id: int, job_id: int) -> bool:
-    """Add a job to applications. Return True if added, False if already exists."""
+async def add_application(telegram_id: int, job_id: int, is_manual: bool = False) -> bool:
+    """Add a job to applications. Return True if added, False if already exists.
+    Auto-removes the job from saved_jobs if it was saved there."""
     pool = get_pool()
     async with pool.acquire() as conn:
         try:
             # Check if already tracked
             existing = await conn.fetchval(
-                "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2",
-                telegram_id, job_id
+                "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = $3",
+                telegram_id, job_id, is_manual
             )
             if existing:
                 return False
@@ -19,12 +20,13 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
             # Insert the application
             app_id = await conn.fetchval(
                 """
-                INSERT INTO applications (telegram_id, job_id, status)
-                VALUES ($1, $2, 'applied')
+                INSERT INTO applications (telegram_id, job_id, is_manual, status)
+                VALUES ($1, $2, $3, 'applied')
                 RETURNING id
                 """,
                 telegram_id,
-                job_id
+                job_id,
+                is_manual
             )
 
             # Schedule a follow-up reminder 3 days from now
@@ -39,6 +41,19 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
                 )
             except Exception as e:
                 logger.warning(f"Could not create reminder (non-critical): {e}")
+
+            # Auto-cleanup: remove from saved_jobs (both scraped and manual)
+            try:
+                await conn.execute(
+                    "DELETE FROM saved_jobs WHERE telegram_id = $1 AND job_id = $2",
+                    telegram_id, job_id
+                )
+                await conn.execute(
+                    "DELETE FROM saved_jobs WHERE telegram_id = $1 AND manual_job_id = $2",
+                    telegram_id, job_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not auto-remove from saved_jobs (non-critical): {e}")
 
             return True
         except Exception as e:
@@ -55,7 +70,7 @@ async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -
                    j.id as job_id, j.title, j.company, j.location, j.url
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
-            WHERE a.telegram_id = $1
+            WHERE a.telegram_id = $1 AND a.is_manual = FALSE
 
             UNION ALL
 
@@ -63,7 +78,7 @@ async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -
                    mj.id as job_id, mj.title, mj.company, mj.location, mj.url
             FROM applications a
             JOIN manual_jobs mj ON a.job_id = mj.id
-            WHERE a.telegram_id = $1
+            WHERE a.telegram_id = $1 AND a.is_manual = TRUE
 
             ORDER BY applied_at DESC
             LIMIT $2 OFFSET $3
@@ -183,7 +198,7 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
                    j.id as job_id, j.title, j.company, j.location, j.url
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
-            WHERE a.telegram_id = $1 AND a.id = $2
+            WHERE a.telegram_id = $1 AND a.id = $2 AND a.is_manual = FALSE
             
             UNION ALL
             
@@ -191,7 +206,7 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
                    mj.id as job_id, mj.title, mj.company, mj.location, mj.url
             FROM applications a
             JOIN manual_jobs mj ON a.job_id = mj.id
-            WHERE a.telegram_id = $1 AND a.id = $2
+            WHERE a.telegram_id = $1 AND a.id = $2 AND a.is_manual = TRUE
             """,
             telegram_id, app_id
         )
@@ -323,3 +338,70 @@ async def get_click_stats() -> dict:
         "total": total or 0,
     }
 
+
+async def get_weekly_scorecard(telegram_id: int) -> dict:
+    """Return this week's activity stats for a user.
+    Used by the Friday Scorecard digest.
+    Returns: jobs_viewed, jobs_saved, jobs_applied this week."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        jobs_viewed = await conn.fetchval(
+            """SELECT COUNT(*) FROM user_seen_jobs
+               WHERE telegram_id = $1 AND seen_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+        jobs_saved = await conn.fetchval(
+            """SELECT COUNT(*) FROM saved_jobs
+               WHERE telegram_id = $1 AND saved_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+        jobs_applied = await conn.fetchval(
+            """SELECT COUNT(*) FROM applications
+               WHERE telegram_id = $1 AND applied_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id
+        ) or 0
+
+    return {
+        "viewed":  int(jobs_viewed),
+        "saved":   int(jobs_saved),
+        "applied": int(jobs_applied),
+    }
+
+
+async def get_due_followups(telegram_id: int) -> list[dict]:
+    """Return all follow-up reminders due today for this user (sent=FALSE).
+    Used by the 6:30 PM evening consolidation digest."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT r.id, r.application_id,
+                   COALESCE(j.title,  mj.title)   AS title,
+                   COALESCE(j.company, mj.company) AS company,
+                   a.applied_at
+            FROM reminders r
+            JOIN applications a ON r.application_id = a.id
+            LEFT JOIN jobs j       ON a.job_id = j.id
+            LEFT JOIN manual_jobs mj ON a.job_id = mj.id
+            WHERE r.telegram_id = $1
+              AND r.sent = FALSE
+              AND r.remind_at <= NOW()
+            ORDER BY r.remind_at
+            """,
+            telegram_id
+        )
+        return [dict(r) for r in rows]
+
+
+async def mark_reminders_sent(reminder_ids: list[int]) -> None:
+    """Mark a list of reminder IDs as sent."""
+    if not reminder_ids:
+        return
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE reminders SET sent = TRUE WHERE id = ANY($1::int[])",
+            reminder_ids
+        )

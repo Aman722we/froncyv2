@@ -27,4 +27,4 @@ async def delete_user(telegram_id: int):
             logger.info("User reset successfully.")
 
 if __name__ == "__main__":
-    asyncio.run(delete_user(8894241314))
+    asyncio.run(delete_user(8619554269))

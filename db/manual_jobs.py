@@ -287,3 +287,30 @@ async def list_manual_jobs_admin() -> list[dict]:
             "SELECT id, title, company, job_type, posted_at, is_active FROM manual_jobs ORDER BY posted_at DESC LIMIT 50"
         )
         return [dict(row) for row in rows]
+
+
+async def count_new_jobs_since(since_timestamp) -> dict:
+    """Return count of new manual jobs added since `since_timestamp`.
+    Also breaks them down by location type (remote vs onsite).
+    Used for the 'Since your last visit' FOMO header in the daily feed."""
+    from datetime import timezone
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if since_timestamp is None:
+            return {"total": 0, "remote": 0}
+
+        # Ensure timezone-aware
+        if hasattr(since_timestamp, 'tzinfo') and since_timestamp.tzinfo is None:
+            since_timestamp = since_timestamp.replace(tzinfo=timezone.utc)
+
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE AND posted_at > $1",
+            since_timestamp
+        )
+        remote = await conn.fetchval(
+            """SELECT COUNT(*) FROM manual_jobs
+               WHERE is_active = TRUE AND posted_at > $1
+               AND LOWER(location) LIKE '%remote%'""",
+            since_timestamp
+        )
+        return {"total": int(total or 0), "remote": int(remote or 0)}

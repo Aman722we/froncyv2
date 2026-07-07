@@ -23,18 +23,20 @@ def get_mode_for_plan(plan: str) -> LLMMode:
     return LLMMode.FAST
 
 
-def _get_client(mode: LLMMode) -> tuple[AsyncOpenAI, str]:
+def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]:
     """Get the appropriate OpenAI client and model name for the mode."""
     if mode == LLMMode.QUALITY:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_70B,
+            timeout=timeout,
         )
         model = settings.NVIDIA_MODEL_70B
     else:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_8B,
+            timeout=timeout,
         )
         model = settings.NVIDIA_MODEL_8B
 
@@ -149,29 +151,32 @@ def get_mode_display(mode: LLMMode) -> str:
         return "✨ Quality Mode (Llama 3 70B)"
     return "⚡ Fast Mode (Llama 3 8B)"
 
-ATS_SYSTEM_PROMPT = """You are an expert Tech Recruiter and ATS analyzer specializing in frontend development roles for freshers and early-career developers.
-Compare the provided Resume against the Job Description thoughtfully.
 
-CRITICAL INSTRUCTIONS:
-- The primary audience is frontend freshers (0-1 year experience). Adjust scoring expectations accordingly — a strong portfolio of personal/college projects should be weighted similarly to professional experience.
-- Identify the core frontend nature of the role: Is it React-heavy? Vue? Vanilla JS? CSS/animation-focused? Accessibility-driven? Score based on alignment with the CORE frontend stack, not peripheral tools.
-- For fresher frontend roles, prioritize: HTML/CSS/JS proficiency, framework experience (React/Vue/Next.js), responsive design, and any shipped projects or live demos over enterprise-level tools.
-- Do NOT penalize heavily for missing backend, DevOps, or cloud skills unless the job explicitly requires them as must-haves.
-- Fresher vs 1-year experience gaps are MINOR. Flag them honestly but don’t make them the primary gap — skill alignment matters more.
-- Recognize proxy signals: Personal projects, GitHub repos, college assignments, hackathons, and freelance work all count as real frontend experience. Do not treat these as lesser.
-- Identify real gaps like missing core framework knowledge, no shipped UI, or very weak CSS/JS fundamentals.
-- IGNORE generic soft skills entirely like "leadership", "creative", "passionate".
+ATS_SYSTEM_PROMPT = """You are an expert Tech Recruiter and ATS system that compares a candidate's resume to a job description with strict, literal accuracy.
+
+## THE GOLDEN RULE — READ THIS FIRST:
+A skill can ONLY go into "matching_keywords" or "tech_found" if it is EXPLICITLY mentioned in the resume text.
+NEVER infer, assume, or guess. If Redux is not written in the resume, it is MISSING. Period.
+Knowing React does NOT mean the candidate knows Redux. Knowing JavaScript does NOT mean they know TypeScript.
+Every skill must have explicit textual evidence in the resume to be counted as matched.
+
+## INSTRUCTIONS:
+- Scan the JD for every concrete skill, library, tool, and technology it mentions.
+- For EACH one, check if it literally appears in the resume text. If yes -> tech_found. If no -> missing_hard_skills.
+- missing_hard_skills: specific named tools, libraries, frameworks the JD requires but are absent from the resume (e.g., Redux, Vite, D3.js, PWA, PostgreSQL).
+- missing_soft_tech_skills: methodological/conceptual gaps (e.g., CI/CD, Agile, performance optimization, accessibility practices).
+- matching_keywords: skills the resume has that are relevant to the JD — max 8 items.
+- Do NOT penalize for missing backend/DevOps skills unless the JD explicitly lists them as required.
+- IGNORE generic soft skills like "leadership", "creative", "passionate".
+- Be honest and precise. The user needs accurate gaps to improve their resume.
 
 You must return EXACTLY and ONLY valid JSON matching this schema:
 {
-  "score": <0-100 integer. For freshers, a strong project portfolio with the right stack should score 65-85. Penalize missing CORE frontend skills, not missing backend tools>,
-  "matching_keywords": [<list of max 8 highly relevant frontend skills or concepts the user HAS>],
-  "missing_keywords": [<list of max 8 real frontend technical gaps that actually matter for this role>],
-  "tech_found": [<list of exact frontend tools/libraries found in both resume and JD>],
-  "tech_missing": [<list of core frontend tools requested but absent. Don't list backend/DevOps tools unless explicitly required>],
-  "suggestions": [
-     <2-3 sentences of honest, actionable advice for a fresher frontend developer. Suggest specific things to build or add to their portfolio if there are gaps. Be encouraging but honest.>
-  ]
+  "matching_keywords": [<max 8 skills the resume explicitly has that match the JD>],
+  "missing_hard_skills": [<specific tools/libraries/frameworks in the JD but NOT found in the resume>],
+  "missing_soft_tech_skills": [<conceptual/methodological gaps e.g. CI/CD, Agile, accessibility>],
+  "tech_found": [<exact tools explicitly in BOTH the resume and JD>],
+  "suggestions": [<2-3 sentences of honest, specific, actionable advice. Name actual things to build or learn.>]
 }
 
 No markdown wrappers, no code blocks, just raw JSON."""
@@ -228,3 +233,291 @@ Analyze the match and provide the JSON:"""
                 raise
 
     raise RuntimeError("ATS generation failed after retries")
+
+
+RESUME_EXTRACTION_SYSTEM_PROMPT = """You are a faithful resume data-entry clerk. Your ONLY job is to lift information out of the resume text and place it into a JSON structure. You are NOT a writer, editor, or advisor.
+
+GOLDEN RULE — READ THIS FIRST:
+Copy bullet points WORD-FOR-WORD exactly as they appear in the resume. Do NOT rephrase, summarize, shorten, or "improve" them. Treat each bullet like a legal document you are transcribing. Changing even one word is a critical failure.
+
+CRITICAL RULES:
+- Return ONLY valid JSON, no markdown, no code blocks, just raw JSON.
+- CRITICAL JSON RULE: Ensure all internal double quotes inside strings are correctly escaped (e.g., \" ). Do NOT forget any commas between properties.
+- If a field is not present, use null or an empty array [].
+- For links: check both the text content AND any section labelled "[EMBEDDED LINKS FROM PDF]" at the bottom.
+- GitHub links usually contain "github.com". LinkedIn links contain "linkedin.com". Project live links contain vercel.app, netlify.app, or a custom domain.
+- Escape ALL special LaTeX characters in text: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}, ~ → \\textasciitilde{}, ^ → \\textasciicircum{}
+- Include ALL projects found — do NOT drop any project. Extract every single one.
+- For experience: include ALL jobs found.
+- CRITICAL: Do NOT duplicate entries. If a company/startup is extracted under "experience", DO NOT extract it again under "projects". Every entry must be unique to its category.
+
+Return JSON in EXACTLY this format:
+{
+  "name": "Full Name",
+  "headline": "Role Title (e.g. Frontend Developer)",
+  "email": "email@example.com",
+  "phone": "+91-XXXXXXXXXX or null",
+  "github": "https://github.com/username or null",
+  "linkedin": "https://linkedin.com/in/username or null",
+  "education": [
+    {
+      "institution": "University Name",
+      "degree": "Bachelor of Technology",
+      "years": "2021--2025"
+    }
+  ],
+  "experience": [
+    {
+      "company": "Company Name",
+      "title": "Job Title",
+      "duration": "Month Year -- Month Year",
+      "link": "https://live-link-or-null",
+      "bullets": ["Exact word-for-word copy of bullet 1.", "Exact word-for-word copy of bullet 2."]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Project Name",
+      "duration": "Month Year -- Present",
+      "live_link": "https://live-url-or-null",
+      "code_link": "https://github-url-or-null",
+      "bullets": ["Exact word-for-word copy of bullet 1.", "Exact word-for-word copy of bullet 2."]
+    }
+  ],
+  "skills": [
+    {"category": "Frontend Engineering", "items": "React, Next.js, TypeScript"},
+    {"category": "Backend & Tools", "items": "Node.js, PostgreSQL, Git"}
+  ],
+  "coding_profiles": [
+    {"platform": "LeetCode", "link": "https://leetcode.com/...", "stats": "400+ problems solved | max rating 1750"}
+  ]
+}"""
+
+
+async def extract_resume_json(resume_text: str) -> dict:
+    """
+    Parse raw resume text (including embedded URLs section) into a structured dict
+    ready to be injected into the LaTeX Jinja2 template.
+
+    Args:
+        resume_text: Full extracted text from PDF (including [EMBEDDED LINKS FROM PDF] section)
+
+    Returns:
+        Parsed resume dict, or raises RuntimeError on failure
+    """
+    import json as _json
+    # Resume extraction produces a large JSON output — give it a longer timeout
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
+
+    user_message = f"""Parse this resume into the exact JSON format specified:
+
+{resume_text[:4000]}
+
+Return the JSON now:"""
+
+    for attempt in range(2):
+        try:
+            logger.info(f"Extracting resume JSON with {model} (attempt {attempt + 1})")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": RESUME_EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.1,
+                max_tokens=3000,
+                top_p=1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+            result = result.strip()
+            
+            try:
+                data = _json.loads(result)
+            except _json.JSONDecodeError as je:
+                logger.warning(f"JSON syntax error: {je}. Attempting auto-repair with LLM...")
+                fast_client, fast_model = _get_client(LLMMode.FAST)
+                repair_prompt = f"The following JSON string is invalid. Fix the syntax errors (like missing commas or unescaped quotes) and return ONLY the valid raw JSON. Do not change the content.\n\n{result}"
+                repair_res = await fast_client.chat.completions.create(
+                    model=fast_model,
+                    messages=[{"role": "user", "content": repair_prompt}],
+                    temperature=0.0,
+                    max_tokens=3000
+                )
+                repaired = repair_res.choices[0].message.content.strip()
+                if repaired.startswith("```json"):
+                    repaired = repaired[7:]
+                if repaired.startswith("```"):
+                    repaired = repaired[3:]
+                if repaired.endswith("```"):
+                    repaired = repaired[:-3]
+                data = _json.loads(repaired.strip())
+                
+            logger.info(f"Resume JSON extracted: {len(data.get('projects', []))} projects, {len(data.get('experience', []))} jobs")
+            return data
+        except Exception as e:
+            logger.error(f"Resume extraction error (attempt {attempt + 1}): {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+            else:
+                raise RuntimeError(f"Failed to extract resume JSON: {e}")
+
+    raise RuntimeError("Resume extraction failed after retries")
+
+
+BULLET_OPTIMIZATION_SYSTEM_PROMPT = """You are an expert ATS resume optimizer. You will be given a list of bullet points from a candidate's resume, a job description, and a list of missing ATS keywords.
+
+Your task is to produce a DIFF PATCH — a tiny list of surgical replacements. You are NOT rewriting the entire resume.
+
+## STEP 1: Quality Audit
+Read all the bullets. Identify any bullets that are genuinely poorly written:
+- Poorly written = passive voice ("was responsible for"), vague ("worked on stuff"), or has zero technical detail.
+- Well-written = starts with a strong action verb, is specific, mentions technologies or metrics.
+- For EACH poorly written bullet: write a new, improved version that MUST preserve every single technical keyword, tool, and metric from the original. Just fix the grammar and structure.
+- For EACH well-written bullet: DO NOT touch it at all.
+
+## STEP 2: Keyword Weave (max 1-2 bullets total)
+From all bullets (original or improved), find the 1 or 2 most logically relevant ones to weave the missing ATS keywords into naturally.
+- Weave organically into the sentence structure. Do NOT tack on at the end.
+- GOOD: "Engineered a Next.js PWA using Zustand for state management, enforcing accessibility-driven development."
+- BAD: "Engineered an installable Next.js PWA, incorporating accessibility-driven development."
+
+## OUTPUT FORMAT — CRITICAL:
+Return ONLY a JSON object with a single key "replacements" containing an array.
+Each item in the array represents ONE bullet you changed (quality fix OR keyword weave).
+Only include bullets you actually changed. If a bullet was already perfect and needed no changes, do NOT include it.
+
+{
+  "replacements": [
+    {
+      "original": "The exact original bullet text, copied character-for-character.",
+      "improved": "The new improved bullet text with keywords woven in."
+    }
+  ]
+}
+
+If no changes are needed at all, return: {"replacements": []}
+No markdown. No code blocks. Raw JSON only."""
+
+
+async def optimize_resume_bullets(resume_json: dict, job_description: str, missing_keywords: list[str]) -> dict:
+    """
+    Uses a Diff-Patch approach to apply surgical improvements to resume bullets.
+    The AI only outputs a list of (original -> improved) replacements.
+    Python then applies those replacements, making it impossible for the AI to
+    accidentally delete or hallucinate content across the rest of the resume.
+
+    Args:
+        resume_json: Structured resume dict from extract_resume_json()
+        job_description: The target job description text
+        missing_keywords: List of missing soft-tech keywords from the ATS analyzer
+
+    Returns:
+        Updated resume_json with only the patched bullet points changed
+    """
+    import json as _json
+    import copy
+
+    # Collect ALL bullets with metadata so we can patch by exact text match
+    all_bullets: list[str] = []
+    for exp in resume_json.get("experience", []):
+        all_bullets.extend(exp.get("bullets", []))
+    for proj in resume_json.get("projects", []):
+        all_bullets.extend(proj.get("bullets", []))
+
+    if not all_bullets:
+        logger.warning("No bullets found in resume — skipping optimization")
+        return resume_json
+
+    keywords_str = ", ".join(missing_keywords) if missing_keywords else "general ATS optimization"
+
+    user_message = f"""Here are all the bullet points from the candidate's resume (one per line, numbered):
+
+{chr(10).join(f'{i+1}. {b}' for i, b in enumerate(all_bullets))}
+
+Job Description:
+{job_description[:1500]}
+
+Missing ATS keywords to weave in: {keywords_str}
+
+Apply your two-step process and return the diff patch JSON:"""
+
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
+
+    for attempt in range(2):
+        try:
+            logger.info(f"Generating bullet diff-patch with {model} (attempt {attempt + 1})")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": BULLET_OPTIMIZATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.3,
+                max_tokens=1500,  # Much smaller — we only need the patch, not the full resume
+                top_p=1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+
+            patch = _json.loads(result.strip())
+            replacements = patch.get("replacements", [])
+
+            if not replacements:
+                logger.info("AI returned empty diff-patch — resume bullets are already optimal")
+                return resume_json
+
+            # Build a lookup map: original_text -> improved_text
+            patch_map: dict[str, str] = {}
+            for r in replacements:
+                orig = r.get("original", "").strip()
+                improved = r.get("improved", "").strip()
+                if orig and improved and orig != improved:
+                    patch_map[orig] = improved
+
+            logger.info(f"Applying {len(patch_map)} bullet patch(es) via Python — rest of resume untouched")
+
+            # Apply the patch: Python does a simple string match-and-replace
+            # The AI cannot touch anything outside the patch_map
+            final_json = copy.deepcopy(resume_json)
+
+            def apply_patch_to_section(entries: list) -> list:
+                for entry in entries:
+                    new_bullets = []
+                    for bullet in entry.get("bullets", []):
+                        # Try exact match first
+                        if bullet in patch_map:
+                            new_bullets.append(patch_map[bullet])
+                        else:
+                            # Try trimmed match as a fallback
+                            trimmed = bullet.strip()
+                            new_bullets.append(patch_map.get(trimmed, bullet))
+                    entry["bullets"] = new_bullets
+                return entries
+
+            final_json["experience"] = apply_patch_to_section(final_json.get("experience", []))
+            final_json["projects"] = apply_patch_to_section(final_json.get("projects", []))
+
+            logger.info("Diff-patch applied successfully — resume integrity preserved")
+            return final_json
+
+        except Exception as e:
+            logger.error(f"Bullet diff-patch error (attempt {attempt + 1}): {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+            else:
+                logger.warning("Returning original resume JSON as fallback")
+                return resume_json
+
+    return resume_json
+

@@ -268,15 +268,20 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     f_exp = filters.get("exp", "any")
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
-    f_role = filters.get("role", "any")
+    f_loc = filters.get("loc", "any")
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("── Experience ──", callback_data="ignore")],
         [
-            InlineKeyboardButton("✅ Fresher (0)" if f_exp == "0" else "Fresher (0)", callback_data="filter_exp_0"),
-            InlineKeyboardButton("✅ 1-2 Yrs" if f_exp == "1" else "1-2 Yrs", callback_data="filter_exp_1"),
-            InlineKeyboardButton("✅ 3+ Yrs" if f_exp == "3" else "3+ Yrs", callback_data="filter_exp_3"),
+            InlineKeyboardButton("✅ 0 YOE" if f_exp == "0" else "0 YOE", callback_data="filter_exp_0"),
+            InlineKeyboardButton("✅ 1 YOE" if f_exp == "1" else "1 YOE", callback_data="filter_exp_1"),
             InlineKeyboardButton("✅ Any" if f_exp == "any" else "Any", callback_data="filter_exp_any"),
+        ],
+        [InlineKeyboardButton("── Location ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ Remote" if f_loc == "remote" else "Remote", callback_data="filter_loc_remote"),
+            InlineKeyboardButton("✅ Onsite" if f_loc == "onsite" else "Onsite", callback_data="filter_loc_onsite"),
+            InlineKeyboardButton("✅ Any" if f_loc == "any" else "Any", callback_data="filter_loc_any"),
         ],
         [InlineKeyboardButton("── Recency ──", callback_data="ignore")],
         [
@@ -290,13 +295,6 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
             InlineKeyboardButton("✅ Medium (>40%)" if f_match == "med" else "Medium (>40%)", callback_data="filter_match_med"),
             InlineKeyboardButton("✅ Any" if f_match == "any" else "Any", callback_data="filter_match_any"),
         ],
-        [InlineKeyboardButton("── Role ──", callback_data="ignore")],
-        [
-            InlineKeyboardButton("✅ Frontend" if f_role == "frontend" else "Frontend", callback_data="filter_role_frontend"),
-            # FUTURE (multi-role): InlineKeyboardButton("✅ Backend" if f_role == "backend" else "Backend", callback_data="filter_role_backend"),
-            # FUTURE (multi-role): InlineKeyboardButton("✅ Fullstack" if f_role == "fullstack" else "Fullstack", callback_data="filter_role_fullstack"),
-            InlineKeyboardButton("✅ Any" if f_role == "any" else "Any", callback_data="filter_role_any"),
-        ],
         [
             InlineKeyboardButton("🗑 Clear", callback_data="filter_clear"),
             InlineKeyboardButton("▶️ Apply Filters", callback_data="menu_jobs_filtered")
@@ -305,23 +303,19 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
 
 
 def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None) -> InlineKeyboardMarkup:
-    """Actions for a single job detail view."""
+    """Actions for a single job detail view.
+    Layout:
+        Row 1: [📊 ATS Analyze]  [✍️ Cover Letter]
+        Row 2: [✅ Mark as Applied]  [⏳ Remind Me]
+        Row 3: [🔙 Back]
+    """
     is_manual = job.get("is_manual", False)
     prefix = "manual" if is_manual else "job"
     cl_prefix = "manual_cl" if is_manual else "cl"
     ats_prefix = "manual_ats" if is_manual else "ats"
-
-    top_row = [
-        InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-    ]
-    if is_manual:
-        top_row.append(InlineKeyboardButton("💾 Save", callback_data=f"manual_job_save_{job['id']}"))
-    else:
-        top_row.append(InlineKeyboardButton("💾 Save", callback_data=f"job_save_{job['id']}"))
+    remind_callback = f"remind_manual_{job['id']}" if is_manual else f"remind_job_{job['id']}"
 
     # Build the apply URL: use redirector in production, raw URL in dev
-    # We parse out just the scheme+netloc (domain) from WEBHOOK_URL to avoid
-    # accidentally including any path like /telegram-webhook in the base.
     raw_url = job.get("url", "https://t.me/FroncyJobsBot")
     webhook_raw = settings.WEBHOOK_URL or ""
     if webhook_raw:
@@ -334,38 +328,49 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     else:
         apply_url = raw_url
 
-    buttons = [
-        top_row,
-        [
-            InlineKeyboardButton("✅ Mark as Applied", callback_data=f"applied_{job['id']}"),
-            InlineKeyboardButton("🔗 Open Link", url=apply_url),
-        ]
-    ]
+    buttons = []
 
+    # Row 1: ATS (pro) + Cover Letter
     if plan in ("pro", "trial"):
         buttons.append([
-            InlineKeyboardButton("📊 ATS Analyze This Job", callback_data=f"{ats_prefix}_job_{job['id']}"),
-        ])
-    elif score >= 0:
-        if score >= 70:
-            buttons.insert(0, [InlineKeyboardButton("🔍 Unlock Match Breakdown → Go Pro", callback_data="menu_upgrade")])
-        elif score < 70:
-            buttons.insert(0, [InlineKeyboardButton("🔍 See What's Missing → Go Pro", callback_data="menu_upgrade")])
-
-    if from_saved:
-        buttons.append([
-            InlineKeyboardButton("🔙 Back to Saved Jobs", callback_data="menu_saved")
-        ])
-    elif from_daily:
-        buttons.append([
-            InlineKeyboardButton("🔙 Back to Daily Feed", callback_data="menu_daily")
+            InlineKeyboardButton("📊 ATS Analyze", callback_data=f"{ats_prefix}_job_{job['id']}"),
+            InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
     else:
+        # Free users: show upsell hint on ATS, keep CL
         buttons.append([
-            InlineKeyboardButton("🔙 Back to Jobs", callback_data="menu_jobs")
+            InlineKeyboardButton("🔒 ATS Analyze (Pro)", callback_data="menu_upgrade"),
+            InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
+        # Optionally show match score upsell
+        if score >= 70:
+            buttons.insert(0, [InlineKeyboardButton("🔍 Unlock Match Breakdown → Go Pro", callback_data="menu_upgrade")])
+        elif 0 <= score < 70:
+            buttons.insert(0, [InlineKeyboardButton("🔍 See What's Missing → Go Pro", callback_data="menu_upgrade")])
+
+    # Row 2: Mark as Applied + Remind Me (replaces old Save button)
+    is_manual = job.get("is_manual", False)
+    applied_cb = f"manual_applied_{job['id']}" if is_manual else f"applied_{job['id']}"
+    buttons.append([
+        InlineKeyboardButton("✅ Mark as Applied", callback_data=applied_cb),
+        InlineKeyboardButton("⏳ Remind Me", callback_data=remind_callback),
+    ])
+
+    # Row 3: Open Link (URL button, no callback_data)
+    buttons.append([
+        InlineKeyboardButton("🔗 Open Link", url=apply_url),
+    ])
+
+    # Row 4: Back navigation
+    if from_saved:
+        buttons.append([InlineKeyboardButton("🔙 Back to Saved Jobs", callback_data="menu_saved")])
+    elif from_daily:
+        buttons.append([InlineKeyboardButton("🔙 Back to Daily Feed", callback_data="menu_daily")])
+    else:
+        buttons.append([InlineKeyboardButton("🔙 Back to Jobs", callback_data="menu_jobs")])
 
     return InlineKeyboardMarkup(buttons)
+
 
 
 # ──────────────────────────────────────────────
@@ -378,7 +383,7 @@ def cover_letter_result_keyboard(job_id: int, is_manual: bool = False) -> Inline
     back_prefix = "manual_view" if is_manual else "job_view"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 Copy Text", callback_data=f"cl_copy_{job_id}"),
+            InlineKeyboardButton("📋 Copy Text", callback_data=f"{cl_prefix}_copy_{job_id}"),
             InlineKeyboardButton("🔄 Regenerate", callback_data=f"{cl_prefix}_regen_{job_id}"),
         ],
         [

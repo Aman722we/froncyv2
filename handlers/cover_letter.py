@@ -104,28 +104,35 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     jd = f"{job.get('title')} at {job.get('company')} - {job.get('location')}. Skills: {', '.join(job.get('skills', []))}"
 
     # ── Animated progress loader ──────────────────────────────────────────
+    back_cb = "explore_loading_jobs"
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    loading_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔙 Explore Other Jobs", callback_data=back_cb)
+    ]])
+    
+    # Reset navigation state
+    context.user_data["navigated_away_from_loading"] = False
+
     # Quality (70B) takes ~60-70s; Fast (8B) takes ~3-5s.
-    # We fire the generation task immediately and update the message every
-    # STAGE_INTERVAL seconds so the user always sees forward progress.
     if mode == LLMMode.QUALITY:
         stages = [
-            "🔍 *Analyzing job requirements\.\.\.*",
-            "📄 *Scanning your resume skills\.\.\.*",
-            "🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_",
-            "✨ *Polishing tone and structure\.\.\.*",
-            "⚡ *Optimizing for ATS keywords\.\.\.*",
-            "⏳ *Almost done\!* The AI is finishing up\.\.\.",
+            r"🔍 *Analyzing job requirements\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"📄 *Scanning your resume skills\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"🧠 *Generating your cover letter\.\.\.*" + "\n" + r"_\(Quality AI · takes ~60 seconds\)_" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"✨ *Polishing tone and structure\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"⚡ *Optimizing for ATS keywords\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"⏳ *Almost done\!* The AI is finishing up\.\.\." + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
         ]
         stage_interval = 10  # seconds between each stage
     else:
         stages = [
-            "⚡ *Generating your cover letter\.\.\.*",
-            "✨ *Polishing up\.\.\.*",
+            r"⚡ *Generating your cover letter\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"✨ *Polishing up\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
         ]
         stage_interval = 6
 
     # Show first stage immediately
-    await query.edit_message_text(stages[0], parse_mode="MarkdownV2")
+    await query.edit_message_text(stages[0], parse_mode="MarkdownV2", reply_markup=loading_kb)
 
     # Fire generation in the background
     gen_task = asyncio.create_task(
@@ -140,10 +147,11 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         except asyncio.TimeoutError:
             if gen_task.done():
                 break  # Done between intervals (exception case)
-            try:
-                await query.edit_message_text(stage_msg, parse_mode="MarkdownV2")
-            except Exception:
-                pass  # If Telegram rate-limits the edit, just skip it
+            if not context.user_data.get("navigated_away_from_loading"):
+                try:
+                    await query.edit_message_text(stage_msg, parse_mode="MarkdownV2", reply_markup=loading_kb)
+                except Exception:
+                    pass  # If Telegram rate-limits the edit, just skip it
 
     # If we exhausted all stages but task still running, wait unconditionally
     if letter is None:
@@ -173,17 +181,39 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         footer = f"_\\({remaining} of 10 remaining today\\)_"
 
     # Send the final result
-    await query.edit_message_text(
-        messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter, footer),
-        reply_markup=keyboards.cover_letter_result_keyboard(job_id, is_manual=is_manual),
-        parse_mode="MarkdownV2"
-    )
+    final_text = messages.cover_letter_result(job.get("title", ""), job.get("company", ""), letter, footer)
+    final_kb = keyboards.cover_letter_result_keyboard(job_id, is_manual=is_manual)
+    
+    if context.user_data.get("navigated_away_from_loading"):
+        # Edit the loading message to say it's done
+        try:
+            await query.edit_message_text(f"✅ Your Cover Letter for {job.get('company', 'Company')} is ready! Check the new message below.")
+        except Exception:
+            pass
+        # Send a new message so the user gets notified
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=final_text,
+            reply_markup=final_kb,
+            parse_mode="MarkdownV2"
+        )
+    else:
+        # Just replace the loading message
+        await query.edit_message_text(
+            final_text,
+            reply_markup=final_kb,
+            parse_mode="MarkdownV2"
+        )
 
 async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Since Telegram bots can't easily copy to the user's clipboard,
     we just reply with the raw text so they can easily copy it on mobile."""
     query = update.callback_query
     await query.answer("Sending raw text for copying...")
+
+    is_manual = query.data.startswith("manual_cl_copy_")
+    job_id = int(query.data.split("_")[-1])
+    back_prefix = "manual_view" if is_manual else "job_view"
 
     user_id = update.effective_user.id
 
@@ -212,7 +242,11 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if letter_body:
             # Log copy intent — best proxy for "did they actually use this letter?"
             await log_ai_usage(user_id, "cover_letter_copied")
-            await query.message.reply_text(letter_body)
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"{back_prefix}_{job_id}")]
+            ])
+            await query.message.reply_text(letter_body, reply_markup=kb)
             return
 
     await query.message.reply_text("Error extracting text.")

@@ -18,7 +18,15 @@ from utils.helpers import get_effective_plan
 async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /daily_feed command or 'menu_daily' callback."""
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    
+    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent, count_new_jobs_since
+    
+    # Fire all independent queries in parallel
+    user, seen_jobs, total_active_jobs = await asyncio.gather(
+        get_user(user_id),
+        get_seen_jobs(user_id),
+        count_manual_jobs(),
+    )
     
     if not user or not user.get("is_onboarded"):
         msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
@@ -47,23 +55,51 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan == "free" else 12
-    jobs = await get_personalized_manual_jobs(
-        user_dict, 
-        seen_job_ids=seen_jobs, 
-        limit=feed_limit,
-        exclude_sent_within_days=3,
-        max_age_days=10
+
+    # Fetch jobs + freshness count in parallel
+    jobs, new_jobs = await asyncio.gather(
+        get_personalized_manual_jobs(
+            user_dict,
+            seen_job_ids=seen_jobs,
+            limit=feed_limit,
+            exclude_sent_within_days=3,
+            max_age_days=10
+        ),
+        count_new_jobs_since(user.get("jobs_reset_at")),
     )
-    total_active_jobs = await count_manual_jobs()
-    
+
     if jobs:
         await log_jobs_sent(user_id, [j["id"] for j in jobs])
-    
+
+    # Build optional skill tip (Phase 4) — compute from last 20 matched jobs
+    skill_tip = None
+    try:
+        from db.manual_jobs import get_manual_jobs
+        from utils.messages import compute_manual_job_match
+        import random
+        # Only show the tip ~30% of the time to avoid repetition
+        if random.random() < 0.30:
+            sample_jobs = await get_manual_jobs(limit=20)
+            missing_skills: dict[str, int] = {}
+            user_skills_lower = {s.lower() for s in (user_dict.get("skills") or [])}
+            for job in sample_jobs:
+                job_skills = [s.lower() for s in (job.get("skills") or [])]
+                for sk in job_skills:
+                    if sk not in user_skills_lower:
+                        missing_skills[sk] = missing_skills.get(sk, 0) + 1
+            if missing_skills:
+                top_skill, count = max(missing_skills.items(), key=lambda x: x[1])
+                pct = round((count / len(sample_jobs)) * 100)
+                if pct >= 30:  # only show if meaningful
+                    skill_tip = f"{pct}% of your matched jobs require {top_skill.title()}. Adding it could unlock more matches!"
+    except Exception:
+        skill_tip = None  # non-critical, never crash the feed
+
     if not jobs:
         msg = messages.no_jobs_found()
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
     else:
-        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict)
+        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs, skill_tip=skill_tip)
         kb = keyboards.daily_feed_keyboard(jobs, plan)
 
     if update.callback_query:
@@ -154,9 +190,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     f_exp = filters.get("exp", "any")
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
-    
-    # Use explicit filter if set, otherwise fallback to user's role preference
-    f_role = filters.get("role", user.get("role_pref", "any")).lower()
+    f_loc = filters.get("loc", "any")
     
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -166,10 +200,15 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         job_exp = job.get("min_yoe", 0)
         if f_exp != "any":
             if f_exp == "0" and job_exp > 0: continue
-            elif f_exp == "1" and not (1 <= job_exp <= 2): continue
-            elif f_exp == "3" and job_exp < 3: continue
+            elif f_exp == "1" and job_exp != 1: continue
             
-        # 2. Recency Filter
+        # 2. Location Filter
+        if f_loc != "any":
+            job_loc = (job.get("location") or "remote").lower()
+            if f_loc == "remote" and "remote" not in job_loc: continue
+            if f_loc == "onsite" and "remote" in job_loc: continue
+
+        # 3. Recency Filter
         if f_time != "any":
             posted = job.get("posted_at")
             if posted:
@@ -187,19 +226,14 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if f_match == "high" and score < 70: continue
             elif f_match == "med" and score < 40: continue
             
-        # 4. Role Filter
-        if f_role != "any" and f_role != "fullstack":
-            title_lower = job.get("title", "").lower()
-            if f_role == "frontend" and not any(kw in title_lower for kw in ["frontend", "front-end", "front end", "react", "angular", "vue"]):
-                continue
-            elif f_role == "backend" and not any(kw in title_lower for kw in ["backend", "back-end", "back end", "node", "python", "java", "django"]):
-                continue
-            
+
         filtered_jobs.append(job)
         
     total_filtered = len(filtered_jobs)
     page_jobs = filtered_jobs[offset:offset+display_count]
 
+    force_new = context.user_data.pop("force_new_message", False)
+    
     if not page_jobs:
         if page > 1: msg = messages.no_jobs_found()
         else: msg = messages.no_jobs_found()
@@ -207,21 +241,29 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
             keyboards.InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
         ]])
-        if update.callback_query:
+        if update.callback_query and not force_new:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         else:
-            await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
+            if update.callback_query:
+                await update.callback_query.answer()
+                await context.bot.send_message(chat_id=update.callback_query.message.chat_id, text=msg, reply_markup=back_kb, parse_mode="MarkdownV2")
+            else:
+                await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
     msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user)
     kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
 
-    if update.callback_query:
+    if update.callback_query and not force_new:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
     else:
-        await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        if update.callback_query:
+            await update.callback_query.answer()
+            await context.bot.send_message(chat_id=update.callback_query.message.chat_id, text=msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        else:
+            await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
     # Only increment counter on first view of the day (not on re-views)
     if jobs_seen_today == 0 and page == 1:
@@ -282,7 +324,17 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     msg = messages.job_detail_message(job, plan=plan, user=user)
     kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id)
 
-    await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
+    if query.message and query.message.document:
+        await query.edit_message_reply_markup(reply_markup=None)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=msg,
+            reply_markup=kb,
+            parse_mode="MarkdownV2",
+            disable_web_page_preview=True
+        )
+    else:
+        await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
 
 async def save_job_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -380,3 +432,33 @@ async def handle_filter_toggle(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
     except Exception:
         pass # message not modified
+
+
+async def remind_me_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle ⏳ Remind Me for a regular (scraped) job.
+    Saves the job and confirms with a toast. The scheduler will nudge the user at 6:30 PM."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    # callback_data format: remind_job_<job_id>
+    job_id = int(query.data.split("_")[-1])
+
+    saved = await save_job(user_id, job_id)
+    if saved:
+        await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
+    else:
+        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)
+
+
+async def remind_me_manual_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle ⏳ Remind Me for a manual (admin-curated) job.
+    Saves the job and confirms with a toast. The scheduler will nudge the user at 6:30 PM."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    # callback_data format: remind_manual_<job_id>
+    job_id = int(query.data.split("_")[-1])
+
+    saved = await save_manual_job(user_id, job_id)
+    if saved:
+        await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
+    else:
+        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)

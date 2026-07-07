@@ -41,22 +41,28 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         def _sanitize(val):
             return str(val).replace("~", "").replace("`", "")
 
-        score = data.get("score", 0)
-        matching = [_sanitize(k) for k in data.get("matching_keywords", [])]
-        missing = [_sanitize(k) for k in data.get("missing_keywords", [])]
-        tech_found = [_sanitize(k) for k in data.get("tech_found", [])]
-        tech_missing = [_sanitize(k) for k in data.get("tech_missing", [])]
-        suggestions = [_sanitize(s) for s in data.get("suggestions", [])]
+        matching = [_sanitize(k) for k in (data.get("matching_keywords") or [])]
+        missing_hard = [_sanitize(k) for k in (data.get("missing_hard_skills") or [])]
+        missing_soft = [_sanitize(k) for k in (data.get("missing_soft_tech_skills") or [])]
+        tech_found = [_sanitize(k) for k in (data.get("tech_found") or [])]
+        suggestions = [_sanitize(s) for s in (data.get("suggestions") or [])]
+
+        total_tech = len(tech_found) + len(missing_hard) + len(missing_soft)
+        if total_tech > 0:
+            score = int((len(tech_found) / total_tech) * 100)
+        else:
+            score = 0
 
         result = {
             "score": score,
             "matching_keywords": matching,
-            "missing_keywords": missing,
+            "missing_hard_skills": missing_hard,
+            "missing_soft_tech_skills": missing_soft,
             "suggestions": suggestions,
-            "tech_match": {"found": tech_found, "missing": tech_missing},
+            "tech_found": tech_found,
         }
         
-        logger.info(f"LLM ATS Analysis: score={score}%, {len(matching)} matches, {len(missing)} gaps")
+        logger.info(f"LLM ATS Analysis: score={score}%, {len(matching)} matches, {len(missing_hard) + len(missing_soft)} gaps")
         return result
 
     except Exception as e:
@@ -64,7 +70,8 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         return {
             "score": 0,
             "matching_keywords": [],
-            "missing_keywords": [],
+            "missing_hard_skills": [],
+            "missing_soft_tech_skills": [],
             "suggestions": ["⚠️ Error analyzing resume. Please parse your resume again."],
-            "tech_match": {"found": [], "missing": []},
+            "tech_found": [],
         }

@@ -11,9 +11,9 @@ from utils.error_alert import send_error_alert
 
 from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu
-from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command
+from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive
+from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, broadcast_command
+from handlers.admin import get_addjob_handler, send_message_command
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
     analytics_command, analytics_page_callback, users_command, user_detail_command, users_page_callback,
@@ -85,19 +85,41 @@ def build_bot() -> Application:
     """Build and configure the Telegram bot application."""
     logger.info("Building Telegram bot application...")
     
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    from telegram.request import HTTPXRequest
+    
+    # Production-grade HTTP connection pool for Telegram API calls.
+    # Default connection_pool_size=1 is a MASSIVE bottleneck — every API call
+    # (query.answer, edit_message, send_message) queues behind a single TCP connection.
+    # Bumping to 100 allows concurrent API calls and eliminates queueing delays.
+    telegram_request = HTTPXRequest(
+        connection_pool_size=100,
+        pool_timeout=5.0,
+        connect_timeout=5.0,
+        read_timeout=10.0,
+    )
+    
+    builder = (
+        Application.builder()
+        .token(settings.TELEGRAM_BOT_TOKEN)
+        .request(telegram_request)
+        .get_updates_request(telegram_request)
+    )
+    
+    # In production we handle webhooks via FastAPI, so the built-in Updater
+    # (designed for polling) is dead weight. Disabling it saves memory and
+    # removes overhead from process_update().
+    if settings.ENVIRONMENT == "production":
+        builder = builder.updater(None)
+    
+    app = builder.build()
 
     # ── Global Pre-Processor (runs before all other handlers, group=-1) ──
     async def _global_pre_processor(update: Update, context) -> None:
         """Instantly stop loading spinners, and log activity in the background."""
         import asyncio
         
-        # Instantly kill the 3-6 second loading spinner on ALL buttons globally
         if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except Exception:
-                pass
+            pass
                 
         # Run DB tracking in the background so it doesn't block the next handler
         if update.effective_user:
@@ -128,6 +150,8 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))
     app.add_handler(CommandHandler("deletedusers", deleted_users_command))
+    app.add_handler(CommandHandler("send",      send_message_command))
+
     app.add_handler(CallbackQueryHandler(users_page_callback, pattern="^adm_users_\\d+$"))
     app.add_handler(CallbackQueryHandler(deleted_users_page_callback, pattern="^adm_delusers_\\d+$"))
     app.add_handler(CallbackQueryHandler(analytics_page_callback, pattern="^analytics_page_\\d+$"))
@@ -155,9 +179,11 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(jobs_filter_menu, pattern="^jobs_filter_menu$"))
     app.add_handler(CallbackQueryHandler(handle_filter_toggle, pattern="^filter_"))
     app.add_handler(CallbackQueryHandler(view_jobs, pattern="^menu_jobs_filtered$"))
+    app.add_handler(CallbackQueryHandler(remind_me_callback, pattern="^remind_job_"))
+    app.add_handler(CallbackQueryHandler(remind_me_manual_callback, pattern="^remind_manual_"))
 
     # Cover Letter Callbacks
-    app.add_handler(CallbackQueryHandler(copy_cover_letter, pattern="^cl_copy_"))
+    app.add_handler(CallbackQueryHandler(copy_cover_letter, pattern="^(manual_)?cl_copy_"))
     app.add_handler(CallbackQueryHandler(generate_cover_letter_callback, pattern="^(manual_)?cl_(generate|regen|tone)_"))
 
 
@@ -166,6 +192,9 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(replace_resume_prompt, pattern="^resume_upload$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
+    app.add_handler(CallbackQueryHandler(generate_ats_pdf_callback, pattern="^gen_ats_pdf_"))
+    app.add_handler(CallbackQueryHandler(get_latex_code_callback, pattern="^get_latex_"))
+    app.add_handler(CallbackQueryHandler(explore_loading_jobs_callback, pattern="^explore_loading_jobs$"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     async def text_router(update, context):
         if context.user_data.get("awaiting_settings_custom_skill"):
@@ -176,7 +205,7 @@ def build_bot() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Tracker & Analytics
-    app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^applied_"))
+    app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^(manual_)?applied_"))
     app.add_handler(CallbackQueryHandler(tracker_dashboard, pattern="^tracker"))
     app.add_handler(CallbackQueryHandler(manage_app_callback, pattern="^manage_app_"))
     app.add_handler(CallbackQueryHandler(update_app_status_callback, pattern="^updapp_"))

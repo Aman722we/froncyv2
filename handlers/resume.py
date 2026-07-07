@@ -1,6 +1,7 @@
 """
 Resume and ATS Analyzer handlers.
 """
+import io
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
 from loguru import logger
@@ -153,6 +154,9 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
             ])
         await update.message.reply_text(msg, parse_mode="MarkdownV2", reply_markup=result_kb)
+        # Store JD in context for the PDF generator (manual ATS flow)
+        context.user_data["last_ats_jd"] = jd_text if 'jd_text' in dir() else update.message.text
+        context.user_data["last_ats_result"] = result
 
     except Exception as e:
         logger.exception(f"ATS analysis failed: {e}")
@@ -279,19 +283,30 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
         await log_ai_usage(user_id, "ats_check")
 
         from utils.keyboards import InlineKeyboardMarkup as KB, InlineKeyboardButton as IKB
-        
+
         # Correct 'Back to Job' callback depending on scraped vs manual
         back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+        pdf_cb = f"gen_ats_pdf_manual_{job_id}" if is_manual else f"gen_ats_pdf_{job_id}"
 
-        # Add upsell only for free users
+        # Store ATS result and JD in context for the PDF generator
+        context.user_data["last_ats_jd"] = jd_text
+        context.user_data["last_ats_result"] = result
+        context.user_data["last_ats_job_id"] = job_id
+        context.user_data["last_ats_is_manual"] = is_manual
+
+        # Add upsell only for free users; always add the PDF generator button
         if plan not in PRO_PLANS:
             back_kb = KB([
+                [IKB("✨ Create ATS-Optimized Resume", callback_data=pdf_cb)],
                 [IKB("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
                 [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
-            back_kb = KB([[IKB("🔙 Back to Job", callback_data=back_cb)]])
-            
+            back_kb = KB([
+                [IKB("✨ Create ATS-Optimized Resume", callback_data=pdf_cb)],
+                [IKB("🔙 Back to Job", callback_data=back_cb)]
+            ])
+
         await query.edit_message_text(msg, parse_mode="MarkdownV2", reply_markup=back_kb)
     except Exception as e:
         logger.exception(f"ATS job analysis failed: {e}")
@@ -299,6 +314,234 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             "⚠️ Analysis failed\\. Please try again\\.",
             parse_mode="MarkdownV2"
         )
+
+
+async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle '✨ Apply these changes — Generate PDF' button from the ATS result screen.
+    Extracts resume JSON, optimizes bullets with the job's missing keywords,
+    compiles a PDF via LaTeX, and sends it directly to the user in Telegram.
+    """
+    query = update.callback_query
+    await query.answer("🚀 Starting PDF generation...")
+
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+
+    if not user or not user.get("resume_text"):
+        await query.message.reply_text(
+            "📄 Please upload your resume first with /resume\\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # Parse job_id from callback: gen_ats_pdf_<job_id> or gen_ats_pdf_manual_<job_id>
+    data = query.data  # e.g. "gen_ats_pdf_42" or "gen_ats_pdf_manual_42"
+    is_manual = "manual" in data
+    job_id = int(data.split("_")[-1])
+
+    # Retrieve cached ATS result and JD from context
+    ats_result = context.user_data.get("last_ats_result", {})
+    jd_text = context.user_data.get("last_ats_jd", "")
+    
+    # CRITICAL: We only pass soft technical skills to the optimizer to prevent hallucinating 
+    # entirely new programming languages or frameworks that the candidate doesn't know.
+    missing_keywords = ats_result.get("missing_soft_tech_skills", [])
+
+    if is_manual:
+        job = await get_manual_job_by_id(job_id)
+    else:
+        job = await get_job_by_id(job_id)
+        
+    if not job:
+        job = {}
+
+    # If no cached JD, fall back to fetching the job from DB
+    if not jd_text and job:
+        jd_text = (
+            f"Job Title: {job.get('title', '')}\n"
+            f"Company: {job.get('company', '')}\n"
+            f"Skills: {', '.join(job.get('skills', []))}"
+        )
+
+    # ── Stage 1: Extract resume JSON ──────────────────────────────────────
+    back_cb = f"explore_loading_jobs"
+    loading_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔙 Explore Other Jobs", callback_data=back_cb)
+    ]])
+    
+    # Reset navigation state
+    context.user_data["navigated_away_from_loading"] = False
+    
+    async def update_loading_msg(step_text: str):
+        if not context.user_data.get("navigated_away_from_loading"):
+            try:
+                full_text = (
+                    f"⚙️ *Generating your ATS Resume\.\.\.*\n\n{step_text}\n\n"
+                    r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
+                    r"You don't need to wait here, feel free to explore other jobs, and we'll send the PDF here when it's ready\!_"
+                )
+                await query.edit_message_text(
+                    full_text,
+                    reply_markup=loading_kb,
+                    parse_mode="MarkdownV2"
+                )
+            except Exception:
+                pass
+
+    await update_loading_msg(r"✅ *Step 1 of 3: Parsing your resume profile\.\.\.*")
+
+    from services.llm_service import extract_resume_json, optimize_resume_bullets
+    from services.resume_builder import compile_resume_pdf
+
+    try:
+        resume_json = await extract_resume_json(user["resume_text"])
+    except Exception as e:
+        logger.error(f"Resume JSON extraction failed: {e}")
+        await query.edit_message_text(
+            r"⚠️ Couldn't parse your resume\. Please try re\-uploading your PDF with /resume\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # Check for missing critical fields and ask user
+    missing_fields = []
+    if not resume_json.get("email"):
+        missing_fields.append("email address")
+    if not resume_json.get("name"):
+        missing_fields.append("full name")
+
+    if missing_fields:
+        fields_str = " and ".join(missing_fields)
+        context.user_data["resume_json_draft"] = resume_json
+        context.user_data["pdf_jd_text"] = jd_text
+        context.user_data["pdf_missing_keywords"] = missing_keywords
+        context.user_data["pdf_job_id"] = job_id
+        context.user_data["pdf_is_manual"] = is_manual
+        await query.edit_message_text(
+            rf"👋 Your resume is missing your {fields_str}\."
+            r" Please reply with: `Your Name | your@email.com`",
+            parse_mode="MarkdownV2"
+        )
+        context.user_data["waiting_for_resume_details"] = True
+        return
+
+    # ── Stage 2: Optimize bullets ─────────────────────────────────────────
+    await update_loading_msg(r"🎯 *Step 2 of 3: Optimizing keywords for this job\.\.\.*")
+
+    try:
+        optimized_json = await optimize_resume_bullets(resume_json, jd_text, missing_keywords)
+    except Exception as e:
+        logger.warning(f"Bullet optimization failed, using original: {e}")
+        optimized_json = resume_json  # Graceful fallback
+
+    # ── Stage 3: Compile PDF ──────────────────────────────────────────────
+    await update_loading_msg(r"📄 *Step 3 of 3: Compiling your ATS PDF\.\.\.*\n_This takes about 15 seconds\._")
+    
+    # Save optimized json for LaTeX export
+    context.user_data["last_optimized_json"] = optimized_json
+    context.user_data["pdf_job_id"] = job_id
+    context.user_data["pdf_is_manual"] = is_manual
+
+    try:
+        pdf_bytes = await compile_resume_pdf(optimized_json)
+    except Exception as e:
+        logger.error(f"PDF compilation failed: {e}")
+        await query.edit_message_text(
+            "⚠️ PDF generation failed\\. Our team has been notified\\. Please try again in a few minutes\\.",
+            parse_mode="MarkdownV2"
+        )
+        return
+
+    # ── Send PDF ──────────────────────────────────────────────────────────
+    name_slug = resume_json.get("name", "resume").replace(" ", "_")
+    company_name = job.get("company", "Company").replace(" ", "_").replace("/", "_")
+    filename = f"{name_slug}_ATS_{company_name}.pdf"
+
+    await query.edit_message_text(
+        r"✅ *Your ATS\-optimized resume is ready\!*" "\n\n"
+        r"_Your bullet points have been rewritten to match this job's keywords\._",
+        parse_mode="MarkdownV2"
+    )
+
+    latex_cb = f"get_latex_{job_id}"
+    back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Get LaTeX Code", callback_data=latex_cb)],
+        [InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)]
+    ])
+
+    await query.message.reply_document(
+        document=io.BytesIO(pdf_bytes),
+        filename=filename,
+        caption=(
+            f"🎯 ATS-Optimized Resume for {job.get('company', 'Company')}\n"
+            f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
+            "Good luck with your application! 🚀\n\n"
+            "Need to make a tiny tweak? Click 'Get LaTeX Code' below and paste it into Overleaf."
+        ),
+        reply_markup=reply_markup
+    )
+
+    logger.info(f"ATS PDF sent to user {user_id}: {filename} ({len(pdf_bytes)} bytes)")
+
+async def get_latex_code_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the raw LaTeX source code to the user."""
+    query = update.callback_query
+    await query.answer("Preparing LaTeX code...")
+
+    # Remove the buttons from the original PDF message
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception as e:
+        logger.warning(f"Failed to remove markup from PDF: {e}")
+
+    optimized_json = context.user_data.get("last_optimized_json")
+    if not optimized_json:
+        await context.bot.send_message(chat_id=query.message.chat_id, text="LaTeX code expired. Please generate the PDF again.")
+        return
+
+    from services.resume_builder import _render_latex
+    import io
+    latex_source = _render_latex(optimized_json, font_size="11pt")
+    
+    name_slug = optimized_json.get("name", "resume").replace(" ", "_")
+    filename = f"{name_slug}_resume_source.tex"
+    
+    job_id = context.user_data.get("pdf_job_id")
+    is_manual = context.user_data.get("pdf_is_manual", False)
+    
+    reply_markup = None
+    if job_id:
+        back_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)
+        ]])
+
+    await context.bot.send_document(
+        chat_id=query.message.chat_id,
+        document=io.BytesIO(latex_source.encode("utf-8")),
+        filename=filename,
+        caption="📄 Here is your raw LaTeX source code! Paste this into Overleaf.com to make manual adjustments.",
+        reply_markup=reply_markup
+    )
+
+async def explore_loading_jobs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the 'Explore Other Jobs' button during ATS loading."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Remove the explore button so the loading message becomes static text
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+        
+    context.user_data["navigated_away_from_loading"] = True
+    context.user_data["force_new_message"] = True
+    
+    from handlers.jobs import view_jobs
+    await view_jobs(update, context)
 
 
 # ──────────────────────────────────────────────

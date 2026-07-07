@@ -289,7 +289,7 @@ async def batch_year_received(update: Update, context: ContextTypes.DEFAULT_TYPE
     step4_bar = messages.escape_md("[🟢🟢🟢🟢] Step 4 of 4 — Almost there!")
     await update.message.reply_text(
         f"{step4_bar}\n\n"
-        "📄 *Upload your resume* \\(PDF\\) so I can write personalised cover letters for you\.\n\n"
+        r"📄 *Upload your resume* \(PDF\) so I can write personalised cover letters for you\." "\n\n"
         "You can skip this and upload later with /resume",
         reply_markup=keyboards.resume_prompt_keyboard(),
         parse_mode="MarkdownV2",

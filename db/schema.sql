@@ -133,3 +133,6 @@ CREATE TABLE IF NOT EXISTS reminders (
 
 CREATE INDEX IF NOT EXISTS idx_reminders_remind_at 
   ON reminders(remind_at, sent);
+
+-- 4. Add is_manual to applications to prevent cross-joins with jobs/manual_jobs tables
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE;
