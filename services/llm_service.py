@@ -165,7 +165,7 @@ CRITICAL INSTRUCTIONS:
 You must return EXACTLY and ONLY valid JSON matching this schema:
 {
   "matching_keywords": [<list of max 8 highly relevant skills or concepts the user HAS>],
-  "missing_hard_skills": [<list of programming languages, major frameworks, and databases the JD requires but the user lacks (e.g., Ruby, Django, PostgreSQL)>],
+  "missing_hard_skills": [<list of programming languages, frameworks, libraries, tools, and databases the JD requires but the user lacks (e.g., React, Redux, Vite, PostgreSQL, Ruby)>],
   "missing_soft_tech_skills": [<list of conceptual/methodological technical skills missing (e.g., REST APIs, Agile, CI/CD, performance optimization, accessibility)>],
   "tech_found": [<list of exact tools/libraries found in both resume and JD>],
   "suggestions": [
