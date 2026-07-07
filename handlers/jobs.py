@@ -185,9 +185,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     f_exp = filters.get("exp", "any")
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
-    
-    # Use explicit filter if set, otherwise fallback to user's role preference
-    f_role = filters.get("role", user.get("role_pref", "any")).lower()
+    f_loc = filters.get("loc", "any")
     
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -197,10 +195,15 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         job_exp = job.get("min_yoe", 0)
         if f_exp != "any":
             if f_exp == "0" and job_exp > 0: continue
-            elif f_exp == "1" and not (1 <= job_exp <= 2): continue
-            elif f_exp == "3" and job_exp < 3: continue
+            elif f_exp == "1" and job_exp != 1: continue
             
-        # 2. Recency Filter
+        # 2. Location Filter
+        if f_loc != "any":
+            job_loc = (job.get("location") or "remote").lower()
+            if f_loc == "remote" and "remote" not in job_loc: continue
+            if f_loc == "onsite" and "remote" in job_loc: continue
+
+        # 3. Recency Filter
         if f_time != "any":
             posted = job.get("posted_at")
             if posted:

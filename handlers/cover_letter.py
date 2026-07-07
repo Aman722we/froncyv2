@@ -185,6 +185,10 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer("Sending raw text for copying...")
 
+    is_manual = "manual_" in query.data
+    job_id = int(query.data.split("_")[-1])
+    back_prefix = "manual_view" if is_manual else "job_view"
+
     user_id = update.effective_user.id
 
     # Extract the letter from the message text
@@ -212,7 +216,11 @@ async def copy_cover_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if letter_body:
             # Log copy intent — best proxy for "did they actually use this letter?"
             await log_ai_usage(user_id, "cover_letter_copied")
-            await query.message.reply_text(letter_body)
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"{back_prefix}_{job_id}")]
+            ])
+            await query.message.reply_text(letter_body, reply_markup=kb)
             return
 
     await query.message.reply_text("Error extracting text.")

@@ -268,15 +268,20 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     f_exp = filters.get("exp", "any")
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
-    f_role = filters.get("role", "any")
+    f_loc = filters.get("loc", "any")
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("── Experience ──", callback_data="ignore")],
         [
-            InlineKeyboardButton("✅ Fresher (0)" if f_exp == "0" else "Fresher (0)", callback_data="filter_exp_0"),
-            InlineKeyboardButton("✅ 1-2 Yrs" if f_exp == "1" else "1-2 Yrs", callback_data="filter_exp_1"),
-            InlineKeyboardButton("✅ 3+ Yrs" if f_exp == "3" else "3+ Yrs", callback_data="filter_exp_3"),
+            InlineKeyboardButton("✅ 0 YOE" if f_exp == "0" else "0 YOE", callback_data="filter_exp_0"),
+            InlineKeyboardButton("✅ 1 YOE" if f_exp == "1" else "1 YOE", callback_data="filter_exp_1"),
             InlineKeyboardButton("✅ Any" if f_exp == "any" else "Any", callback_data="filter_exp_any"),
+        ],
+        [InlineKeyboardButton("── Location ──", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ Remote" if f_loc == "remote" else "Remote", callback_data="filter_loc_remote"),
+            InlineKeyboardButton("✅ Onsite" if f_loc == "onsite" else "Onsite", callback_data="filter_loc_onsite"),
+            InlineKeyboardButton("✅ Any" if f_loc == "any" else "Any", callback_data="filter_loc_any"),
         ],
         [InlineKeyboardButton("── Recency ──", callback_data="ignore")],
         [
@@ -289,13 +294,6 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
             InlineKeyboardButton("✅ High (>70%)" if f_match == "high" else "High (>70%)", callback_data="filter_match_high"),
             InlineKeyboardButton("✅ Medium (>40%)" if f_match == "med" else "Medium (>40%)", callback_data="filter_match_med"),
             InlineKeyboardButton("✅ Any" if f_match == "any" else "Any", callback_data="filter_match_any"),
-        ],
-        [InlineKeyboardButton("── Role ──", callback_data="ignore")],
-        [
-            InlineKeyboardButton("✅ Frontend" if f_role == "frontend" else "Frontend", callback_data="filter_role_frontend"),
-            # FUTURE (multi-role): InlineKeyboardButton("✅ Backend" if f_role == "backend" else "Backend", callback_data="filter_role_backend"),
-            # FUTURE (multi-role): InlineKeyboardButton("✅ Fullstack" if f_role == "fullstack" else "Fullstack", callback_data="filter_role_fullstack"),
-            InlineKeyboardButton("✅ Any" if f_role == "any" else "Any", callback_data="filter_role_any"),
         ],
         [
             InlineKeyboardButton("🗑 Clear", callback_data="filter_clear"),
