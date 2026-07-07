@@ -116,18 +116,18 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     # Quality (70B) takes ~60-70s; Fast (8B) takes ~3-5s.
     if mode == LLMMode.QUALITY:
         stages = [
-            r"🔍 *Analyzing job requirements\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"📄 *Scanning your resume skills\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"🧠 *Generating your cover letter\.\.\.*\n_\(Quality AI · takes ~60 seconds\)_\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"✨ *Polishing tone and structure\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"⚡ *Optimizing for ATS keywords\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"⏳ *Almost done\!* The AI is finishing up\.\.\.\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"🔍 *Analyzing job requirements\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"📄 *Scanning your resume skills\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"🧠 *Generating your cover letter\.\.\.*" + "\n" + r"_\(Quality AI · takes ~60 seconds\)_" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"✨ *Polishing tone and structure\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"⚡ *Optimizing for ATS keywords\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"⏳ *Almost done\!* The AI is finishing up\.\.\." + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
         ]
         stage_interval = 10  # seconds between each stage
     else:
         stages = [
-            r"⚡ *Generating your cover letter\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"✨ *Polishing up\.\.\.*\n\n_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"⚡ *Generating your cover letter\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+            r"✨ *Polishing up\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
         ]
         stage_interval = 6
 
