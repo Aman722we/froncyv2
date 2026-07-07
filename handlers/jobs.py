@@ -4,6 +4,7 @@ Jobs handlers — view jobs list, job details, and save/unsave jobs.
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from loguru import logger
+import asyncio
 
 from db.users import get_user, increment_jobs_seen
 from db.jobs import get_job_by_id, save_job, unsave_job, save_manual_job, unsave_manual_job
