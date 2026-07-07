@@ -164,10 +164,10 @@ CRITICAL INSTRUCTIONS:
 
 You must return EXACTLY and ONLY valid JSON matching this schema:
 {
-  "matching_keywords": [<list of max 8 highly relevant frontend skills or concepts the user HAS>],
-  "missing_keywords": [<list of max 8 real frontend technical gaps that actually matter for this role>],
-  "tech_found": [<list of exact frontend tools/libraries found in both resume and JD>],
-  "tech_missing": [<list of core frontend tools requested but absent. Don't list backend/DevOps tools unless explicitly required>],
+  "matching_keywords": [<list of max 8 highly relevant skills or concepts the user HAS>],
+  "missing_hard_skills": [<list of programming languages, major frameworks, and databases the JD requires but the user lacks (e.g., Ruby, Django, PostgreSQL)>],
+  "missing_soft_tech_skills": [<list of conceptual/methodological technical skills missing (e.g., REST APIs, Agile, CI/CD, performance optimization, accessibility)>],
+  "tech_found": [<list of exact tools/libraries found in both resume and JD>],
   "suggestions": [
      <2-3 sentences of honest, actionable advice for a fresher frontend developer. Suggest specific things to build or add to their portfolio if there are gaps. Be encouraging but honest.>
   ]

@@ -343,7 +343,10 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     # Retrieve cached ATS result and JD from context
     ats_result = context.user_data.get("last_ats_result", {})
     jd_text = context.user_data.get("last_ats_jd", "")
-    missing_keywords = ats_result.get("missing_keywords", []) + ats_result.get("tech_match", {}).get("missing", [])
+    
+    # CRITICAL: We only pass soft technical skills to the optimizer to prevent hallucinating 
+    # entirely new programming languages or frameworks that the candidate doesn't know.
+    missing_keywords = ats_result.get("missing_soft_tech_skills", [])
 
     if is_manual:
         job = await get_manual_job_by_id(job_id)

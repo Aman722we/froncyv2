@@ -831,9 +831,9 @@ def ats_result(result: dict) -> str:
         return escape_md(", ".join(str(i) for i in items))
 
     matching = safe_list(result.get("matching_keywords", [])[:8])
-    missing = safe_list(result.get("missing_keywords", [])[:8])
-    tech_found = safe_list(result.get("tech_match", {}).get("found", [])[:6])
-    tech_missing = safe_list(result.get("tech_match", {}).get("missing", [])[:6])
+    missing_hard = safe_list(result.get("missing_hard_skills", [])[:8])
+    missing_soft = safe_list(result.get("missing_soft_tech_skills", [])[:8])
+    tech_found = safe_list(result.get("tech_found", [])[:6])
 
     # Escape each suggestion line independently
     suggestions = "\n".join(
@@ -841,19 +841,20 @@ def ats_result(result: dict) -> str:
     )
 
     matching_line = f"✅ *Matching:* {matching}" if matching else "✅ *Matching:* None"
-    missing_line = f"❌ *Missing:* {missing}" if missing else "❌ *Missing:* None"
+    missing_hard_line = f"❌ *Missing Tech:* {missing_hard}" if missing_hard else "❌ *Missing Tech:* None"
+    missing_soft_line = f"⚠️ *Missing Concepts:* {missing_soft}" if missing_soft else ""
     tech_found_line = f"🔧 *Tech Found:* {tech_found}" if tech_found else "🔧 *Tech Found:* None"
-    tech_missing_line = f"⚠️ *Tech Missing:* {tech_missing}" if tech_missing else ""
 
     msg = (
         f"📊 *ATS Match Score: {score}%*\n"
         f"{bar}\n\n"
         f"{matching_line}\n"
-        f"{missing_line}\n\n"
-        f"{tech_found_line}\n"
+        f"{missing_hard_line}\n"
     )
-    if tech_missing_line:
-        msg += f"{tech_missing_line}\n"
+    if missing_soft_line:
+        msg += f"{missing_soft_line}\n"
+    
+    msg += f"\n{tech_found_line}\n"
     if suggestions:
         msg += f"\n💡 *Suggestions:*\n{suggestions}"
     return msg
