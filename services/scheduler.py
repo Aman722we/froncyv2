@@ -299,6 +299,21 @@ async def _send_weekly_digest():
                 pass
 
 
+async def _downgrade_expired_trials_job():
+    """Downgrade users with expired trials to 'free' plan."""
+    try:
+        from db.users import downgrade_expired_trials
+        logger.info("🧹 Checking for expired trials...")
+        await downgrade_expired_trials()
+    except Exception as e:
+        logger.error(f"❌ Failed to downgrade expired trials: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _downgrade_expired_trials_job", e)
+            except Exception:
+                pass
+
+
 async def _cleanup_old_manual_jobs():
     """Soft-delete manual jobs older than 30 days."""
     try:
@@ -450,6 +465,15 @@ def start_scheduler():
         CronTrigger(hour=0, minute=0),
         id="cleanup_manual_jobs",
         name="Deactivate manual jobs older than 30 days",
+        replace_existing=True,
+    )
+
+    # Downgrade expired trials — Runs every day at 00:05 UTC
+    scheduler.add_job(
+        _downgrade_expired_trials_job,
+        CronTrigger(hour=0, minute=5),
+        id="downgrade_expired_trials",
+        name="Downgrade expired trials to free plan",
         replace_existing=True,
     )
 

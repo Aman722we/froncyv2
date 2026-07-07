@@ -351,3 +351,22 @@ async def get_all_users() -> list[int]:
             "SELECT telegram_id FROM users WHERE is_onboarded = TRUE"
         )
         return [row["telegram_id"] for row in rows]
+
+
+async def downgrade_expired_trials() -> None:
+    """Downgrade users with expired trials back to the 'free' plan."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE users
+            SET plan = 'free'
+            WHERE plan = 'trial'
+              AND is_trial = TRUE
+              AND trial_expires_at <= NOW()
+            """
+        )
+        # result is a string like 'UPDATE N'
+        updated_count = int(result.split()[-1]) if result.startswith("UPDATE") else 0
+        if updated_count > 0:
+            logger.info(f"Downgraded {updated_count} expired trials to free plan.")
