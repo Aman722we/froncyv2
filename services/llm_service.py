@@ -23,20 +23,20 @@ def get_mode_for_plan(plan: str) -> LLMMode:
     return LLMMode.FAST
 
 
-def _get_client(mode: LLMMode) -> tuple[AsyncOpenAI, str]:
+def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]:
     """Get the appropriate OpenAI client and model name for the mode."""
     if mode == LLMMode.QUALITY:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_70B,
-            timeout=30.0,
+            timeout=timeout,
         )
         model = settings.NVIDIA_MODEL_70B
     else:
         client = AsyncOpenAI(
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_8B,
-            timeout=15.0,
+            timeout=timeout,
         )
         model = settings.NVIDIA_MODEL_8B
 
@@ -304,7 +304,8 @@ async def extract_resume_json(resume_text: str) -> dict:
         Parsed resume dict, or raises RuntimeError on failure
     """
     import json as _json
-    client, model = _get_client(LLMMode.QUALITY)
+    # Resume extraction produces a large JSON output — give it a longer timeout
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
 
     user_message = f"""Parse this resume into the exact JSON format specified:
 
@@ -408,7 +409,8 @@ async def optimize_resume_bullets(resume_json: dict, job_description: str, missi
         Updated resume_json with optimized bullet points
     """
     import json as _json
-    client, model = _get_client(LLMMode.QUALITY)
+    # Bullet optimization also outputs a large JSON — give it a longer timeout
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
 
     import copy
     
