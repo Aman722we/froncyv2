@@ -297,13 +297,13 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
         # Add upsell only for free users; always add the PDF generator button
         if plan not in PRO_PLANS:
             back_kb = KB([
-                [IKB("✨ Apply these changes — Generate PDF", callback_data=pdf_cb)],
+                [IKB("✨ Create ATS-Optimized Resume", callback_data=pdf_cb)],
                 [IKB("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
                 [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
             back_kb = KB([
-                [IKB("✨ Apply these changes — Generate PDF", callback_data=pdf_cb)],
+                [IKB("✨ Create ATS-Optimized Resume", callback_data=pdf_cb)],
                 [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
 
