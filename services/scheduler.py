@@ -417,33 +417,30 @@ from datetime import datetime
 
 def start_scheduler():
     """Start all scheduled jobs."""
-    # ⚠️ TEST MODE on develop: all jobs fire every 5 minutes for rapid testing.
-    # Revert to production times before merging to main.
-
-    # Daily alerts — every 5 min (TEST: normally every 10 min)
+    # Daily alerts — every 10 min
     scheduler.add_job(
         _send_daily_alerts,
-        CronTrigger(minute="*/5"),
+        CronTrigger(minute="*/10"),
         id="daily_alerts",
-        name="[TEST] Send daily job alerts every 5 min",
+        name="Send daily job alerts every 10 min",
         replace_existing=True,
     )
 
-    # Evening Digest — 07:37 UTC = 1:07 PM IST (TEST)
+    # Evening Digest — 13:00 UTC = 6:30 PM IST
     scheduler.add_job(
         _send_evening_digest,
-        CronTrigger(hour=7, minute=37),
+        CronTrigger(hour=13, minute=0),
         id="evening_digest",
-        name="[TEST] Evening digest at 1:07 PM IST",
+        name="Evening digest at 6:30 PM IST",
         replace_existing=True,
     )
 
-    # Friday Scorecard — 07:42 UTC = 1:12 PM IST (TEST, fires daily not just Fridays)
+    # Friday Scorecard — Fridays at 13:00 UTC = 6:30 PM IST
     scheduler.add_job(
         _send_weekly_digest,
-        CronTrigger(hour=7, minute=42),
+        CronTrigger(day_of_week='fri', hour=13, minute=0),
         id="weekly_digest",
-        name="[TEST] Friday scorecard at 1:12 PM IST",
+        name="Friday scorecard at 6:30 PM IST",
         replace_existing=True,
     )
 
@@ -457,7 +454,7 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info("📅 Scheduler started — ⚠️ TEST MODE (5-min intervals)")
+    logger.info("📅 Scheduler started")
 
 
 def stop_scheduler():
