@@ -110,12 +110,9 @@ async def tracker_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
 
-async def manage_app_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """View details of a single application to update its status."""
+async def _render_manage_app_ui(update: Update, context: ContextTypes.DEFAULT_TYPE, app_id: int) -> None:
+    """Helper to render the application management UI."""
     query = update.callback_query
-    await query.answer()
-
-    app_id = int(query.data.split("_")[-1])
     user_id = update.effective_user.id
     
     app = await get_application_by_id(user_id, app_id)
@@ -150,6 +147,14 @@ async def manage_app_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2", disable_web_page_preview=True)
 
+async def manage_app_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """View details of a single application to update its status."""
+    query = update.callback_query
+    await query.answer()
+
+    app_id = int(query.data.split("_")[-1])
+    await _render_manage_app_ui(update, context, app_id)
+
 async def update_app_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle status update click."""
     query = update.callback_query
@@ -163,8 +168,7 @@ async def update_app_status_callback(update: Update, context: ContextTypes.DEFAU
     if success:
         await query.answer(f"Status updated to {new_status.title()}!", show_alert=True)
         # Refresh the management UI to reflect the new state
-        query.data = f"manage_app_{app_id}"
-        await manage_app_callback(update, context)
+        await _render_manage_app_ui(update, context, app_id)
     else:
         await query.answer("Failed to update status. Please try again.", show_alert=True)
 

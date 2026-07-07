@@ -49,3 +49,6 @@ Those are closer to the core value than simple logins.
 
 ## On the /help command tell user to message your problem on FroncySupport.
 
+### ADVANCED FEATURES
+
+## conversational correction for resume generator 
