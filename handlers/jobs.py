@@ -221,14 +221,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if f_match == "high" and score < 70: continue
             elif f_match == "med" and score < 40: continue
             
-        # 4. Role Filter
-        if f_role != "any" and f_role != "fullstack":
-            title_lower = job.get("title", "").lower()
-            if f_role == "frontend" and not any(kw in title_lower for kw in ["frontend", "front-end", "front end", "react", "angular", "vue"]):
-                continue
-            elif f_role == "backend" and not any(kw in title_lower for kw in ["backend", "back-end", "back end", "node", "python", "java", "django"]):
-                continue
-            
+
         filtered_jobs.append(job)
         
     total_filtered = len(filtered_jobs)
