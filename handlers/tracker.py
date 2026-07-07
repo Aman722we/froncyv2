@@ -11,6 +11,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
     """Handle ✅ Mark as Applied button."""
     query = update.callback_query
 
+    is_manual = "manual_applied" in query.data
     job_id = int(query.data.split("_")[-1])
     user_id = update.effective_user.id
     user = await get_user(user_id)
@@ -34,7 +35,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
             return
             
-    success = await add_application(user_id, job_id)
+    success = await add_application(user_id, job_id, is_manual=is_manual)
     
     if success:
         msg = "✅ Job added to your tracker!"

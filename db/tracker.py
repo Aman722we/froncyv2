@@ -3,7 +3,7 @@ from db.connection import get_pool
 from datetime import datetime
 import json
 
-async def add_application(telegram_id: int, job_id: int) -> bool:
+async def add_application(telegram_id: int, job_id: int, is_manual: bool = False) -> bool:
     """Add a job to applications. Return True if added, False if already exists.
     Auto-removes the job from saved_jobs if it was saved there."""
     pool = get_pool()
@@ -11,8 +11,8 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
         try:
             # Check if already tracked
             existing = await conn.fetchval(
-                "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2",
-                telegram_id, job_id
+                "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = $3",
+                telegram_id, job_id, is_manual
             )
             if existing:
                 return False
@@ -20,12 +20,13 @@ async def add_application(telegram_id: int, job_id: int) -> bool:
             # Insert the application
             app_id = await conn.fetchval(
                 """
-                INSERT INTO applications (telegram_id, job_id, status)
-                VALUES ($1, $2, 'applied')
+                INSERT INTO applications (telegram_id, job_id, is_manual, status)
+                VALUES ($1, $2, $3, 'applied')
                 RETURNING id
                 """,
                 telegram_id,
-                job_id
+                job_id,
+                is_manual
             )
 
             # Schedule a follow-up reminder 3 days from now
@@ -69,7 +70,7 @@ async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -
                    j.id as job_id, j.title, j.company, j.location, j.url
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
-            WHERE a.telegram_id = $1
+            WHERE a.telegram_id = $1 AND a.is_manual = FALSE
 
             UNION ALL
 
@@ -77,7 +78,7 @@ async def get_applications(telegram_id: int, limit: int = 10, offset: int = 0) -
                    mj.id as job_id, mj.title, mj.company, mj.location, mj.url
             FROM applications a
             JOIN manual_jobs mj ON a.job_id = mj.id
-            WHERE a.telegram_id = $1
+            WHERE a.telegram_id = $1 AND a.is_manual = TRUE
 
             ORDER BY applied_at DESC
             LIMIT $2 OFFSET $3
@@ -197,7 +198,7 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
                    j.id as job_id, j.title, j.company, j.location, j.url
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
-            WHERE a.telegram_id = $1 AND a.id = $2
+            WHERE a.telegram_id = $1 AND a.id = $2 AND a.is_manual = FALSE
             
             UNION ALL
             
@@ -205,7 +206,7 @@ async def get_application_by_id(telegram_id: int, app_id: int) -> dict | None:
                    mj.id as job_id, mj.title, mj.company, mj.location, mj.url
             FROM applications a
             JOIN manual_jobs mj ON a.job_id = mj.id
-            WHERE a.telegram_id = $1 AND a.id = $2
+            WHERE a.telegram_id = $1 AND a.id = $2 AND a.is_manual = TRUE
             """,
             telegram_id, app_id
         )

@@ -203,7 +203,7 @@ def build_bot() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Tracker & Analytics
-    app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^applied_"))
+    app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^(manual_)?applied_"))
     app.add_handler(CallbackQueryHandler(tracker_dashboard, pattern="^tracker"))
     app.add_handler(CallbackQueryHandler(manage_app_callback, pattern="^manage_app_"))
     app.add_handler(CallbackQueryHandler(update_app_status_callback, pattern="^updapp_"))

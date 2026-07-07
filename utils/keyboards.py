@@ -351,8 +351,10 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
             buttons.insert(0, [InlineKeyboardButton("🔍 See What's Missing → Go Pro", callback_data="menu_upgrade")])
 
     # Row 2: Mark as Applied + Remind Me (replaces old Save button)
+    is_manual = job.get("is_manual", False)
+    applied_cb = f"manual_applied_{job['id']}" if is_manual else f"applied_{job['id']}"
     buttons.append([
-        InlineKeyboardButton("✅ Mark as Applied", callback_data=f"applied_{job['id']}"),
+        InlineKeyboardButton("✅ Mark as Applied", callback_data=applied_cb),
         InlineKeyboardButton("⏳ Remind Me", callback_data=remind_callback),
     ])
 
