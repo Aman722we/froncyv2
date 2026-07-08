@@ -57,6 +57,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan == "free" else 12
 
+    from datetime import datetime, timedelta, timezone
     # Fetch jobs + freshness count in parallel
     jobs, new_jobs = await asyncio.gather(
         get_personalized_manual_jobs(
@@ -66,7 +67,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             exclude_sent_within_days=3,
             max_age_days=10
         ),
-        count_new_jobs_since(user.get("jobs_reset_at")),
+        count_new_jobs_since(datetime.now(timezone.utc) - timedelta(hours=24)),
     )
 
     if jobs:

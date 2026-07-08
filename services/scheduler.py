@@ -27,7 +27,7 @@ async def _send_daily_alerts():
     try:
         from db.connection import get_pool
 
-        from datetime import datetime
+        from datetime import datetime, timedelta, timezone
         from zoneinfo import ZoneInfo
 
         # Get current time in IST (e.g. "13:00")
@@ -88,7 +88,7 @@ async def _send_daily_alerts():
 
                 # Freshness count since the user's last alert reset time
                 from db.manual_jobs import count_new_jobs_since
-                new_jobs = await count_new_jobs_since(user_record.get("jobs_reset_at"))
+                new_jobs = await count_new_jobs_since(datetime.now(timezone.utc) - timedelta(hours=24))
 
                 # Format alert message with the new Daily Feed UI
                 from utils.messages import format_daily_feed_message

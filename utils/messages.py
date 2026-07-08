@@ -545,7 +545,7 @@ def format_daily_feed_message(
         total_count: total active jobs in the pool (for footer).
         user: user dict (for match scoring display).
         new_jobs: dict with keys 'total' and 'remote' — count of new jobs
-                  since the user's last visit. If total > 0 a FOMO header
+                  in the last 24 hours. If total > 0 a FOMO header
                   is injected at the top.
         skill_tip: optional skill gap tip string to inject at the footer
                    (e.g. "70% of your matched jobs require TypeScript").
@@ -557,7 +557,7 @@ def format_daily_feed_message(
         r = new_jobs.get("remote", 0)
         remote_note = f", \\+{r} remote" if r > 0 else ""
         freshness_line = (
-            f"🔔 *\\+{n} new job{'s' if n != 1 else ''} added since your last visit{remote_note}\\!*\n"
+            f"🔔 *\\+{n} new job{'s' if n != 1 else ''} added in the last 24 hours{remote_note}\\!*\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
         )
 
