@@ -40,3 +40,17 @@ This document is a living record of the critical lessons we have learned while b
 **The Problem:** Our AI Cover Letter generation was taking ~60-70 seconds because it uses a massive, high-quality 70B parameter model. Users thought the bot was broken because it just sat there frozen.
 **The Solution:** Instead of trying to make the impossible happen (speeding up a 70B model), we fixed the *perception* of time. We implemented a dynamic, async loader that sends status updates every few seconds ("Analyzing job...", "Scanning resume...", "Writing..."). 
 **Core Learning:** Users will wait for high-quality results if you communicate with them. A 60-second wait is unacceptable if the screen is frozen, but perfectly acceptable if they see the bot actively "working" for them.
+
+---
+
+## 5. AI Hallucinations vs. Strict Constraints (The Resume Generator)
+**The Problem:** When generating ATS-friendly resumes, giving an LLM free rein to rewrite a resume resulted in massive hallucinations—inventing skills the user didn't have and ruining the formatting.
+**The Solution:** We moved away from having the LLM "write a resume" and instead used a "Diff & Patch" architecture combined with **LaTeX**. We pass the user's base resume as a JSON structure, ask the AI *only* for structural updates, and compile it dynamically into a highly rigid LaTeX template.
+**Core Learning:** Never trust an LLM to generate unstructured output for a high-stakes document like a resume. Constrain its output to specific JSON fields (like `MissingKeywords` or `SummaryTweaks`) and use traditional programmatic tools (LaTeX) to handle the formatting.
+
+---
+
+## 6. The Danger of "Direct to Main" Deployments
+**The Problem:** We were developing complex features (like the Resume Generator) and fixing bugs on the main branch simultaneously. During a git merge, a single `import asyncio` line was lost, instantly crashing the entire bot for all users upon deployment to Railway.
+**The Solution:** We established a strict two-environment pipeline using a separate `@FroncyTestBot` tied to a `develop` branch.
+**Core Learning:** No matter how small the fix, AI and humans alike make mistakes during Git merges. The only way to protect users is to test in a sandbox first. In the future, we must implement automated Linters on GitHub to catch `NameError` bugs before they deploy.

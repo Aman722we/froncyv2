@@ -3,52 +3,25 @@
 This file tracks the upcoming features, bug fixes, and improvements that need to be implemented.
 
 ## 🐛 Bug Fixes
-- [x] **"Mark as Applied" Sync Issue:** When clicking "Mark as Applied", the bot says "You have already tracked this job", but the job does not appear in the "My Applications" view. Need to trace the DB save logic and the tracker fetch logic to find the mismatch.
-- [x] **Job Detail UI Width:** After removing the raw job URL from the job detail message, the Telegram message bubble became too thin/narrow. **Fix:** Add a long horizontal line (e.g., `─────────────────────────`) to artificially widen the message bubble and improve readability.
+- [x] **"Mark as Applied" Sync Issue:** When clicking "Mark as Applied", the bot says "You have already tracked this job", but the job does not appear in the "My Applications" view.
+- [x] **Job Detail UI Width:** Add a long horizontal line to artificially widen the message bubble.
+- [x] **Trial Expiration Tracking:** Added automated nightly CRON job to downgrade expired trials to the 'free' plan so analytics numbers remain accurate.
 
 ## 🚀 New Features & Improvements
-- [x] **Duplicate Job Prevention Algorithm:** Verify or implement a system to ensure that jobs are never sent to the same user more than once (e.g., keeping track of `seen_jobs` or filtering out jobs they've already received in previous feeds).
+- [x] **ATS-Friendly Resume Generator:** Generates perfectly formatted LaTeX PDFs customized specifically to the job description without hallucinating new skills.
+- [x] **Test/Staging Variant of FroncyBot:** Created a `develop` branch workflow to test features safely before deploying to production (`main`).
+- [x] **Broadcast Command:** Added `/broadcast` command to message all onboarded users simultaneously.
+- [x] **Duplicate Job Prevention:** Prevent sending the same job to a user twice (`seen_jobs` logic).
+- [x] **Retention Features:** Added Evening Digest, Friday Scorecard, and 24-hour freshness FOMO headers to Daily Feeds.
 
 ## 📝 Backlog / Ideas
-- [ ]
+- [ ] **Conversational correction for resume generator:** Allow users to chat with the bot to make manual edits to the generated ATS resume.
+- [ ] **Apply Success Kit button:** A bundle (Cover letter, cold email, resume, interview prep) generated in one click.
+- [ ] **Database Backup:** Automate backing up the PostgreSQL database using Cloudflare storage or AWS S3.
+- [ ] **Tackle Expired Jobs:** Implement a system or cron job to automatically detect and prune expired jobs from the manual job board.
+- [ ] **Remove button spinner suppressor:** Adjust UI logic to properly handle telegram button loading states.
+- [ ] **Help Command Update:** Update `/help` command to explicitly direct users to message `FroncySupport` with issues.
 
-## Create a testing varient of FroncyBot : when we add new feature or update the bot if it crahes it offects all the users 
-
-
-## The metric I would add immediately
-
-You already track:
-
-DAU
-WAU
-Returning users
-
-Good.
-
-Now add:
-
-Users who opened daily feed today
-
-and
-
-Users who clicked at least one job today
-
-Those are closer to the core value than simple logins.
-
-## BackUp the database useing cloudflare storage
-
-## Create ATS friendly Resume generator
-
-## Create Apply Success Kit button
-
-## Create /braodcast command similar to /send command to send any message to every user togather
-
-## Think how to tackle the expired jobs on the job boards.
-
-## Remove the button spinner supressure 
-
-## On the /help command tell user to message your problem on FroncySupport.
-
-### ADVANCED FEATURES
-
-## conversational correction for resume generator 
+## 📊 Analytics Backlog
+- [x] **Daily Active Users / Feed Openers:** Tracking users who explicitly check their feed.
+- [ ] **Job Link Click Tracking:** Track users who clicked at least one job application link today (closer to core value than simple logins).

@@ -14,6 +14,14 @@ Because Telegram users have a universal `telegram_id` that never changes, their 
 
 ---
 
+## 🛡️ The Staging & Deployment Protocol
+To prevent pushing broken code (like missing dependencies or syntax errors) directly to active users, FroncyBot follows a strict two-environment protocol:
+1. **Develop Branch (`@FroncyTestBot`):** All new features, AI prompts, and major architectural changes must be pushed to the `develop` branch and tested via the separate Test Bot token.
+2. **Main Branch (`@FroncyJobsBot`):** Code is only merged into `main` after it has been fully verified in the testing environment. No untested code should ever go directly to `main`.
+3. **Future Goal - CI/CD & Linters:** We will implement GitHub Actions to automatically run linters and tests on all Pull Requests to catch `NameError` or missing import crashes before Railway deploys them.
+
+---
+
 ## 🛡️ Preventative Measures (To implement as we scale)
 
 ### 1. Build an Official Telegram Channel (The Backup Comms)

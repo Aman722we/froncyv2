@@ -71,5 +71,23 @@ FroncyBot (formerly Applixy) is a fully autonomous, AI-powered Telegram bot desi
 - Instead of silently failing, the bot immediately sends a `❌ CRASH ALERT ❌` message to the admin.
 - The alert includes the exact stack trace, the module where it failed, and the specific user context, allowing for instant debugging before users are affected.
 
+## 11. ATS-Friendly Resume Generator
+**How it works:**
+- Users can click "Generate ATS Resume" on a job listing.
+- The bot takes their original saved resume and the target job description, generating a highly optimized, tailored resume.
+- Uses LaTeX to compile a professional, ATS-parseable PDF on the fly.
+- Uses a diff-patch architecture to ensure the AI does not hallucinate false skills or change the layout unexpectedly.
+
+## 12. Retention & FOMO Features
+**How it works:**
+- **Daily Feed Freshness Header:** Injects a "🔔 +X new jobs added in the last 24 hours" header to create FOMO and encourage daily checks.
+- **Evening Digest:** A 6:30 PM automated alert reminding users of jobs they saved but haven't applied to yet.
+- **Friday Scorecard:** A weekly summary sent on Fridays detailing how many jobs they viewed, ATS checks they ran, and cover letters they generated to keep them motivated.
+
+## 13. Staging & Testing Pipeline
+**How it works:**
+- The repository follows a two-branch system (`main` for production, `develop` for testing).
+- A separate Telegram Test Bot (`@FroncyTestBot`) is hooked up to the `develop` branch, allowing the admins to safely test new AI features without breaking the production bot for active users.
+
 ---
 *Built with Python, python-telegram-bot (v20+), asyncpg (PostgreSQL), FastAPI, Razorpay, and LLaMA 3.1.*

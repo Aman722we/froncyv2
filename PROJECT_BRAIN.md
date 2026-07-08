@@ -16,7 +16,8 @@ If you are reading this, you are a new AI agent (or a new chat session) working 
 ## 2. Core Architectural Decisions
 *   **Platform:** Telegram Bot (Python / `python-telegram-bot` v20+ async).
 *   **Database:** PostgreSQL (hosted on Railway). We use `asyncpg` for high-performance connection pooling.
-*   **AI Models:** NVIDIA NIM (Llama 3 70B) for high-quality cover letters. We prioritize quality over speed for generation.
+*   **AI Models:** NVIDIA NIM (Llama 3.1 70B) for high-quality cover letters and ATS resume diff generation. We prioritize quality over speed for generation.
+*   **PDF Generation:** `pdflatex` (TeX Live) is used for rendering dynamic, ATS-parseable resumes to guarantee perfect layout matching without hallucinations.
 *   **Data Independence:** The database uses `telegram_id` as the primary key. User data is strictly isolated from the bot instance. If the Telegram bot is banned, user data is perfectly preserved.
 
 ---
@@ -25,6 +26,10 @@ If you are reading this, you are a new AI agent (or a new chat session) working 
 ### The Telegram Deletion Incident
 *   **What happened:** In the early days, the original bot account was deleted by Telegram without warning. 
 *   **The Safeguard:** We never market the direct `t.me` link. We market `getfroncy.com` (routed through Cloudflare). If the bot gets banned again, we spin up a new bot token, update the backend, and change the Cloudflare redirect. The database seamlessly recognizes returning users via their `telegram_id`.
+
+### The Merge Conflict / Broken Production Incident
+*   **What happened:** We developed a major feature (Resumes) on the `develop` branch while fixing bugs on `main`. During the merge, an import (`import asyncio`) was dropped, causing the bot to crash completely on launch for all users.
+*   **The Safeguard:** We now rely heavily on our Staging Environment (`@FroncyTestBot` hooked to `develop`). For the future, we must NEVER push code directly to `main` without testing in `develop` first, and we should use Linters/Code Review (like CodeRabbit) for PRs.
 
 ---
 
