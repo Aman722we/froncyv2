@@ -279,12 +279,24 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     failed = 0
     blocked = 0
 
+    import asyncio
+    from telegram.error import Forbidden, RetryAfter
+
     for tid in all_user_ids:
         try:
             await context.bot.send_message(chat_id=tid, text=message_text)
             sent += 1
-        except telegram.error.Forbidden:
+            await asyncio.sleep(0.05)  # 20 messages per second max to avoid rate limits
+        except Forbidden:
             blocked += 1
+        except RetryAfter as e:
+            logger.warning(f"Rate limited by Telegram. Sleeping for {e.retry_after} seconds...")
+            await asyncio.sleep(e.retry_after)
+            try:
+                await context.bot.send_message(chat_id=tid, text=message_text)
+                sent += 1
+            except Exception:
+                failed += 1
         except Exception as e:
             logger.warning(f"Broadcast failed for {tid}: {e}")
             failed += 1
