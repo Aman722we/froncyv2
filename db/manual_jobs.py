@@ -1,7 +1,7 @@
 """
 CRUD operations for manually curated jobs.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from loguru import logger
 from db.connection import get_pool
 from utils.constants import FRONTEND_SKILLS, ACTIVE_EXPERIENCE
@@ -36,7 +36,7 @@ async def add_manual_job(data: dict) -> int:
             data.get("min_yoe", 0),
             data.get("eligible_batches", []),
             data.get("added_by"),
-            data.get("posted_at") or datetime.utcnow(),
+            data.get("posted_at") or datetime.now(timezone.utc),
         )
         job_id = row["id"]
         logger.info(f"Manual job added: ID={job_id} — {data['title']} @ {data['company']}")
