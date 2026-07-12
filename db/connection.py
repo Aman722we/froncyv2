@@ -138,8 +138,20 @@ async def init_db() -> asyncpg.Pool:
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_jobs_skills ON manual_jobs USING GIN (skills);")
             # Add manual_job_id to saved_jobs so users can bookmark manual jobs too
             await conn.execute("ALTER TABLE saved_jobs ADD COLUMN IF NOT EXISTS manual_job_id INT REFERENCES manual_jobs(id) ON DELETE CASCADE;")
+            # Apply Smart — Hiring Manager columns on manual_jobs
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS hm_name TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS hm_role TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS hm_linkedin TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS hm_email TEXT;")
         except Exception as e:
             logger.warning(f"Failed to apply manual_jobs migrations: {e}")
+
+        # Apply Smart usage tracking on users
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS apply_smart_used INT DEFAULT 0;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS apply_smart_reset DATE DEFAULT CURRENT_DATE;")
+        except Exception as e:
+            logger.warning(f"Failed to apply apply_smart migrations: {e}")
 
         # Referral system migrations
         try:

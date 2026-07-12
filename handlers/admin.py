@@ -36,7 +36,10 @@ async def addjob_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "📍 Remote - US | 6 month Internship | 25K/Month\n"
         "🎓 2025/2026 | 2-4 YOE  (batches optional, YOE can be range like 2-4 or single like 1+)\n"
         "🏷 Typescript, React, Next.Js, CSS, Git\n"
-        "⏰ 22d ago  (Optional)\n\n"
+        "⏰ 22d ago  (Optional)\n"
+        "👤 Founder | John Doe | john@company.com | https://linkedin.com/in/johndoe  (Optional — for Apply Smart)\n\n"
+        "<b>👤 Format:</b> Role | Name | Email | LinkedIn URL\n"
+        "All 👤 fields after Name are optional. Include as many as you have.\n\n"
         "Type /cancel to abort.",
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -121,6 +124,31 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             except Exception:
                 pass
 
+        # Line 7: Hiring Manager (Optional) — for Apply Smart
+        # Format: 👤 Role | Name | email | linkedin_url
+        hm_role_val = hm_name_val = hm_email_val = hm_linkedin_val = None
+        for line in lines[5:]:
+            if "👤" in line:
+                hm_raw = line.replace("👤", "").strip()
+                hm_parts = [p.strip() for p in hm_raw.split("|")]
+                if len(hm_parts) >= 1:
+                    hm_role_val = hm_parts[0] or None
+                if len(hm_parts) >= 2:
+                    hm_name_val = hm_parts[1] or None
+                if len(hm_parts) >= 3:
+                    val = hm_parts[2]
+                    if "@" in val:
+                        hm_email_val = val
+                    elif "linkedin" in val.lower():
+                        hm_linkedin_val = val
+                if len(hm_parts) >= 4:
+                    val = hm_parts[3]
+                    if "linkedin" in val.lower():
+                        hm_linkedin_val = val
+                    elif "@" in val:
+                        hm_email_val = val
+                break
+
         # Insert DB
         data = {
             "title": title,
@@ -134,7 +162,11 @@ async def parse_and_add_job(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             "min_yoe": min_yoe,
             "eligible_batches": batches,
             "added_by": update.effective_user.id,
-            "posted_at": posted_at
+            "posted_at": posted_at,
+            "hm_name": hm_name_val,
+            "hm_role": hm_role_val,
+            "hm_email": hm_email_val,
+            "hm_linkedin": hm_linkedin_val,
         }
         
         job_id = await add_manual_job(data)

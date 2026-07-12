@@ -21,8 +21,9 @@ async def add_manual_job(data: dict) -> int:
             """
             INSERT INTO manual_jobs (
                 title, company, url, location, salary, job_type, duration,
-                skills, min_yoe, eligible_batches, added_by, posted_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                skills, min_yoe, eligible_batches, added_by, posted_at,
+                hm_name, hm_role, hm_linkedin, hm_email
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
             RETURNING id
             """,
             data["title"],
@@ -37,6 +38,10 @@ async def add_manual_job(data: dict) -> int:
             data.get("eligible_batches", []),
             data.get("added_by"),
             data.get("posted_at") or datetime.now(timezone.utc),
+            data.get("hm_name"),
+            data.get("hm_role"),
+            data.get("hm_linkedin"),
+            data.get("hm_email"),
         )
         job_id = row["id"]
         logger.info(f"Manual job added: ID={job_id} — {data['title']} @ {data['company']}")

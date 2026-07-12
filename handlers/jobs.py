@@ -464,3 +464,261 @@ async def remind_me_manual_callback(update: Update, context: ContextTypes.DEFAUL
         await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
     else:
         await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)
+
+
+# ─────────────────────────────────────────────────────────
+# Apply Smart — One-Click Application Kit
+# ─────────────────────────────────────────────────────────
+
+# Daily limits per plan
+APPLY_SMART_LIMITS = {
+    "free": 1,
+    "trial": 5,
+    "pro": 10,
+}
+
+
+async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 🚀 Apply Smart button — triggers full async application kit generation."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    job_id = int(query.data.split("_")[-1])
+
+    await query.answer()
+
+    # ── 1. Fetch user & plan ──────────────────────────────
+    user = await get_user(user_id)
+    if not user:
+        await query.edit_message_text("⚠️ User not found. Please type /start to set up your profile.")
+        return
+
+    plan = get_effective_plan(user)
+    resume_text = user.get("resume_text")
+
+    if not resume_text:
+        await query.answer(
+            "⚠️ Upload your resume first! Go to ⚙️ Settings → Resume.",
+            show_alert=True,
+        )
+        return
+
+    # ── 2. Check daily limit ──────────────────────────────
+    from db.users import get_apply_smart_usage, increment_apply_smart_used
+    usage = await get_apply_smart_usage(user_id)
+    limit = APPLY_SMART_LIMITS.get(plan, 1)
+    used = usage.get("used", 0)
+
+    if used >= limit:
+        limit_msg = {
+            "free": "Free users get 1 Apply Smart per day.\n\n💎 Upgrade to Pro for 10 per day!",
+            "trial": f"Trial users get {limit} Apply Smarts per day. You've used all {limit} today!",
+            "pro": f"Pro users get {limit} Apply Smarts per day. You've used all {limit} today!",
+        }.get(plan, "You've hit your daily Apply Smart limit.")
+        await query.answer(f"🚫 {limit_msg}", show_alert=True)
+        return
+
+    # ── 3. Fetch job + HM details ─────────────────────────
+    job = await get_manual_job_by_id(job_id)
+    if not job:
+        await query.answer("⚠️ Job not found.", show_alert=True)
+        return
+
+    hm_name = job.get("hm_name")
+    hm_role = job.get("hm_role")
+    hm_linkedin = job.get("hm_linkedin")
+    hm_email = job.get("hm_email")
+    has_linkedin = bool(hm_name and hm_linkedin)
+    has_email = bool(hm_name and hm_email)
+
+    # Build job description for the LLM
+    job_desc = (
+        f"Job Title: {job.get('title', '')}\n"
+        f"Company: {job.get('company', '')}\n"
+        f"Location: {job.get('location', '')}\n"
+        f"Skills Required: {', '.join(job.get('skills', []))}\n"
+        f"Experience: {job.get('min_yoe', 0)} years\n"
+        f"Salary: {job.get('salary', 'Not disclosed')}\n"
+    )
+
+    # ── 4. Instantly respond — free the user to browse ────
+    steps = ["✅ ATS Resume", "✅ Cover Letter"]
+    if has_linkedin:
+        steps.append("✅ LinkedIn Connection Note + DM")
+    if has_email:
+        steps.append("✅ Cold Email")
+    steps.append("✅ Application Tracked + Follow-up Reminder (3 days)")
+
+    steps_text = "\n".join(f"  {s}" for s in steps)
+
+    explore_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔍 Explore Other Jobs", callback_data="explore_loading_jobs")
+    ]])
+
+    loading_msg = await query.edit_message_text(
+        f"🚀 *Apply Smart Engine Starting\\!*\n\n"
+        f"Building your complete application kit for *{job.get('company', 'this company')}*\\.\n\n"
+        f"This takes \\~8 minutes\\. Feel free to browse other jobs — I'll ping you the moment it's ready\\! 🔔\n\n"
+        f"*What's being generated:*\n{steps_text.replace('.', chr(92)+'.')}",
+        parse_mode="MarkdownV2",
+        reply_markup=explore_kb,
+    )
+
+    # Increment counter immediately (prevents double-clicks)
+    await increment_apply_smart_used(user_id)
+
+    # ── 5. Kick off background generation ─────────────────
+    async def _generate_kit():
+        try:
+            from services.llm_service import (
+                extract_resume_json, optimize_resume_bullets,
+                generate_cover_letter, generate_outreach_templates, LLMMode,
+                generate_ats_analysis,
+            )
+            from services.resume_builder import compile_resume_pdf
+            import io as _io
+
+            # Step 1a: ATS Analysis to get missing keywords
+            ats_raw = await generate_ats_analysis(
+                resume_text=resume_text,
+                job_description=job_desc,
+                mode=LLMMode.QUALITY,
+            )
+            import json as _json
+            try:
+                ats_result = _json.loads(ats_raw)
+            except Exception:
+                ats_result = {}
+            missing_keywords = ats_result.get("missing_soft_tech_skills", [])
+
+            # Step 1b: Extract resume JSON
+            resume_json = await extract_resume_json(resume_text)
+
+            # Step 1c: Optimize bullets with keywords
+            optimized_json = await optimize_resume_bullets(resume_json, job_desc, missing_keywords)
+
+            # Step 1d: Compile PDF
+            pdf_bytes = await compile_resume_pdf(optimized_json)
+
+            # Step 2: Cover Letter
+            cover_letter = await generate_cover_letter(
+                resume_text=resume_text,
+                job_description=job_desc,
+                mode=LLMMode.QUALITY,
+            )
+
+            # Step 3: Outreach (dynamic)
+            outreach = {}
+            if has_linkedin or has_email:
+                outreach = await generate_outreach_templates(
+                    resume_text=resume_text,
+                    job_description=job_desc,
+                    hm_name=hm_name or "Hiring Manager",
+                    hm_role=hm_role or "Hiring Manager",
+                    company=job.get("company", "the company"),
+                    generate_linkedin=has_linkedin,
+                    generate_email=has_email,
+                )
+
+            # Step 4: Track application + set reminder
+            from db.connection import get_pool as _get_pool
+            from datetime import datetime, timedelta, timezone as _tz
+            pool = _get_pool()
+            async with pool.acquire() as conn:
+                app_row = await conn.fetchrow(
+                    """
+                    INSERT INTO applications (telegram_id, company_name, job_title, job_url, status, is_manual)
+                    VALUES ($1, $2, $3, $4, 'tracked', TRUE)
+                    RETURNING id
+                    """,
+                    user_id,
+                    job.get("company", "Unknown"),
+                    job.get("title", "Unknown"),
+                    job.get("url", ""),
+                )
+                if app_row:
+                    remind_at = datetime.now(_tz.utc) + timedelta(days=3)
+                    await conn.execute(
+                        """
+                        INSERT INTO reminders (telegram_id, application_id, remind_at, reminder_type)
+                        VALUES ($1, $2, $3, 'followup')
+                        """,
+                        user_id, app_row["id"], remind_at,
+                    )
+
+            # Step 5: Send the final payload
+            company = job.get("company", "Company")
+
+            # Send ATS Resume PDF
+            name_slug = resume_json.get("name", "resume").replace(" ", "_")
+            filename = f"{name_slug}_ATS_{company.replace(' ', '_')}.pdf"
+            await context.bot.send_document(
+                chat_id=user_id,
+                document=_io.BytesIO(pdf_bytes),
+                filename=filename,
+                caption=(
+                    f"📄 ATS-Optimized Resume for {company}\n"
+                    f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
+                    "Your Apply Smart Kit continues below 👇"
+                ),
+            )
+
+            # Build the outreach section
+            outreach_lines = []
+            if outreach:
+                outreach_lines.append(f"\n\n👤 Hiring Manager: {hm_name or 'N/A'} ({hm_role or 'N/A'})")
+                if hm_linkedin:
+                    outreach_lines.append(f"🔗 LinkedIn: {hm_linkedin}")
+                if hm_email:
+                    outreach_lines.append(f"📧 Email: {hm_email}")
+                if outreach.get("connection_note"):
+                    outreach_lines.append(f"\n📌 Connection Note (<200 chars):\n\"{outreach['connection_note'][:200]}\"")
+                if outreach.get("linkedin_dm"):
+                    outreach_lines.append(f"\n💬 LinkedIn DM:\n{outreach['linkedin_dm']}")
+                if outreach.get("cold_email"):
+                    outreach_lines.append(f"\n📧 Cold Email:\n{outreach['cold_email']}")
+
+            outreach_text = "\n".join(outreach_lines)
+
+            # Build full cover letter + outreach message (plain text to avoid MarkdownV2 escaping issues)
+            full_msg = (
+                f"🎯 Apply Smart Kit Ready for {company}!\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"✍️ Cover Letter:\n\n{cover_letter}\n"
+                f"{outreach_text}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ Application tracked!\n"
+                f"⏰ Follow-up reminder set for 3 days from now.\n\n"
+                f"Good luck! 🚀"
+            )
+
+            MAX_LEN = 4096
+            if len(full_msg) > MAX_LEN:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"✍️ Cover Letter for {company}:\n\n{cover_letter}",
+                )
+                if outreach_text:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=f"👤 Outreach Templates:{outreach_text}\n\n✅ Application tracked! ⏰ Follow-up in 3 days.",
+                    )
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="✅ Application tracked! ⏰ Follow-up reminder set for 3 days from now. Good luck! 🚀",
+                )
+            else:
+                await context.bot.send_message(chat_id=user_id, text=full_msg)
+
+        except Exception as e:
+            logger.error(f"Apply Smart generation failed for user {user_id}, job {job_id}: {e}")
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "❌ Oops! Something went wrong while generating your Apply Kit. "
+                    "Your usage counter has still been incremented. "
+                    "Please try again in a few minutes or contact support."
+                ),
+            )
+
+    asyncio.create_task(_generate_kit())
+
