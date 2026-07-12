@@ -370,3 +370,41 @@ async def downgrade_expired_trials() -> None:
         updated_count = int(result.split()[-1]) if result.startswith("UPDATE") else 0
         if updated_count > 0:
             logger.info(f"Downgraded {updated_count} expired trials to free plan.")
+
+
+async def get_apply_smart_usage(telegram_id: int) -> dict:
+    """Return how many Apply Smart generations the user has used today."""
+    pool = get_pool()
+    from datetime import date
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT apply_smart_used, apply_smart_reset FROM users WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if not row:
+            return {"used": 0}
+        # Reset counter if last reset was on a previous date
+        if row["apply_smart_reset"] != date.today():
+            await conn.execute(
+                "UPDATE users SET apply_smart_used = 0, apply_smart_reset = CURRENT_DATE WHERE telegram_id = $1",
+                telegram_id,
+            )
+            return {"used": 0}
+        return {"used": row["apply_smart_used"] or 0}
+
+
+async def increment_apply_smart_used(telegram_id: int) -> None:
+    """Increment the apply_smart_used counter for a user."""
+    pool = get_pool()
+    from datetime import date
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET apply_smart_used = COALESCE(apply_smart_used, 0) + 1,
+                apply_smart_reset = CURRENT_DATE
+            WHERE telegram_id = $1
+            """,
+            telegram_id,
+        )
+

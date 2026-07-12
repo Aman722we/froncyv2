@@ -305,17 +305,19 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
 def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None) -> InlineKeyboardMarkup:
     """Actions for a single job detail view.
     Layout:
-        Row 1: [📊 ATS Analyze]  [✍️ Cover Letter]
-        Row 2: [✅ Mark as Applied]  [⏳ Remind Me]
-        Row 3: [🔙 Back]
+        Row 1: [🚀 Apply Smart (Complete Kit)]        ← Full Width
+        Row 2: [📄 ATS Resume]  [✍️ Cover Letter]
+        Row 3: [✅ Mark as Applied]  [⏳ Remind Me]
+        Row 4: [🔗 Open Link]  [⬅️ Back]
     """
     is_manual = job.get("is_manual", False)
     prefix = "manual" if is_manual else "job"
     cl_prefix = "manual_cl" if is_manual else "cl"
     ats_prefix = "manual_ats" if is_manual else "ats"
     remind_callback = f"remind_manual_{job['id']}" if is_manual else f"remind_job_{job['id']}"
+    applied_cb = f"manual_applied_{job['id']}" if is_manual else f"applied_{job['id']}"
 
-    # Build the apply URL: use redirector in production, raw URL in dev
+    # Build the apply URL
     raw_url = job.get("url", "https://t.me/FroncyJobsBot")
     webhook_raw = settings.WEBHOOK_URL or ""
     if webhook_raw:
@@ -330,47 +332,48 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 
     buttons = []
 
-    # Row 1: ATS (pro) + Cover Letter
+    # Row 1: Apply Smart — Full Width (only for manual jobs that have HM data)
+    # Show for all manual jobs; the handler will check quota and HM availability
+    if is_manual:
+        buttons.append([
+            InlineKeyboardButton("🚀 Apply Smart (Complete Kit)", callback_data=f"apply_smart_{job['id']}"),
+        ])
+    
+    # Row 2: ATS + Cover Letter
     if plan in ("pro", "trial"):
         buttons.append([
-            InlineKeyboardButton("📊 ATS Analyze", callback_data=f"{ats_prefix}_job_{job['id']}"),
+            InlineKeyboardButton("📄 ATS Resume", callback_data=f"{ats_prefix}_job_{job['id']}"),
             InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
     else:
-        # Free users: show upsell hint on ATS, keep CL
         buttons.append([
-            InlineKeyboardButton("🔒 ATS Analyze (Pro)", callback_data="menu_upgrade"),
+            InlineKeyboardButton("🔒 ATS Resume (Pro)", callback_data="menu_upgrade"),
             InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
-        # Optionally show match score upsell
-        if score >= 70:
-            buttons.insert(0, [InlineKeyboardButton("🔍 Unlock Match Breakdown → Go Pro", callback_data="menu_upgrade")])
-        elif 0 <= score < 70:
-            buttons.insert(0, [InlineKeyboardButton("🔍 See What's Missing → Go Pro", callback_data="menu_upgrade")])
 
-    # Row 2: Mark as Applied + Remind Me (replaces old Save button)
-    is_manual = job.get("is_manual", False)
-    applied_cb = f"manual_applied_{job['id']}" if is_manual else f"applied_{job['id']}"
+    # Row 3: Mark as Applied + Remind Me
     buttons.append([
         InlineKeyboardButton("✅ Mark as Applied", callback_data=applied_cb),
         InlineKeyboardButton("⏳ Remind Me", callback_data=remind_callback),
     ])
 
-    # Row 3: Open Link (URL button, no callback_data)
+    # Row 4: Open Link + Back (split)
+    if from_saved:
+        back_cb = "menu_saved"
+        back_label = "⬅️ Back to Saved"
+    elif from_daily:
+        back_cb = "menu_daily"
+        back_label = "⬅️ Back to Feed"
+    else:
+        back_cb = "menu_jobs"
+        back_label = "⬅️ Back to Jobs"
+
     buttons.append([
         InlineKeyboardButton("🔗 Open Link", url=apply_url),
+        InlineKeyboardButton(back_label, callback_data=back_cb),
     ])
 
-    # Row 4: Back navigation
-    if from_saved:
-        buttons.append([InlineKeyboardButton("🔙 Back to Saved Jobs", callback_data="menu_saved")])
-    elif from_daily:
-        buttons.append([InlineKeyboardButton("🔙 Back to Daily Feed", callback_data="menu_daily")])
-    else:
-        buttons.append([InlineKeyboardButton("🔙 Back to Jobs", callback_data="menu_jobs")])
-
     return InlineKeyboardMarkup(buttons)
-
 
 
 # ──────────────────────────────────────────────

@@ -521,3 +521,107 @@ Apply your two-step process and return the diff patch JSON:"""
 
     return resume_json
 
+
+OUTREACH_SYSTEM_PROMPT = """You are a world-class career coach and ghostwriter who crafts highly personalized, authentic outreach messages for job seekers.
+
+You will receive:
+- A candidate's resume text
+- A job description
+- A hiring manager's name and role
+
+Your task is to generate outreach messages that feel genuine and human, not templated.
+Reference specific details from the company, job, and candidate's background.
+
+CRITICAL RULES:
+- connection_note: MUST be under 200 characters. It is the LinkedIn connection request note. Be specific, reference the company or role. No emojis.
+- linkedin_dm: 3-4 short paragraphs. Warm but professional. Reference 1 specific project from their resume that maps to this role.
+- cold_email: Professional email. Include a subject line on the first line prefixed with "Subject: ". Then the body. 4-5 short paragraphs.
+- NEVER use generic phrases like "I hope this message finds you well" or "I am writing to express my interest".
+- Use the hiring manager's actual name and role. Address them directly.
+- Return ONLY valid JSON. No markdown, no code blocks.
+
+Return JSON in EXACTLY this format:
+{
+  "connection_note": "...",
+  "linkedin_dm": "...",
+  "cold_email": "Subject: [subject here]\\n\\n[email body here]"
+}"""
+
+
+async def generate_outreach_templates(
+    resume_text: str,
+    job_description: str,
+    hm_name: str,
+    hm_role: str,
+    company: str,
+    generate_linkedin: bool = True,
+    generate_email: bool = True,
+) -> dict:
+    """
+    Dynamically generate outreach templates based on available hiring manager data.
+
+    Returns a dict with keys depending on what was requested:
+      connection_note, linkedin_dm, cold_email
+    """
+    import json as _json
+
+    fields_needed = []
+    if generate_linkedin:
+        fields_needed.extend(["connection_note", "linkedin_dm"])
+    if generate_email:
+        fields_needed.append("cold_email")
+
+    if not fields_needed:
+        return {}
+
+    fields_schema = ", ".join(f'"{f}": "..."' for f in fields_needed)
+    schema_note = f"Return ONLY these fields: {{{fields_schema}}}"
+
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
+
+    user_message = f"""Candidate Resume:
+{resume_text[:2000]}
+
+Job Description:
+{job_description[:1500]}
+
+Hiring Manager: {hm_name} ({hm_role}) at {company}
+
+{schema_note}
+
+Generate the outreach messages now:"""
+
+    for attempt in range(2):
+        try:
+            logger.info(f"Generating outreach templates with {model} (attempt {attempt + 1})")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": OUTREACH_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.7,
+                max_tokens=1200,
+                top_p=1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+
+            data = _json.loads(result.strip())
+            logger.info(f"Outreach templates generated: {list(data.keys())}")
+            return data
+
+        except Exception as e:
+            logger.error(f"Outreach LLM error (attempt {attempt + 1}): {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+            else:
+                logger.warning("Returning empty outreach templates as fallback")
+                return {}
+
+    return {}

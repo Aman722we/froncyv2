@@ -17,10 +17,50 @@ This file tracks the upcoming features, bug fixes, and improvements that need to
 ## 📝 Backlog / Ideas
 - [ ] **Conversational correction for resume generator:** Allow users to chat with the bot to make manual edits to the generated ATS resume.
 - [ ] **Apply Success Kit button:** A bundle (Cover letter, cold email, resume, interview prep) generated in one click.
+- [ ] **Apply smart button:**               
+      Imagine this
+
+Someone opens this job.
+
+Frontend Engineer
+VectorShift
+
+They press
+
+🚀 Apply Smart
+
+Then
+
+Step 1
+Generate ATS Resume
+Done.
+
+Step 2
+Generate Cover Letter
+Done.
+
+Step 3
+Message Hiring Team
+👤 Founder
+LinkedIn
+Email
+
+Generate LinkedIn DM
+Generate Cold Email
+Done.
+
+Step 4
+Application Tracked
+Follow-up reminder set for 3 days.
+
+Finished.
+
 - [ ] **Database Backup:** Automate backing up the PostgreSQL database using Cloudflare storage or AWS S3.
 - [ ] **Tackle Expired Jobs:** Implement a system or cron job to automatically detect and prune expired jobs from the manual job board.
 - [ ] **Remove button spinner suppressor:** Adjust UI logic to properly handle telegram button loading states.
 - [ ] **Help Command Update:** Update `/help` command to explicitly direct users to message `FroncySupport` with issues.
+- [ ] **Add linter and tests on github:** to catch bugs before release.
+- [ ] **CodeRabbit:** try to find any good substitute of code rabbit.
 
 ## 📊 Analytics Backlog
 - [x] **Daily Active Users / Feed Openers:** Tracking users who explicitly check their feed.
