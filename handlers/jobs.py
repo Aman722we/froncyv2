@@ -627,26 +627,31 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             from datetime import datetime, timedelta, timezone as _tz
             pool = _get_pool()
             async with pool.acquire() as conn:
-                app_row = await conn.fetchrow(
-                    """
-                    INSERT INTO applications (telegram_id, company_name, job_title, job_url, status, is_manual)
-                    VALUES ($1, $2, $3, $4, 'tracked', TRUE)
-                    RETURNING id
-                    """,
-                    user_id,
-                    job.get("company", "Unknown"),
-                    job.get("title", "Unknown"),
-                    job.get("url", ""),
+                app_id = await conn.fetchval(
+                    "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = TRUE",
+                    user_id, job_id
                 )
-                if app_row:
-                    remind_at = datetime.now(_tz.utc) + timedelta(days=3)
-                    await conn.execute(
+                if not app_id:
+                    app_id = await conn.fetchval(
                         """
-                        INSERT INTO reminders (telegram_id, application_id, remind_at, reminder_type)
-                        VALUES ($1, $2, $3, 'followup')
+                        INSERT INTO applications (telegram_id, job_id, status, is_manual)
+                        VALUES ($1, $2, 'tracked', TRUE)
+                        RETURNING id
                         """,
-                        user_id, app_row["id"], remind_at,
+                        user_id, job_id,
                     )
+                
+                if app_id:
+                    rem_exists = await conn.fetchval("SELECT id FROM reminders WHERE application_id = $1", app_id)
+                    if not rem_exists:
+                        remind_at = datetime.now(_tz.utc) + timedelta(days=3)
+                        await conn.execute(
+                            """
+                            INSERT INTO reminders (telegram_id, application_id, remind_at, reminder_type)
+                            VALUES ($1, $2, $3, 'followup')
+                            """,
+                            user_id, app_id, remind_at,
+                        )
 
             # Step 5: Send the final payload
             company = job.get("company", "Company")
