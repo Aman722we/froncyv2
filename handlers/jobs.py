@@ -548,17 +548,20 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         steps.append("✅ Cold Email")
     steps.append("✅ Application Tracked + Follow-up Reminder (3 days)")
 
+    from utils.helpers import escape_md
     steps_text = "\n".join(f"  {s}" for s in steps)
 
     explore_kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("🔍 Explore Other Jobs", callback_data="explore_loading_jobs")
     ]])
 
+    company_name = escape_md(job.get('company', 'this company'))
+    
     loading_msg = await query.edit_message_text(
         f"🚀 *Apply Smart Engine Starting\\!*\n\n"
-        f"Building your complete application kit for *{job.get('company', 'this company')}*\\.\n\n"
+        f"Building your complete application kit for *{company_name}*\\.\n\n"
         f"This takes \\~8 minutes\\. Feel free to browse other jobs — I'll ping you the moment it's ready\\! 🔔\n\n"
-        f"*What's being generated:*\n{steps_text.replace('.', chr(92)+'.')}",
+        f"*What's being generated:*\n{escape_md(steps_text)}",
         parse_mode="MarkdownV2",
         reply_markup=explore_kb,
     )
