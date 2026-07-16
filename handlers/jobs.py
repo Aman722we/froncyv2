@@ -593,7 +593,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 lines.append(f"{step_states['outreach']} LinkedIn Connection Note + DM" if has_linkedin else f"{step_states['outreach']} Cold Email")
                 if has_linkedin and has_email:
                     lines[-1] = f"{step_states['outreach']} LinkedIn Connection Note + DM + Cold Email"
-            lines.append(f"{step_states['tracking']} Application Tracked + Follow-up Reminder")
+            lines.append(f"{step_states['tracking']} Application Tracked + Follow\-up Reminder")
             try:
                 await loading_msg.edit_text(
                     _build_loading_text(current_action, lines, company_name),
@@ -658,40 +658,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 step_states["outreach"] = "✅"
 
-            # Step 4: Track application + set reminder
-            await _refresh_loading("⚙️ Step 4/4 — Tracking application \u0026 setting reminder...")
+            # Step 4: Send the kit (tracking comes AFTER successful delivery)
+            await _refresh_loading("⚙️ Step 4/5 — Sending your kit...")
 
-            from db.connection import get_pool as _get_pool
-            from datetime import datetime, timedelta, timezone as _tz
-            pool = _get_pool()
-            async with pool.acquire() as conn:
-                app_id = await conn.fetchval(
-                    "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = TRUE",
-                    user_id, job_id
-                )
-                if not app_id:
-                    app_id = await conn.fetchval(
-                        """
-                        INSERT INTO applications (telegram_id, job_id, status, is_manual)
-                        VALUES ($1, $2, 'tracked', TRUE)
-                        RETURNING id
-                        """,
-                        user_id, job_id,
-                    )
-                if app_id:
-                    rem_exists = await conn.fetchval("SELECT id FROM reminders WHERE application_id = $1", app_id)
-                    if not rem_exists:
-                        remind_at = datetime.now(_tz.utc) + timedelta(days=3)
-                        await conn.execute(
-                            """
-                            INSERT INTO reminders (telegram_id, application_id, remind_at, reminder_type)
-                            VALUES ($1, $2, $3, 'followup')
-                            """,
-                            user_id, app_id, remind_at,
-                        )
-            step_states["tracking"] = "✅"
-
-            # Final loading update — all done
+            # Final loading update — all done (before messages arrive)
             await _refresh_loading("✅ All done! Your kit is below 👇")
 
             # ── Deliver Kit: Option A — 2 messages ──────────────
@@ -816,27 +786,66 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                         disable_notification=True,
                     )
 
+            # Step 5: Track application + set reminder (AFTER successful delivery)
+            await _refresh_loading("⚙️ Step 5/5 — Tracking application & setting reminder...")
+            from db.connection import get_pool as _get_pool
+            from datetime import datetime, timedelta, timezone as _tz
+            pool = _get_pool()
+            async with pool.acquire() as conn:
+                app_id = await conn.fetchval(
+                    "SELECT id FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = TRUE",
+                    user_id, job_id
+                )
+                if not app_id:
+                    app_id = await conn.fetchval(
+                        """
+                        INSERT INTO applications (telegram_id, job_id, status, is_manual)
+                        VALUES ($1, $2, 'tracked', TRUE)
+                        RETURNING id
+                        """,
+                        user_id, job_id,
+                    )
+                if app_id:
+                    rem_exists = await conn.fetchval("SELECT id FROM reminders WHERE application_id = $1", app_id)
+                    if not rem_exists:
+                        remind_at = datetime.now(_tz.utc) + timedelta(days=3)
+                        await conn.execute(
+                            """
+                            INSERT INTO reminders (telegram_id, application_id, remind_at, reminder_type)
+                            VALUES ($1, $2, $3, 'followup')
+                            """,
+                            user_id, app_id, remind_at,
+                        )
+            step_states["tracking"] = "✅"
+            await _refresh_loading("✅ Done! Application tracked & reminder set.")
+
         except Exception as e:
             logger.error(f"Apply Smart generation failed for user {user_id}, job {job_id}: {e}")
-            
-            # Decrement usage count since it failed
+
+            # Decrement usage count since it failed — user gets a free retry
             try:
                 pool = _get_pool()
                 async with pool.acquire() as conn:
                     await conn.execute(
-                        "UPDATE users SET apply_smart_used = GREATEST(0, apply_smart_used - 1) WHERE telegram_id = $1", 
+                        "UPDATE users SET apply_smart_used = GREATEST(0, apply_smart_used - 1) WHERE telegram_id = $1",
                         user_id
                     )
             except Exception as db_e:
                 logger.error(f"Failed to decrement usage count for user {user_id}: {db_e}")
 
+            # Retry button so the user can try again without hunting for the job
+            retry_kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 Retry Apply Smart", callback_data=f"apply_smart_{job_id}")
+            ]])
+
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
                     "❌ Oops! Something went wrong while generating your Apply Kit.\n"
-                    "Don't worry, your usage credit has been refunded.\n"
-                    "Please try again in a few minutes or contact support."
+                    "Don't worry — your usage credit has been refunded.\n\n"
+                    "Tap the button below to try again instantly!"
                 ),
+                reply_markup=retry_kb,
             )
 
     asyncio.create_task(_generate_kit())
