@@ -696,6 +696,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # ── Deliver Kit: Option A — 2 messages ──────────────
             company = job.get("company", "Company")
+            company_esc = escape_md(company)
 
             # Message 1: ATS Resume PDF
             name_slug = resume_json.get("name", "resume").replace(" ", "_")
@@ -713,7 +714,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Message 2: Full kit as a single message with tap-to-copy code blocks
             # Cover Letter block
             kit_parts = [
-                f"🎯 *Apply Smart Kit Ready for {company}\!*",
+                f"🎯 *Apply Smart Kit Ready for {company_esc}\!*",
                 "",
                 "━━━━━━━━━━━━━━━━━━━━━━━━",
                 "✍️ *Cover Letter* — tap to copy:",
@@ -722,15 +723,17 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Outreach blocks
             if outreach:
+                hm_name_esc = escape_md(hm_name or "N/A")
+                hm_role_esc = escape_md(hm_role or "N/A")
                 kit_parts += [
                     "",
                     "━━━━━━━━━━━━━━━━━━━━━━━━",
-                    f"👤 *Hiring Manager:* {hm_name or 'N/A'} \({hm_role or 'N/A'}\)",
+                    f"👤 *Hiring Manager:* {hm_name_esc} \({hm_role_esc}\)",
                 ]
                 if hm_linkedin:
-                    kit_parts.append(f"🔗 LinkedIn: {hm_linkedin}")
+                    kit_parts.append(f"🔗 LinkedIn: {escape_md(hm_linkedin)}")
                 if hm_email:
-                    kit_parts.append(f"📧 Email: {hm_email}")
+                    kit_parts.append(f"📧 Email: {escape_md(hm_email)}")
 
                 if outreach.get("connection_note"):
                     kit_parts += [
@@ -774,7 +777,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 # Split: send cover letter first, then outreach
                 cl_msg = (
-                    f"🎯 *Apply Smart Kit Ready for {company}\!*\n\n"
+                    f"🎯 *Apply Smart Kit Ready for {company_esc}\!*\n\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "✍️ *Cover Letter* — tap to copy:\n"
                     f"```\n{cover_letter}\n```"
@@ -815,11 +818,23 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         except Exception as e:
             logger.error(f"Apply Smart generation failed for user {user_id}, job {job_id}: {e}")
+            
+            # Decrement usage count since it failed
+            try:
+                pool = _get_pool()
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE users SET apply_smart_used = GREATEST(0, apply_smart_used - 1) WHERE telegram_id = $1", 
+                        user_id
+                    )
+            except Exception as db_e:
+                logger.error(f"Failed to decrement usage count for user {user_id}: {db_e}")
+
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
-                    "❌ Oops! Something went wrong while generating your Apply Kit. "
-                    "Your usage counter has still been incremented. "
+                    "❌ Oops! Something went wrong while generating your Apply Kit.\n"
+                    "Don't worry, your usage credit has been refunded.\n"
                     "Please try again in a few minutes or contact support."
                 ),
             )
