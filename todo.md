@@ -61,6 +61,7 @@ Finished.
 - [ ] **Help Command Update:** Update `/help` command to explicitly direct users to message `FroncySupport` with issues.
 - [ ] **Add linter and tests on github:** to catch bugs before release.
 - [ ] **CodeRabbit:** try to find any good substitute of code rabbit.
+- [ ] **Advanced Outreach:** Support parsing multiple `👤` contacts per job and generating outreach templates for all of them (e.g., both Founder and HR).
 
 ## 📊 Analytics Backlog
 - [x] **Daily Active Users / Feed Openers:** Tracking users who explicitly check their feed.
