@@ -541,27 +541,34 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
     # ── 4. Instantly respond — free the user to browse ────
-    steps = ["✅ ATS Resume", "✅ Cover Letter"]
+    # Build pending step list (⏳ = not started yet)
+    pending_steps = ["⏳ ATS Resume"]
+    pending_steps.append("⏳ Cover Letter")
     if has_linkedin:
-        steps.append("✅ LinkedIn Connection Note + DM")
+        pending_steps.append("⏳ LinkedIn Connection Note + DM")
     if has_email:
-        steps.append("✅ Cold Email")
-    steps.append("✅ Application Tracked + Follow-up Reminder (3 days)")
+        pending_steps.append("⏳ Cold Email")
+    pending_steps.append("⏳ Application Tracked \u002b Follow-up Reminder")
 
     from utils.helpers import escape_md
-    steps_text = "\n".join(f"  {s}" for s in steps)
+
+    def _build_loading_text(header: str, steps: list[str], company_esc: str) -> str:
+        steps_text = "\n".join(f"  {s}" for s in steps)
+        return (
+            f"{escape_md(header)}\n\n"
+            f"Building your kit for *{company_esc}*\.\n"
+            f"Feel free to browse other jobs — I'll ping you the moment it's ready\! 🔔\n\n"
+            f"*Progress:*\n{escape_md(steps_text)}"
+        )
 
     explore_kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("🔍 Explore Other Jobs", callback_data="explore_loading_jobs")
     ]])
 
     company_name = escape_md(job.get('company', 'this company'))
-    
+
     loading_msg = await query.edit_message_text(
-        f"🚀 *Apply Smart Engine Starting\\!*\n\n"
-        f"Building your complete application kit for *{company_name}*\\.\n\n"
-        f"This takes \\~8 minutes\\. Feel free to browse other jobs — I'll ping you the moment it's ready\\! 🔔\n\n"
-        f"*What's being generated:*\n{escape_md(steps_text)}",
+        _build_loading_text("🚀 Apply Smart Engine Starting!", pending_steps, company_name),
         parse_mode="MarkdownV2",
         reply_markup=explore_kb,
     )
@@ -571,6 +578,31 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # ── 5. Kick off background generation ─────────────────
     async def _generate_kit():
+        # Helper: update the loading message's live progress
+        step_states = {
+            "resume": "⏳",
+            "cover_letter": "⏳",
+            "outreach": "⏳" if (has_linkedin or has_email) else None,
+            "tracking": "⏳",
+        }
+
+        async def _refresh_loading(current_action: str):
+            lines = [f"{step_states['resume']} ATS Resume"]
+            lines.append(f"{step_states['cover_letter']} Cover Letter")
+            if step_states["outreach"] is not None:
+                lines.append(f"{step_states['outreach']} LinkedIn Connection Note + DM" if has_linkedin else f"{step_states['outreach']} Cold Email")
+                if has_linkedin and has_email:
+                    lines[-1] = f"{step_states['outreach']} LinkedIn Connection Note + DM + Cold Email"
+            lines.append(f"{step_states['tracking']} Application Tracked + Follow-up Reminder")
+            try:
+                await loading_msg.edit_text(
+                    _build_loading_text(current_action, lines, company_name),
+                    parse_mode="MarkdownV2",
+                    reply_markup=explore_kb,
+                )
+            except Exception:
+                pass  # Ignore edit failures (e.g., message not modified)
+
         try:
             from services.llm_service import (
                 extract_resume_json, optimize_resume_bullets,
@@ -580,7 +612,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             from services.resume_builder import compile_resume_pdf
             import io as _io
 
-            # Step 1a: ATS Analysis to get missing keywords
+            # Step 1: ATS Resume
+            await _refresh_loading("⚙️ Step 1/4 — Analysing job & building ATS Resume...")
+
             ats_raw = await generate_ats_analysis(
                 resume_text=resume_text,
                 job_description=job_desc,
@@ -593,25 +627,26 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 ats_result = {}
             missing_keywords = ats_result.get("missing_soft_tech_skills", [])
 
-            # Step 1b: Extract resume JSON
             resume_json = await extract_resume_json(resume_text)
-
-            # Step 1c: Optimize bullets with keywords
             optimized_json = await optimize_resume_bullets(resume_json, job_desc, missing_keywords)
-
-            # Step 1d: Compile PDF
             pdf_bytes = await compile_resume_pdf(optimized_json)
 
+            step_states["resume"] = "✅"
+
             # Step 2: Cover Letter
+            await _refresh_loading("⚙️ Step 2/4 — Writing Cover Letter...")
+
             cover_letter = await generate_cover_letter(
                 resume_text=resume_text,
                 job_description=job_desc,
                 mode=LLMMode.QUALITY,
             )
+            step_states["cover_letter"] = "✅"
 
-            # Step 3: Outreach (dynamic)
+            # Step 3: Outreach
             outreach = {}
             if has_linkedin or has_email:
+                await _refresh_loading("⚙️ Step 3/4 — Drafting outreach messages...")
                 outreach = await generate_outreach_templates(
                     resume_text=resume_text,
                     job_description=job_desc,
@@ -621,8 +656,11 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     generate_linkedin=has_linkedin,
                     generate_email=has_email,
                 )
+                step_states["outreach"] = "✅"
 
             # Step 4: Track application + set reminder
+            await _refresh_loading("⚙️ Step 4/4 — Tracking application \u0026 setting reminder...")
+
             from db.connection import get_pool as _get_pool
             from datetime import datetime, timedelta, timezone as _tz
             pool = _get_pool()
@@ -640,7 +678,6 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                         """,
                         user_id, job_id,
                     )
-                
                 if app_id:
                     rem_exists = await conn.fetchval("SELECT id FROM reminders WHERE application_id = $1", app_id)
                     if not rem_exists:
@@ -652,11 +689,15 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                             """,
                             user_id, app_id, remind_at,
                         )
+            step_states["tracking"] = "✅"
 
-            # Step 5: Send the final payload
+            # Final loading update — all done
+            await _refresh_loading("✅ All done! Your kit is below 👇")
+
+            # ── Deliver Kit: Option A — 2 messages ──────────────
             company = job.get("company", "Company")
 
-            # Send ATS Resume PDF
+            # Message 1: ATS Resume PDF
             name_slug = resume_json.get("name", "resume").replace(" ", "_")
             filename = f"{name_slug}_ATS_{company.replace(' ', '_')}.pdf"
             await context.bot.send_document(
@@ -665,57 +706,112 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 filename=filename,
                 caption=(
                     f"📄 ATS-Optimized Resume for {company}\n"
-                    f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}\n\n"
-                    "Your Apply Smart Kit continues below 👇"
+                    f"Keywords added: {', '.join(missing_keywords[:5]) if missing_keywords else 'general optimization'}"
                 ),
             )
 
-            # Build the outreach section
-            outreach_lines = []
+            # Message 2: Full kit as a single message with tap-to-copy code blocks
+            # Cover Letter block
+            kit_parts = [
+                f"🎯 *Apply Smart Kit Ready for {company}\!*",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━",
+                "✍️ *Cover Letter* — tap to copy:",
+                f"```\n{cover_letter}\n```",
+            ]
+
+            # Outreach blocks
             if outreach:
-                outreach_lines.append(f"\n\n👤 Hiring Manager: {hm_name or 'N/A'} ({hm_role or 'N/A'})")
+                kit_parts += [
+                    "",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━",
+                    f"👤 *Hiring Manager:* {hm_name or 'N/A'} \({hm_role or 'N/A'}\)",
+                ]
                 if hm_linkedin:
-                    outreach_lines.append(f"🔗 LinkedIn: {hm_linkedin}")
+                    kit_parts.append(f"🔗 LinkedIn: {hm_linkedin}")
                 if hm_email:
-                    outreach_lines.append(f"📧 Email: {hm_email}")
+                    kit_parts.append(f"📧 Email: {hm_email}")
+
                 if outreach.get("connection_note"):
-                    outreach_lines.append(f"\n📌 Connection Note (<200 chars):\n\"{outreach['connection_note'][:200]}\"")
+                    kit_parts += [
+                        "",
+                        "📌 *Connection Note* \(\<200 chars\) — tap to copy:",
+                        f"```\n{outreach['connection_note'][:200]}\n```",
+                    ]
                 if outreach.get("linkedin_dm"):
-                    outreach_lines.append(f"\n💬 LinkedIn DM:\n{outreach['linkedin_dm']}")
+                    kit_parts += [
+                        "",
+                        "💬 *LinkedIn DM* — tap to copy:",
+                        f"```\n{outreach['linkedin_dm']}\n```",
+                    ]
                 if outreach.get("cold_email"):
-                    outreach_lines.append(f"\n📧 Cold Email:\n{outreach['cold_email']}")
+                    kit_parts += [
+                        "",
+                        "📧 *Cold Email* — tap to copy:",
+                        f"```\n{outreach['cold_email']}\n```",
+                    ]
 
-            outreach_text = "\n".join(outreach_lines)
+            kit_parts += [
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━",
+                "✅ Application tracked\!",
+                "⏰ Follow\-up reminder set for 3 days from now\.",
+                "",
+                "Good luck\! 🚀",
+            ]
 
-            # Build full cover letter + outreach message (plain text to avoid MarkdownV2 escaping issues)
-            full_msg = (
-                f"🎯 Apply Smart Kit Ready for {company}!\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"✍️ Cover Letter:\n\n{cover_letter}\n"
-                f"{outreach_text}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"✅ Application tracked!\n"
-                f"⏰ Follow-up reminder set for 3 days from now.\n\n"
-                f"Good luck! 🚀"
-            )
+            kit_text = "\n".join(kit_parts)
 
+            # Telegram max message length is 4096 chars; split only if needed
             MAX_LEN = 4096
-            if len(full_msg) > MAX_LEN:
+            if len(kit_text) <= MAX_LEN:
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text=f"✍️ Cover Letter for {company}:\n\n{cover_letter}",
-                )
-                if outreach_text:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=f"👤 Outreach Templates:{outreach_text}\n\n✅ Application tracked! ⏰ Follow-up in 3 days.",
-                    )
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text="✅ Application tracked! ⏰ Follow-up reminder set for 3 days from now. Good luck! 🚀",
+                    text=kit_text,
+                    parse_mode="MarkdownV2",
+                    disable_notification=True,
                 )
             else:
-                await context.bot.send_message(chat_id=user_id, text=full_msg)
+                # Split: send cover letter first, then outreach
+                cl_msg = (
+                    f"🎯 *Apply Smart Kit Ready for {company}\!*\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "✍️ *Cover Letter* — tap to copy:\n"
+                    f"```\n{cover_letter}\n```"
+                )
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=cl_msg,
+                    parse_mode="MarkdownV2",
+                    disable_notification=True,
+                )
+                if outreach:
+                    outreach_msg_parts = ["📨 *Outreach Templates*\n"]
+                    if outreach.get("connection_note"):
+                        outreach_msg_parts += [
+                            "📌 *Connection Note* — tap to copy:",
+                            f"```\n{outreach['connection_note'][:200]}\n```\n",
+                        ]
+                    if outreach.get("linkedin_dm"):
+                        outreach_msg_parts += [
+                            "💬 *LinkedIn DM* — tap to copy:",
+                            f"```\n{outreach['linkedin_dm']}\n```\n",
+                        ]
+                    if outreach.get("cold_email"):
+                        outreach_msg_parts += [
+                            "📧 *Cold Email* — tap to copy:",
+                            f"```\n{outreach['cold_email']}\n```\n",
+                        ]
+                    outreach_msg_parts += [
+                        "━━━━━━━━━━━━━━━━━━━━━━━━",
+                        "✅ Application tracked\! ⏰ Follow\-up in 3 days\. Good luck\! 🚀",
+                    ]
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text="\n".join(outreach_msg_parts),
+                        parse_mode="MarkdownV2",
+                        disable_notification=True,
+                    )
 
         except Exception as e:
             logger.error(f"Apply Smart generation failed for user {user_id}, job {job_id}: {e}")
