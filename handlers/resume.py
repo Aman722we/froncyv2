@@ -377,7 +377,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         if not context.user_data.get("navigated_away_from_loading"):
             try:
                 full_text = (
-                    f"⚙️ *Generating your ATS Resume\.\.\.*\n\n{step_text}\n\n"
+                    rf"⚙️ *Generating your ATS Resume\.\.\.*\n\n{step_text}\n\n"
                     r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
                     r"You don't need to wait here, feel free to explore other jobs, and we'll send the PDF here when it's ready\!_"
                 )
