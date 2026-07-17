@@ -597,7 +597,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 lines.append(f"{step_states['outreach']} LinkedIn Connection Note + DM" if has_linkedin else f"{step_states['outreach']} Cold Email")
                 if has_linkedin and has_email:
                     lines[-1] = f"{step_states['outreach']} LinkedIn Connection Note + DM + Cold Email"
-            lines.append(f"{step_states['tracking']} Application Tracked + Follow\-up Reminder")
+            lines.append(f"{step_states['tracking']} Application Tracked + Follow-up Reminder")
             try:
                 await loading_msg.edit_text(
                     _build_loading_text(current_action, lines, company_name),
