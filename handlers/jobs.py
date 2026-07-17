@@ -599,10 +599,8 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     lines[-1] = f"{step_states['outreach']} LinkedIn Connection Note + DM + Cold Email"
             lines.append(f"{step_states['tracking']} Application Tracked + Follow\-up Reminder")
             try:
-                await context.bot.edit_message_text(
-                    chat_id=_loading_chat_id,
-                    message_id=_loading_msg_id,
-                    text=_build_loading_text(current_action, lines, company_name),
+                await loading_msg.edit_text(
+                    _build_loading_text(current_action, lines, company_name),
                     parse_mode="MarkdownV2",
                     reply_markup=explore_kb,
                 )
