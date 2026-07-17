@@ -517,9 +517,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if used >= limit:
         # Show the full upgrade page (just like ATS/filter limits do)
-        from services.pricing_service import get_pricing_info
+        from services.pricing_service import get_current_pricing
+        from db.connection import get_pool as _get_pool_pricing
         from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
-        pricing = await get_pricing_info()
+        pricing = await get_current_pricing(_get_pool_pricing())
         if pricing.get("is_early_adopter_active"):
             upgrade_msg = upgrade_early_adopter_message(pricing)
         else:
@@ -910,10 +911,11 @@ async def apply_smart_locked_callback(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     await query.answer()
 
-    from services.pricing_service import get_pricing_info
+    from services.pricing_service import get_current_pricing
+    from db.connection import get_pool as _get_pool_pricing
     from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
 
-    pricing = await get_pricing_info()
+    pricing = await get_current_pricing(_get_pool_pricing())
     if pricing.get("is_early_adopter_active"):
         upgrade_msg = upgrade_early_adopter_message(pricing)
     else:
