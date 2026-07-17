@@ -723,10 +723,19 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Message 3: Full kit as a single message with tap-to-copy code blocks
             # Cover Letter block
+            job_url = job.get("url", "")
+            job_url_esc = escape_md(job_url) if job_url else ""
             kit_parts = [
                 f"✍️ *Cover Letter* — tap to copy:",
                 f"```\n{cover_letter}\n```",
             ]
+
+            # Apply link right after cover letter
+            if job_url:
+                kit_parts += [
+                    "",
+                    f"🔗 *Apply here:* {job_url_esc}",
+                ]
 
             # Outreach blocks
             if outreach:
@@ -770,6 +779,14 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"Good luck\\! 🚀",
             ]
 
+            # Navigation buttons
+            nav_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔗 Open Apply Link", url=job_url)] if job_url else [],
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}")],
+            ]) if job_url else InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}")],
+            ])
+
             kit_text = "\n".join(kit_parts)
 
             # Telegram max message length is 4096 chars; split only if needed
@@ -779,6 +796,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     chat_id=user_id,
                     text=kit_text,
                     parse_mode="MarkdownV2",
+                    reply_markup=nav_kb,
                     disable_notification=True,
                 )
             else:
@@ -818,6 +836,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                         chat_id=user_id,
                         text="\n".join(outreach_msg_parts),
                         parse_mode="MarkdownV2",
+                        reply_markup=nav_kb,
                         disable_notification=True,
                     )
 
