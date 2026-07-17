@@ -557,7 +557,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return (
             f"{escape_md(header)}\n\n"
             f"Building your kit for *{company_esc}*\.\n"
-            f"Feel free to browse other jobs — I'll ping you the moment it's ready\! 🔔\n\n"
+            f"This will take at least \~5 mins, so explore other jobs 🔔\n\n"
             f"*Progress:*\n{escape_md(steps_text)}"
         )
 
@@ -595,13 +595,16 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     lines[-1] = f"{step_states['outreach']} LinkedIn Connection Note + DM + Cold Email"
             lines.append(f"{step_states['tracking']} Application Tracked + Follow\-up Reminder")
             try:
-                await loading_msg.edit_text(
-                    _build_loading_text(current_action, lines, company_name),
+                await context.bot.edit_message_text(
+                    chat_id=query.message.chat_id,
+                    message_id=query.message.message_id,
+                    text=_build_loading_text(current_action, lines, company_name),
                     parse_mode="MarkdownV2",
                     reply_markup=explore_kb,
                 )
-            except Exception:
-                pass  # Ignore edit failures (e.g., message not modified)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Apply Smart loading edit failed: {e}")
 
         try:
             from services.llm_service import (
@@ -664,11 +667,18 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Final loading update — all done (before messages arrive)
             await _refresh_loading("✅ All done! Your kit is below 👇")
 
-            # ── Deliver Kit: Option A — 2 messages ──────────────
+            # ── Deliver Kit: Option A — 3 messages (Title, PDF, Content) ──────────────
             company = job.get("company", "Company")
             company_esc = escape_md(company)
 
-            # Message 1: ATS Resume PDF
+            # Message 1: Intro Title
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"🎯 *Apply Smart Kit Ready for {company_esc}\!*",
+                parse_mode="MarkdownV2",
+            )
+
+            # Message 2: ATS Resume PDF
             name_slug = resume_json.get("name", "resume").replace(" ", "_")
             filename = f"{name_slug}_ATS_{company.replace(' ', '_')}.pdf"
             await context.bot.send_document(
@@ -681,12 +691,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 ),
             )
 
-            # Message 2: Full kit as a single message with tap-to-copy code blocks
+            # Message 3: Full kit as a single message with tap-to-copy code blocks
             # Cover Letter block
             kit_parts = [
-                f"🎯 *Apply Smart Kit Ready for {company_esc}\!*",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━━━━━",
                 "✍️ *Cover Letter* — tap to copy:",
                 f"```\n{cover_letter}\n```",
             ]
@@ -697,7 +704,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 hm_role_esc = escape_md(hm_role or "N/A")
                 kit_parts += [
                     "",
-                    "━━━━━━━━━━━━━━━━━━━━━━━━",
+                    "──────────────",
                     f"👤 *Hiring Manager:* {hm_name_esc} \({hm_role_esc}\)",
                 ]
                 if hm_linkedin:
@@ -726,7 +733,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             kit_parts += [
                 "",
-                "━━━━━━━━━━━━━━━━━━━━━━━━",
+                "──────────────",
                 "✅ Application tracked\!",
                 "⏰ Follow\-up reminder set for 3 days from now\.",
                 "",
@@ -747,8 +754,6 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 # Split: send cover letter first, then outreach
                 cl_msg = (
-                    f"🎯 *Apply Smart Kit Ready for {company_esc}\!*\n\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "✍️ *Cover Letter* — tap to copy:\n"
                     f"```\n{cover_letter}\n```"
                 )
@@ -776,7 +781,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                             f"```\n{outreach['cold_email']}\n```\n",
                         ]
                     outreach_msg_parts += [
-                        "━━━━━━━━━━━━━━━━━━━━━━━━",
+                        "──────────────",
                         "✅ Application tracked\! ⏰ Follow\-up in 3 days\. Good luck\! 🚀",
                     ]
                     await context.bot.send_message(
