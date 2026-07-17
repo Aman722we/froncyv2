@@ -573,6 +573,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=explore_kb,
     )
 
+    # Capture these NOW as plain ints before the handler returns and query becomes stale
+    _loading_chat_id: int = query.message.chat_id
+    _loading_msg_id: int = query.message.message_id
+
     # Increment counter immediately (prevents double-clicks)
     await increment_apply_smart_used(user_id)
 
@@ -596,15 +600,14 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             lines.append(f"{step_states['tracking']} Application Tracked + Follow\-up Reminder")
             try:
                 await context.bot.edit_message_text(
-                    chat_id=query.message.chat_id,
-                    message_id=query.message.message_id,
+                    chat_id=_loading_chat_id,
+                    message_id=_loading_msg_id,
                     text=_build_loading_text(current_action, lines, company_name),
                     parse_mode="MarkdownV2",
                     reply_markup=explore_kb,
                 )
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(f"Apply Smart loading edit failed: {e}")
+                logger.warning(f"Apply Smart loading edit failed: {e}")
 
         try:
             from services.llm_service import (
