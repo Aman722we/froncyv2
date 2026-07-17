@@ -47,10 +47,19 @@ LATEX_SUBS = (
 )
 
 def escape_latex(value: str) -> str:
-    """Escapes special characters for LaTeX."""
+    """Escapes special characters for LaTeX and removes unsupported Unicode."""
     if not isinstance(value, str):
         return value
-    newval = value
+
+    # 1. Strip unsupported Unicode (pdflatex crashes on weird symbols like ⌢, emojis)
+    # Keep Basic Latin + Latin-1 Supplement (0x00 - 0xFF) and common punctuation
+    def is_safe(c: str) -> bool:
+        cp = ord(c)
+        return cp <= 0x00FF or cp in (0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2026)
+        
+    newval = "".join(c for c in value if is_safe(c))
+
+    # 2. Escape standard LaTeX special characters
     for pattern, replacement in LATEX_SUBS:
         newval = pattern.sub(replacement, newval)
     return newval
