@@ -555,10 +555,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     def _build_loading_text(header: str, steps: list[str], company_esc: str) -> str:
         steps_text = "\n".join(f"  {s}" for s in steps)
         return (
-            rf"{escape_md(header)}\n\n"
-            rf"Building your kit for *{company_esc}*\.\n"
-            rf"This will take at least \~5 mins, so explore other jobs 🔔\n\n"
-            rf"*Progress:*\n{escape_md(steps_text)}"
+            f"{escape_md(header)}\n\n"
+            f"Building your kit for *{company_esc}*\\.\n"
+            f"This will take at least \\~5 mins, so explore other jobs 🔔\n\n"
+            f"*Progress:*\n{escape_md(steps_text)}"
         )
 
     explore_kb = InlineKeyboardMarkup([[
@@ -664,7 +664,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 step_states["outreach"] = "✅"
 
             # Step 4: Send the kit (tracking comes AFTER successful delivery)
-            await _refresh_loading(rf"⚙️ Step 4/5 — Sending your kit\.\.\.")
+            await _refresh_loading(f"⚙️ Step 4/5 — Sending your kit\\.\\.\\.")
 
             # Final loading update — all done (before messages arrive)
             await _refresh_loading("✅ All done! Your kit is below 👇")
@@ -676,7 +676,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Message 1: Intro Title
             await context.bot.send_message(
                 chat_id=user_id,
-                text=rf"🎯 *Apply Smart Kit Ready for {company_esc}\!*",
+                text=f"🎯 *Apply Smart Kit Ready for {company_esc}\\!*",
                 parse_mode="MarkdownV2",
             )
 
@@ -696,7 +696,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Message 3: Full kit as a single message with tap-to-copy code blocks
             # Cover Letter block
             kit_parts = [
-                rf"✍️ *Cover Letter* — tap to copy:",
+                f"✍️ *Cover Letter* — tap to copy:",
                 f"```\n{cover_letter}\n```",
             ]
 
@@ -707,23 +707,23 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 kit_parts += [
                     "",
                     "──────────────",
-                    rf"👤 *Hiring Manager:* {hm_name_esc} \({hm_role_esc}\)",
+                    f"👤 *Hiring Manager:* {hm_name_esc} \\({hm_role_esc}\\)",
                 ]
                 if hm_linkedin:
-                    kit_parts.append(rf"🔗 LinkedIn: {escape_md(hm_linkedin)}")
+                    kit_parts.append(f"🔗 LinkedIn: {escape_md(hm_linkedin)}")
                 if hm_email:
-                    kit_parts.append(rf"📧 Email: {escape_md(hm_email)}")
+                    kit_parts.append(f"📧 Email: {escape_md(hm_email)}")
 
                 if outreach.get("connection_note"):
                     kit_parts += [
                         "",
-                        rf"📌 *Connection Note* \(\<200 chars\) — tap to copy:",
+                        f"📌 *Connection Note* \\(\\<200 chars\\) — tap to copy:",
                         f"```\n{outreach['connection_note'][:200]}\n```",
                     ]
                 if outreach.get("linkedin_dm"):
                     kit_parts += [
                         "",
-                        rf"💬 *LinkedIn DM* — tap to copy:",
+                        f"💬 *LinkedIn DM* — tap to copy:",
                         f"```\n{outreach['linkedin_dm']}\n```",
                     ]
                 if outreach.get("cold_email"):
@@ -736,10 +736,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             kit_parts += [
                 "",
                 "──────────────",
-                rf"✅ Application tracked\!",
-                rf"⏰ Follow\-up reminder set for 3 days from now\.",
+                f"✅ Application tracked\\!",
+                f"⏰ Follow\\-up reminder set for 3 days from now\\.",
                 "",
-                rf"Good luck\! 🚀",
+                f"Good luck\\! 🚀",
             ]
 
             kit_text = "\n".join(kit_parts)
@@ -784,7 +784,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                         ]
                     outreach_msg_parts += [
                         "──────────────",
-                        rf"✅ Application tracked\! ⏰ Follow\-up in 3 days\. Good luck\! 🚀",
+                        f"✅ Application tracked\\! ⏰ Follow\\-up in 3 days\\. Good luck\\! 🚀",
                     ]
                     await context.bot.send_message(
                         chat_id=user_id,

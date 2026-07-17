@@ -111,7 +111,7 @@ async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
             checks_text = f"{checks_left} checks remaining today"
         await query.edit_message_text(
             r"📊 *ATS Resume Analyzer*" "\n\n"
-            rf"Paste the full Job Description below\. \({checks_text}\)",
+            f"Paste the full Job Description below\\. \\({checks_text}\\)",
             parse_mode="MarkdownV2"
         )
 
@@ -377,7 +377,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         if not context.user_data.get("navigated_away_from_loading"):
             try:
                 full_text = (
-                    rf"⚙️ *Generating your ATS Resume\.\.\.*\n\n{step_text}\n\n"
+                    f"⚙️ *Generating your ATS Resume\\.\\.\\.*\n\n{step_text}\n\n"
                     r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
                     r"You don't need to wait here, feel free to explore other jobs, and we'll send the PDF here when it's ready\!_"
                 )
@@ -419,7 +419,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         context.user_data["pdf_job_id"] = job_id
         context.user_data["pdf_is_manual"] = is_manual
         await query.edit_message_text(
-            rf"👋 Your resume is missing your {fields_str}\."
+            f"👋 Your resume is missing your {fields_str}\\."
             r" Please reply with: `Your Name | your@email.com`",
             parse_mode="MarkdownV2"
         )
