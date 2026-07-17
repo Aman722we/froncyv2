@@ -169,8 +169,8 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(coverletter_menu_handler, pattern="^menu_coverletter$"))
     app.add_handler(CallbackQueryHandler(refer_callback, pattern="^menu_refer$"))
     
-    # Jobs Callbacks
-    app.add_handler(CallbackQueryHandler(view_job_detail, pattern="^(job|manual)_view_"))
+    # Job Details / Interaction
+    app.add_handler(CallbackQueryHandler(view_job_detail, pattern="^(job_view_|manual_view_|revisit_manual_)"))
     app.add_handler(CallbackQueryHandler(save_job_callback, pattern="^job_save_"))
     app.add_handler(CallbackQueryHandler(unsave_job_callback, pattern="^job_unsave_"))
     app.add_handler(CallbackQueryHandler(save_manual_job_callback, pattern="^manual_job_save_"))

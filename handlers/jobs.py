@@ -333,7 +333,9 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked)
 
-    if query.message and query.message.document:
+    is_revisit = query.data.startswith("revisit_")
+
+    if (query.message and query.message.document) or is_revisit:
         await query.edit_message_reply_markup(reply_markup=None)
         await context.bot.send_message(
             chat_id=user_id,
@@ -783,9 +785,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Navigation buttons
             nav_kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔗 Open Apply Link", url=job_url)] if job_url else [],
-                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}")],
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"revisit_manual_{job_id}")],
             ]) if job_url else InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}")],
+                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"revisit_manual_{job_id}")],
             ])
 
             kit_text = "\n".join(kit_parts)
