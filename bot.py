@@ -11,7 +11,7 @@ from utils.error_alert import send_error_alert
 
 from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu
-from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback
+from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback, apply_smart_locked_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
 from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback
 from handlers.settings import (
@@ -182,6 +182,7 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(remind_me_callback, pattern="^remind_job_"))
     app.add_handler(CallbackQueryHandler(remind_me_manual_callback, pattern="^remind_manual_"))
     app.add_handler(CallbackQueryHandler(apply_smart_callback, pattern="^apply_smart_\\d+$"))
+    app.add_handler(CallbackQueryHandler(apply_smart_locked_callback, pattern="^apply_smart_locked$"))
 
     # Cover Letter Callbacks
     app.add_handler(CallbackQueryHandler(copy_cover_letter, pattern="^(manual_)?cl_copy_"))

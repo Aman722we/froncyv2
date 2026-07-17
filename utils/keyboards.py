@@ -302,7 +302,7 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None) -> InlineKeyboardMarkup:
+def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False) -> InlineKeyboardMarkup:
     """Actions for a single job detail view.
     Layout:
         Row 1: [🚀 Apply Smart (Complete Kit)]        ← Full Width
@@ -335,9 +335,14 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     # Row 1: Apply Smart — Full Width (only for manual jobs that have HM data)
     # Show for all manual jobs; the handler will check quota and HM availability
     if is_manual:
-        buttons.append([
-            InlineKeyboardButton("🚀 Apply Smart (Complete Kit)", callback_data=f"apply_smart_{job['id']}"),
-        ])
+        if apply_smart_locked:
+            buttons.append([
+                InlineKeyboardButton("🔒 Apply Smart — Limit Reached (Upgrade)", callback_data="apply_smart_locked"),
+            ])
+        else:
+            buttons.append([
+                InlineKeyboardButton("🚀 Apply Smart (Complete Kit)", callback_data=f"apply_smart_{job['id']}"),
+            ])
     
     # Row 2: ATS + Cover Letter
     if plan in ("pro", "trial"):

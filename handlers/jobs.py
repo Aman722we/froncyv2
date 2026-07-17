@@ -324,7 +324,14 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     score = details["score"]
 
     msg = messages.job_detail_message(job, plan=plan, user=user)
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id)
+
+    # Check Apply Smart usage to decide whether to show lock icon on the button
+    from db.users import get_apply_smart_usage
+    _as_usage = await get_apply_smart_usage(user_id)
+    _as_limit = {"free": 1, "trial": 5, "pro": 10}.get(plan, 1)
+    _as_locked = _as_usage.get("used", 0) >= _as_limit
+
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked)
 
     if query.message and query.message.document:
         await query.edit_message_reply_markup(reply_markup=None)
@@ -509,12 +516,33 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     used = usage.get("used", 0)
 
     if used >= limit:
-        limit_msg = {
-            "free": "Free users get 1 Apply Smart per day.\n\n💎 Upgrade to Pro for 10 per day!",
-            "trial": f"Trial users get {limit} Apply Smarts per day. You've used all {limit} today!",
-            "pro": f"Pro users get {limit} Apply Smarts per day. You've used all {limit} today!",
-        }.get(plan, "You've hit your daily Apply Smart limit.")
-        await query.answer(f"🚫 {limit_msg}", show_alert=True)
+        # Show the full upgrade page (just like ATS/filter limits do)
+        from services.pricing_service import get_pricing_info
+        from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
+        pricing = await get_pricing_info()
+        if pricing.get("is_early_adopter_active"):
+            upgrade_msg = upgrade_early_adopter_message(pricing)
+        else:
+            upgrade_msg = upgrade_regular_message(pricing)
+
+        if plan == "pro":
+            limit_text = (
+                f"🔒 *Apply Smart Daily Limit Reached*\n\n"
+                f"You've used all {limit} Apply Smarts for today\\.\n"
+                "Your limit resets at midnight\\! 🔄\n\n"
+                "While you wait, explore more jobs or check your tracker\\."
+            )
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔍 Explore Jobs", callback_data="menu_jobs")],
+                [InlineKeyboardButton("⬅️ Back", callback_data=f"manual_view_{job_id}")],
+            ])
+            await query.edit_message_text(limit_text, parse_mode="MarkdownV2", reply_markup=kb)
+        else:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Upgrade Now", callback_data="upgrade_pro")],
+                [InlineKeyboardButton("⬅️ Back to Job", callback_data=f"manual_view_{job_id}")],
+            ])
+            await query.edit_message_text(upgrade_msg, parse_mode="MarkdownV2", reply_markup=kb)
         return
 
     # ── 3. Fetch job + HM details ─────────────────────────
@@ -857,3 +885,23 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     asyncio.create_task(_generate_kit())
 
+
+async def apply_smart_locked_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle clicks on the locked Apply Smart button — show the upgrade selling page."""
+    query = update.callback_query
+    await query.answer()
+
+    from services.pricing_service import get_pricing_info
+    from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
+
+    pricing = await get_pricing_info()
+    if pricing.get("is_early_adopter_active"):
+        upgrade_msg = upgrade_early_adopter_message(pricing)
+    else:
+        upgrade_msg = upgrade_regular_message(pricing)
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💳 Upgrade Now", callback_data="upgrade_pro")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="menu_jobs")],
+    ])
+    await query.edit_message_text(upgrade_msg, parse_mode="MarkdownV2", reply_markup=kb)
