@@ -706,7 +706,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Message 1: Intro Title with randomized time-saved
             import random as _random
-            mins_saved = _random.randint(20, 28)
+            # More time saved when we generate cold outreach too
+            has_outreach = has_linkedin or has_email
+            mins_saved = _random.randint(20, 28) if has_outreach else _random.randint(12, 18)
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
