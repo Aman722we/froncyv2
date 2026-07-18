@@ -74,12 +74,18 @@ async def _build_page_1(pool) -> str:
 async def _build_page_2() -> str:
     """Page 2: AI Engine usage stats."""
     stats = await get_ai_usage_stats()
-    cl = stats["cover_letter"]
+    cl  = stats["cover_letter"]
     ats = stats["ats_check"]
+    aps = stats["apply_smart"]
 
     return (
         "🤖 <b>AI Engine Analytics</b>  <i>— Page 2 of 3</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🚀 <b>Apply Smart Kits Generated</b>\n"
+        f"  • Today            : <b>{aps['today']}</b>\n"
+        f"  • This week        : <b>{aps['week']}</b>\n"
+        f"  • This month       : <b>{aps['month']}</b>\n"
+        f"  • All time total   : <b>{aps['total']}</b>\n\n"
         "✍️ <b>Cover Letters Generated</b>\n"
         f"  • Today            : <b>{cl['today']}</b>\n"
         f"  • This week        : <b>{cl['week']}</b>\n"

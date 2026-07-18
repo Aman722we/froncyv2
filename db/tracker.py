@@ -135,12 +135,9 @@ async def log_ai_usage(telegram_id: int, feature_type: str) -> None:
 
 
 async def get_ai_usage_stats() -> dict:
-    """Get cover letter and ATS check counts: today, this week, this month, total."""
+    """Get cover letter, ATS check, and Apply Smart counts: today, this week, this month, total."""
     pool = get_pool()
     async with pool.acquire() as conn:
-        for feature in ("cover_letter", "ats_check"):
-            pass  # Pre-warm
-
         rows = await conn.fetch(
             """
             SELECT
@@ -159,6 +156,7 @@ async def get_ai_usage_stats() -> dict:
     result = {
         "cover_letter": {"today": 0, "week": 0, "month": 0, "total": 0},
         "ats_check":    {"today": 0, "week": 0, "month": 0, "total": 0},
+        "apply_smart":  {"today": 0, "week": 0, "month": 0, "total": 0},
     }
     for row in rows:
         ft = row["feature_type"]

@@ -704,12 +704,22 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             company = job.get("company", "Company")
             company_esc = escape_md(company)
 
-            # Message 1: Intro Title
+            # Message 1: Intro Title with randomized time-saved
+            import random as _random
+            mins_saved = _random.randint(20, 28)
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"🎯 *Apply Smart Kit Ready for {company_esc}\\!*",
+                text=(
+                    f"🎉 *Everything you need to apply is ready\\!*\n\n"
+                    f"⚡ Estimated manual work saved: *{mins_saved} minutes*\n"
+                    f"Here's your kit for *{company_esc}* 👇"
+                ),
                 parse_mode="MarkdownV2",
             )
+
+            # Log this Apply Smart use for analytics
+            from db.tracker import log_ai_usage as _log_ai
+            await _log_ai(user_id, "apply_smart")
 
             # Message 2: ATS Resume PDF
             name_slug = resume_json.get("name", "resume").replace(" ", "_")
