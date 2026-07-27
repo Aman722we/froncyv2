@@ -78,13 +78,30 @@ FroncyBot (formerly Applixy) is a fully autonomous, AI-powered Telegram bot desi
 - Uses LaTeX to compile a professional, ATS-parseable PDF on the fly.
 - Uses a diff-patch architecture to ensure the AI does not hallucinate false skills or change the layout unexpectedly.
 
-## 12. Retention & FOMO Features
+## 12. Apply Smart Kit (1-Click Application Bundle)
+**How it works:**
+- Users can click "⚡ Apply Smart" on any job to generate a complete application kit in one go.
+- The AI dynamically generates:
+  - An ATS-optimized tailored PDF Resume.
+  - A personalized Cover Letter.
+  - A customized Cold Email (if HR/Founder email is available).
+  - A LinkedIn Connection Note and DM (if HR/Founder LinkedIn is available).
+- Computes estimated "manual time saved" (e.g., "⚡ Estimated manual work saved: 24 minutes") to reinforce the value of the bot.
+- Automatically sets follow-up reminders.
+
+## 13. Application Tracker Kanban Funnel
+**How it works:**
+- Users can track their job applications directly within Telegram.
+- Moves applications through a funnel: Applied -> Interviewing -> Rejected -> Got Offer.
+- Reminds users to follow up on applications after 3 days.
+
+## 14. Retention & FOMO Features
 **How it works:**
 - **Daily Feed Freshness Header:** Injects a "🔔 +X new jobs added in the last 24 hours" header to create FOMO and encourage daily checks.
 - **Evening Digest:** A 6:30 PM automated alert reminding users of jobs they saved but haven't applied to yet.
 - **Friday Scorecard:** A weekly summary sent on Fridays detailing how many jobs they viewed, ATS checks they ran, and cover letters they generated to keep them motivated.
 
-## 13. Staging & Testing Pipeline
+## 15. Staging & Testing Pipeline
 **How it works:**
 - The repository follows a two-branch system (`main` for production, `develop` for testing).
 - A separate Telegram Test Bot (`@FroncyTestBot`) is hooked up to the `develop` branch, allowing the admins to safely test new AI features without breaking the production bot for active users.
