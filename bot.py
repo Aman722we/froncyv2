@@ -32,6 +32,12 @@ from handlers.tracker import (
     manage_app_callback, update_app_status_callback
 )
 from handlers.admin import get_addjob_handler, send_message_command, broadcast_command
+from handlers.submissions import (
+    handle_url_submission, URL_REGEX,
+    sub_check_callback, sub_ignore_callback, sub_toggle_callback,
+    sub_reject_callback,
+    get_submission_conversation_handler,
+)
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
     analytics_command, analytics_page_callback, users_command, user_detail_command, users_page_callback,
@@ -158,6 +164,13 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("send", send_message_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
 
+    # Community Job Submissions (admin checklist flow)
+    app.add_handler(get_submission_conversation_handler())
+    app.add_handler(CallbackQueryHandler(sub_check_callback,  pattern=r"^sub_check_\d+$"))
+    app.add_handler(CallbackQueryHandler(sub_ignore_callback, pattern=r"^sub_ignore_\d+$"))
+    app.add_handler(CallbackQueryHandler(sub_toggle_callback, pattern=r"^sub_toggle_\d+_\w+$"))
+    app.add_handler(CallbackQueryHandler(sub_reject_callback, pattern=r"^sub_reject_\d+$"))
+
     # Navigation Callbacks
     app.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_menu$"))
     app.add_handler(CallbackQueryHandler(view_jobs, pattern="^menu_jobs$"))
@@ -201,6 +214,8 @@ def build_bot() -> Application:
     async def text_router(update, context):
         if context.user_data.get("awaiting_settings_custom_skill"):
             await settings_custom_skill_receive(update, context)
+        elif URL_REGEX.search(update.message.text or ""):
+            await handle_url_submission(update, context)
         else:
             await ats_analyze_result(update, context)
 

@@ -160,6 +160,25 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply referral migrations: {e}")
 
+        # Community Job Submissions
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_submissions (
+                    id           SERIAL PRIMARY KEY,
+                    telegram_id  BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    url          TEXT NOT NULL,
+                    status       TEXT DEFAULT 'pending',  -- pending/approved/rejected
+                    submitted_at TIMESTAMPTZ DEFAULT NOW(),
+                    reviewed_at  TIMESTAMPTZ,
+                    manual_job_id INT REFERENCES manual_jobs(id) ON DELETE SET NULL
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_submissions_status ON user_submissions(status, submitted_at DESC);"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to apply user_submissions migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 
