@@ -106,5 +106,13 @@ FroncyBot (formerly Applixy) is a fully autonomous, AI-powered Telegram bot desi
 - The repository follows a two-branch system (`main` for production, `develop` for testing).
 - A separate Telegram Test Bot (`@FroncyTestBot`) is hooked up to the `develop` branch, allowing the admins to safely test new AI features without breaking the production bot for active users.
 
+## 16. Community Job Submissions (Bring Your Own Job)
+**How it works:**
+- Users can paste any job URL directly into the bot chat to submit it to the platform.
+- **Admin Verification Queue:** The bot instantly alerts the admin with an inline "Legitimacy Check" UI.
+- The admin toggles flags (e.g., "Company exists", "Recruiter verified", "Scam signals") and approves or rejects the job.
+- **Automated User Feedback:** The bot calculates a "Legitimacy Score" (e.g. 80/100) based on the admin's flags and sends a professional report back to the user.
+- If approved, the job is added to the board, and the submitting user is instantly rewarded with an "Apply Smart" kit for that job.
+
 ---
 *Built with Python, python-telegram-bot (v20+), asyncpg (PostgreSQL), FastAPI, Razorpay, and LLaMA 3.1.*
