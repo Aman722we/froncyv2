@@ -1,4 +1,4 @@
-﻿"""
+"""
 CRUD operations for community job submissions.
 """
 from loguru import logger
@@ -60,3 +60,15 @@ async def mark_submission_approved(submission_id: int, manual_job_id: int) -> No
             "UPDATE user_submissions SET status='approved', reviewed_at=NOW(), manual_job_id=$1 WHERE id=$2",
             manual_job_id, submission_id
         )
+
+
+async def get_pending_submissions(limit: int = 10, offset: int = 0) -> tuple[list[dict], int]:
+    """Fetch pending submissions with pagination. Returns (submissions, total_count)."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        total = await conn.fetchval("SELECT COUNT(*) FROM user_submissions WHERE status='pending'")
+        rows = await conn.fetch(
+            "SELECT * FROM user_submissions WHERE status='pending' ORDER BY submitted_at ASC LIMIT $1 OFFSET $2",
+            limit, offset
+        )
+        return [dict(row) for row in rows], total

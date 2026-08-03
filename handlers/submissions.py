@@ -1,4 +1,4 @@
-﻿"""
+"""
 Community Job Submission handler.
 
 User flow:
@@ -21,7 +21,7 @@ from telegram.ext import (
 from loguru import logger
 from config import settings
 from db.submissions import (
-    create_submission, get_submission,
+    create_submission, get_submission, get_pending_submissions,
     url_already_submitted, mark_submission_rejected, mark_submission_approved,
 )
 from db.manual_jobs import add_manual_job
@@ -423,9 +423,10 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
             f"🎯 <b>{title} @ {company}</b> is now live.\n"
             "Tap the button below to get your Apply Smart Kit ready in one click! 🚀"
         )
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}"),
-        ]])
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+        ])
         try:
             await context.bot.send_message(
                 chat_id=submitter_id,
@@ -481,4 +482,91 @@ def get_submission_conversation_handler() -> ConversationHandler:
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
         ],
         per_message=False,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN FLOW: /links Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _render_links_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1) -> None:
+    limit = 10
+    offset = (page - 1) * limit
+    submissions, total = await get_pending_submissions(limit, offset)
+
+    if not submissions and page == 1:
+        text = "✅ <b>No pending submissions!</b> Queue is empty."
+        kb = InlineKeyboardMarkup([])
+    else:
+        text = f"📋 <b>Pending Job Links</b> (Page {page})\nTotal pending: {total}\n\nSelect a submission to review:"
+        rows = []
+        for sub in submissions:
+            domain = sub["url"].split("//")[-1].split("/")[0][:20]
+            rows.append([InlineKeyboardButton(
+                f"#{sub['id']} - {domain}", callback_data=f"sub_admin_view_{sub['id']}"
+            )])
+        
+        # Pagination
+        nav_row = []
+        if page > 1:
+            nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"links_page_{page-1}"))
+        if offset + limit < total:
+            nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"links_page_{page+1}"))
+        if nav_row:
+            rows.append(nav_row)
+        
+        kb = InlineKeyboardMarkup(rows)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=kb, parse_mode="HTML")
+
+async def links_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the admin links dashboard."""
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return
+    await _render_links_dashboard(update, context, 1)
+
+async def links_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle pagination for links dashboard."""
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return
+    query = update.callback_query
+    await query.answer()
+    page = int(query.data.split("_")[-1])
+    await _render_links_dashboard(update, context, page)
+
+async def sub_admin_view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin clicked on a specific submission in the dashboard."""
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return
+    query = update.callback_query
+    await query.answer()
+    
+    submission_id = int(query.data.split("_")[-1])
+    sub = await get_submission(submission_id)
+    if not sub:
+        await query.edit_message_text("❌ Submission not found or already processed.")
+        return
+        
+    if sub["status"] != "pending":
+        await query.answer("This submission is no longer pending.", show_alert=True)
+        return
+        
+    # Send the legitimacy check UI just like the initial alert
+    # Init empty check state in context
+    context.user_data[f"sub_checks_{submission_id}"] = {key: False for _, key in CHECKLIST_ITEMS}
+    kb = _build_checklist_keyboard(submission_id, context.user_data[f"sub_checks_{submission_id}"])
+    
+    # Add a Back button to the dashboard
+    kb.inline_keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="links_page_1")])
+
+    await query.edit_message_text(
+        f"🔍 <b>Legitimacy Check</b> — Submission #{submission_id}\n\n"
+        f"URL: {sub['url']}\n\n"
+        "Toggle each item, then submit your decision:",
+        parse_mode="HTML",
+        reply_markup=kb,
+        disable_web_page_preview=True,
     )

@@ -37,6 +37,7 @@ from handlers.submissions import (
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
     sub_reject_callback,
     get_submission_conversation_handler,
+    links_command, links_page_callback, sub_admin_view_callback
 )
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
@@ -165,11 +166,14 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("broadcast", broadcast_command))
 
     # Community Job Submissions (admin checklist flow)
+    app.add_handler(CommandHandler("links", links_command))
     app.add_handler(get_submission_conversation_handler())
     app.add_handler(CallbackQueryHandler(sub_check_callback,  pattern=r"^sub_check_\d+$"))
     app.add_handler(CallbackQueryHandler(sub_ignore_callback, pattern=r"^sub_ignore_\d+$"))
     app.add_handler(CallbackQueryHandler(sub_toggle_callback, pattern=r"^sub_toggle_\d+_\w+$"))
     app.add_handler(CallbackQueryHandler(sub_reject_callback, pattern=r"^sub_reject_\d+$"))
+    app.add_handler(CallbackQueryHandler(links_page_callback, pattern=r"^links_page_\d+$"))
+    app.add_handler(CallbackQueryHandler(sub_admin_view_callback, pattern=r"^sub_admin_view_\d+$"))
 
     # Navigation Callbacks
     app.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_menu$"))

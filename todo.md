@@ -15,6 +15,7 @@ This file tracks the upcoming features, bug fixes, and improvements that need to
 - [x] **Retention Features:** Added Evening Digest, Friday Scorecard, and 24-hour freshness FOMO headers to Daily Feeds.
 
 ## 📝 Backlog / Ideas
+- [ ] **Save the generated things:** Save the generated cover letter, ats resume, and whole apply success kit  so the use can find them later.
 - [ ] **Conversational correction for resume generator:** Allow users to chat with the bot to make manual edits to the generated ATS resume.
 - [ ] **Apply Success Kit button:** A bundle (Cover letter, cold email, resume, interview prep) generated in one click.
 - [ ] **Apply smart button:**               
@@ -62,7 +63,8 @@ Finished.
 - [ ] **Add linter and tests on github:** to catch bugs before release.
 - [ ] **CodeRabbit:** try to find any good substitute of code rabbit.
 - [ ] **Advanced Outreach:** Support parsing multiple `👤` contacts per job and generating outreach templates for all of them (e.g., both Founder and HR).
-
+- [ ] **LLM Cost & Speed Optimization:** Split Apply Smart tasks between Llama 3.1 70B (ATS Resume, Cover Letter) and Llama 3.1 8B (Cold Email, LinkedIn DM) to improve concurrency and reduce API limits.
+- [ ] **Remove Experience Limitation:** Modify the `min_yoe` filtering to allow all frontend jobs regardless of YoE, so more jobs can be matched to all users.
 ## 📊 Analytics Backlog
 - [x] **Daily Active Users / Feed Openers:** Tracking users who explicitly check their feed.
 - [ ] **Job Link Click Tracking:** Track users who clicked at least one job application link today (closer to core value than simple logins).
