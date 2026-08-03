@@ -695,7 +695,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 step_states["outreach"] = "✅"
 
             # Step 4: Send the kit (tracking comes AFTER successful delivery)
-            await _refresh_loading(f"⚙️ Step 4/5 — Sending your kit\\.\\.\\.")
+            await _refresh_loading("⚙️ Step 4/5 — Sending your kit...")
 
             # Final loading update — all done (before messages arrive)
             await _refresh_loading("✅ All done! Your kit is below 👇")

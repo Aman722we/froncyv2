@@ -179,6 +179,22 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply user_submissions migrations: {e}")
 
+        # AI Usage Tracking
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS ai_usage_logs (
+                    id           SERIAL PRIMARY KEY,
+                    telegram_id  BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    feature_type TEXT NOT NULL,
+                    used_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ai_usage_logs_user ON ai_usage_logs(telegram_id, used_at DESC);"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to apply ai_usage_logs migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 
