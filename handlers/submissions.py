@@ -558,9 +558,10 @@ async def sub_admin_view_callback(update: Update, context: ContextTypes.DEFAULT_
     # Init empty check state in context
     context.user_data[f"sub_checks_{submission_id}"] = {key: False for _, key in CHECKLIST_ITEMS}
     kb = _build_checklist_keyboard(submission_id, context.user_data[f"sub_checks_{submission_id}"])
-    
     # Add a Back button to the dashboard
-    kb.inline_keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="links_page_1")])
+    new_keyboard = list(kb.inline_keyboard)
+    new_keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="links_page_1")])
+    kb = InlineKeyboardMarkup(new_keyboard)
 
     await query.edit_message_text(
         f"🔍 <b>Legitimacy Check</b> — Submission #{submission_id}\n\n"
