@@ -18,6 +18,8 @@ from telegram.ext import (
     ContextTypes, ConversationHandler, MessageHandler,
     CallbackQueryHandler, filters,
 )
+from loguru import logger
+from config import settings
 from db.submissions import (
     create_submission, get_submission, get_pending_submissions,
     check_url_status, mark_submission_rejected, mark_submission_approved,
