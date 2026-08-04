@@ -15,7 +15,7 @@ Admin flow:
 import re
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    ContextTypes, ConversationHandler, MessageHandler,
+    ContextTypes, ConversationHandler, MessageHandler, CommandHandler,
     CallbackQueryHandler, filters,
 )
 from loguru import logger
@@ -42,7 +42,7 @@ CHECKLIST_ITEMS = [
 ]
 
 URL_REGEX = re.compile(
-    r"https?://[^\s]+",
+    r"(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b(?:[-a-zA-Z0-9@:%_\+.~#?&//=]*)",
     re.IGNORECASE,
 )
 
@@ -576,6 +576,16 @@ async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT
     context.user_data.pop("pending_submission_user", None)
     return ConversationHandler.END
 
+async def cancel_submission(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel the admin submission flow."""
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return ConversationHandler.END
+    context.user_data.pop("pending_submission_id", None)
+    context.user_data.pop("pending_submission_user", None)
+    await update.message.reply_text("❌ Action cancelled.")
+    return ConversationHandler.END
+
+
 def get_submission_conversation_handler() -> ConversationHandler:
     """ConversationHandler for the admin job-text entry and duplicate ID entry."""
     return ConversationHandler(
@@ -592,6 +602,7 @@ def get_submission_conversation_handler() -> ConversationHandler:
             ]
         },
         fallbacks=[
+            CommandHandler("cancelsubmission", cancel_submission),
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
             CallbackQueryHandler(sub_duplicate_callback, pattern=r"^sub_duplicate_\d+$"),
         ],
