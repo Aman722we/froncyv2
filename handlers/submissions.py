@@ -18,16 +18,17 @@ from telegram.ext import (
     ContextTypes, ConversationHandler, MessageHandler,
     CallbackQueryHandler, filters,
 )
-from loguru import logger
-from config import settings
 from db.submissions import (
     create_submission, get_submission, get_pending_submissions,
-    url_already_submitted, mark_submission_rejected, mark_submission_approved,
+    check_url_status, mark_submission_rejected, mark_submission_approved,
 )
 from db.manual_jobs import add_manual_job
+from utils.helpers import normalize_job_url
+
 
 # ── Conversation state for admin job-text entry after approval ──────────────
 WAITING_FOR_SUBMISSION_JOB_TEXT = 50
+WAITING_FOR_DUPLICATE_JOB_ID = 51
 
 # ── Checklist items: (label, callback_data_key) ──────────────────────────────
 CHECKLIST_ITEMS = [
@@ -60,18 +61,36 @@ async def handle_url_submission(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     url = match.group(0).rstrip(".,;)")
+    normalized = normalize_job_url(url)
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name or "Unknown"
 
     # Duplicate check
-    if await url_already_submitted(url):
-        await update.message.reply_text(
-            "👀 This job is already in our system (or pending review). "
-            "We will notify you once it is verified!"
-        )
-        return
+    duplicate_state = await check_url_status(normalized)
+    
+    if duplicate_state:
+        if duplicate_state.get("status") == "live":
+            job_id = duplicate_state.get("job_id")
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            ])
+            await update.message.reply_text(
+                "🎯 <b>Great find!</b>\n\n"
+                "This exact role is already live on our board.\n"
+                "Tap below to get your Apply Kit for it!",
+                parse_mode="HTML",
+                reply_markup=kb
+            )
+            return
+        elif duplicate_state.get("status") == "pending":
+            await update.message.reply_text(
+                "👀 This job is already in our review queue! "
+                "We will notify you once it goes live."
+            )
+            return
 
-    # Save to DB
+    # Save to DB (we save the original URL)
     submission_id = await create_submission(user_id, url)
     logger.info(f"New job submission #{submission_id} from user {user_id}: {url}")
 
@@ -127,7 +146,10 @@ def _build_checklist_keyboard(submission_id: int, checks: dict) -> InlineKeyboar
         )])
 
     rows.append([
-        InlineKeyboardButton("❌ Reject Job", callback_data=f"sub_reject_{submission_id}"),
+        InlineKeyboardButton("❌ Reject", callback_data=f"sub_reject_{submission_id}"),
+        InlineKeyboardButton("🔗 Mark as Duplicate", callback_data=f"sub_duplicate_{submission_id}"),
+    ])
+    rows.append([
         InlineKeyboardButton("✅ Approve Job", callback_data=f"sub_approve_{submission_id}"),
     ])
     return InlineKeyboardMarkup(rows)
@@ -467,22 +489,113 @@ async def cancel_submission(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return ConversationHandler.END
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN FLOW: Manual Duplicate Tagging
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def sub_duplicate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Admin clicked Mark as Duplicate — ask for existing Job ID."""
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return ConversationHandler.END
+
+    submission_id = int(query.data.split("_")[-1])
+    sub = await get_submission(submission_id)
+    if not sub:
+        await query.edit_message_text("❌ Submission not found.")
+        return ConversationHandler.END
+
+    context.user_data["pending_submission_id"] = submission_id
+    context.user_data["pending_submission_user"] = sub["telegram_id"]
+
+    await query.edit_message_text(
+        f"🔗 <b>Mark as Duplicate</b> — Submission #{submission_id}\n\n"
+        "What is the Job ID of the existing live job on the platform?\n\n"
+        "<i>(Type the numeric ID below, or /cancelsubmission to abort)</i>",
+        parse_mode="HTML"
+    )
+    return WAITING_FOR_DUPLICATE_JOB_ID
+
+async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Admin typed the Job ID for the duplicate."""
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        return ConversationHandler.END
+
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ Please enter a valid numeric Job ID, or /cancelsubmission.")
+        return WAITING_FOR_DUPLICATE_JOB_ID
+
+    job_id = int(text)
+    submission_id = context.user_data.get("pending_submission_id")
+    submitter_id = context.user_data.get("pending_submission_user")
+
+    if not submission_id:
+        await update.message.reply_text("⚠️ No active submission context. Please start over.")
+        return ConversationHandler.END
+
+    # Verify job exists
+    from db.manual_jobs import get_manual_job_by_id
+    job = await get_manual_job_by_id(job_id)
+    if not job:
+        await update.message.reply_text("⚠️ No live job found with that ID. Try again or /cancelsubmission.")
+        return WAITING_FOR_DUPLICATE_JOB_ID
+
+    # Mark submission as rejected (duplicate)
+    await mark_submission_rejected(submission_id)
+
+    # Send the user the Apply Smart link for the duplicate
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+    ])
+    msg = (
+        "🎯 <b>Great find!</b>\n\n"
+        "This exact role was already added to our board from another platform.\n"
+        "Tap below to get your Apply Kit for it! 🚀"
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=submitter_id,
+            text=msg,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+    except Exception as e:
+        logger.warning(f"Could not notify submitter {submitter_id} of duplicate: {e}")
+
+    await update.message.reply_text(
+        f"✅ <b>Marked as duplicate of Job #{job_id}.</b>\nUser notified with Apply Smart button.",
+        parse_mode="HTML",
+    )
+
+    context.user_data.pop("pending_submission_id", None)
+    context.user_data.pop("pending_submission_user", None)
+    return ConversationHandler.END
+
 def get_submission_conversation_handler() -> ConversationHandler:
-    """ConversationHandler for the admin job-text entry step after approving a submission."""
+    """ConversationHandler for the admin job-text entry and duplicate ID entry."""
     return ConversationHandler(
         entry_points=[
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
+            CallbackQueryHandler(sub_duplicate_callback, pattern=r"^sub_duplicate_\d+$"),
         ],
         states={
             WAITING_FOR_SUBMISSION_JOB_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, parse_and_add_submitted_job),
+            ],
+            WAITING_FOR_DUPLICATE_JOB_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_duplicate_job_id),
             ]
         },
         fallbacks=[
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
+            CallbackQueryHandler(sub_duplicate_callback, pattern=r"^sub_duplicate_\d+$"),
         ],
         per_message=False,
     )
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

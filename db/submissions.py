@@ -26,20 +26,34 @@ async def get_submission(submission_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-async def url_already_submitted(url: str) -> bool:
-    """Check if a URL has already been submitted (pending or approved) to prevent duplicates."""
+async def check_url_status(normalized_url: str) -> dict | None:
+    """Check if a normalized URL is already in the system (pending, approved, or live).
+    Returns {"status": "live", "job_id": id} if live.
+    Returns {"status": "pending"} if pending in user_submissions.
+    Returns None if brand new.
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
-        existing = await conn.fetchval(
-            "SELECT id FROM user_submissions WHERE url = $1 AND status IN ('pending','approved') LIMIT 1",
-            url
+        # Check manual_jobs first (live)
+        # We use LIKE '%normalized_url%' because manual_jobs urls might not be perfectly normalized
+        # But wait, it's safer to exact match if we normalize upon entry, or use LIKE
+        # Actually, let's just exact match since we're passing in normalized URL, and we'll normalize existing ones on the fly or just match loosely.
+        # For simplicity, we'll check if the stored url contains the normalized_url (which has stripped http/www)
+        live_job = await conn.fetchrow(
+            "SELECT id FROM manual_jobs WHERE url ILIKE $1 LIMIT 1", f"%{normalized_url}%"
         )
-        if existing:
-            return True
-        in_manual = await conn.fetchval(
-            "SELECT id FROM manual_jobs WHERE url = $1 LIMIT 1", url
+        if live_job:
+            return {"status": "live", "job_id": live_job["id"]}
+
+        # Check pending submissions
+        pending = await conn.fetchval(
+            "SELECT id FROM user_submissions WHERE url ILIKE $1 AND status IN ('pending','approved') LIMIT 1",
+            f"%{normalized_url}%"
         )
-        return bool(in_manual)
+        if pending:
+            return {"status": "pending"}
+
+        return None
 
 
 async def mark_submission_rejected(submission_id: int) -> None:

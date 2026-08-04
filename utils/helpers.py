@@ -49,6 +49,28 @@ def detect_portal_type(url: str) -> str:
     return "other"
 
 
+def normalize_job_url(url: str) -> str:
+    """Normalize a URL for deduplication by stripping scheme, www, query params, and trailing slashes."""
+    if not url:
+        return ""
+    
+    # Remove http:// or https://
+    url = re.sub(r"^https?://", "", url.strip(), flags=re.IGNORECASE)
+    
+    # Remove www.
+    if url.lower().startswith("www."):
+        url = url[4:]
+        
+    # Remove query params
+    if "?" in url:
+        url = url.split("?")[0]
+        
+    # Remove trailing slashes
+    url = url.rstrip("/")
+    
+    return url
+
+
 def hash_url(url: str) -> str:
     """Generate MD5 hash of a URL for deduplication."""
     return hashlib.md5(url.strip().lower().encode()).hexdigest()
