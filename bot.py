@@ -217,14 +217,15 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(explore_loading_jobs_callback, pattern="^explore_loading_jobs$"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     async def text_router(update, context):
+        text = update.message.text or update.message.caption or ""
         if context.user_data.get("awaiting_settings_custom_skill"):
             await settings_custom_skill_receive(update, context)
-        elif URL_REGEX.search(update.message.text or ""):
+        elif URL_REGEX.search(text):
             await handle_url_submission(update, context)
         else:
             await ats_analyze_result(update, context)
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, text_router))
 
     # Tracker & Analytics
     app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^(manual_)?applied_"))

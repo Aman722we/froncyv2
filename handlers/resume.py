@@ -130,7 +130,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = await get_user(user_id)
         plan = user.get("plan", "free")
         resume_text = user.get("resume_text", "")
-        jd_text = update.message.text
+        jd_text = (update.message.text or update.message.caption or "").strip()
 
         await update.message.reply_text(r"⏳ Analyzing your resume with AI — this takes about 20 seconds\.\.\.", parse_mode="MarkdownV2")
 

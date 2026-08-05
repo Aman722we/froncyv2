@@ -55,9 +55,13 @@ async def handle_url_submission(update: Update, context: ContextTypes.DEFAULT_TY
     """Called when an onboarded user sends a plain URL."""
     # Skip if admin sent it (they use /addjob for their own URLs)
     if update.effective_user.id == settings.ADMIN_TELEGRAM_ID:
+        await update.message.reply_text(
+            "ℹ️ <b>Admin Note:</b> You sent a job link. Since you are an admin, community link submissions are ignored. Use /addjob to post jobs directly.",
+            parse_mode="HTML"
+        )
         return
 
-    text = update.message.text.strip()
+    text = (update.message.text or update.message.caption or "").strip()
     match = URL_REGEX.search(text)
     if not match:
         return
