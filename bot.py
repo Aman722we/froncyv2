@@ -177,6 +177,7 @@ def build_bot() -> Application:
 
     # Navigation Callbacks
     app.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_menu$"))
+    app.add_handler(CallbackQueryHandler(submit_job_link_info_callback, pattern="^submit_job_link_info$"))
     app.add_handler(CallbackQueryHandler(view_jobs, pattern="^menu_jobs$"))
     app.add_handler(CallbackQueryHandler(daily_feed_command, pattern="^menu_daily$"))
     app.add_handler(CallbackQueryHandler(view_resume, pattern="^menu_resume$"))

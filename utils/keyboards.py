@@ -147,6 +147,7 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
         ],
         [
             InlineKeyboardButton("✍️ Cover Letter", callback_data="menu_coverletter"),
+            InlineKeyboardButton("🔗 Submit Job Link", callback_data="submit_job_link_info"),
         ],
     ]
     if plan == "pro":

@@ -44,3 +44,27 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )
+
+
+async def submit_job_link_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle clicking the 'Submit Job Link' button."""
+    query = update.callback_query
+    await query.answer()
+    
+    msg = (
+        "🔗 *Bring Your Own Job*\n\n"
+        "Found a job on LinkedIn, Indeed, or another board?\n\n"
+        "Just paste the URL directly into this chat\\! "
+        "We'll instantly verify it and generate a complete *Apply Smart Kit* for you\\. 🚀"
+    )
+    
+    # Back button to return to menu
+    kb = keyboards.InlineKeyboardMarkup([[
+        keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")
+    ]])
+    
+    await query.edit_message_text(
+        msg,
+        reply_markup=kb,
+        parse_mode="MarkdownV2"
+    )

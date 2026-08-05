@@ -594,6 +594,8 @@ def format_daily_feed_message(
     if skill_tip:
         footer += f"\n💡 *Pro Tip:* {escape_md(skill_tip)}\n"
 
+    footer += f"\n_P\\.S\\. Found a job elsewhere? Just paste the link here to unlock an Apply Kit for it\\!_"
+
     return header + "".join(lines) + footer
 
 
@@ -731,9 +733,10 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
 
 def no_jobs_found() -> str:
     return (
-        "😔 *No matching jobs found today*\n\n"
-        "Try updating your skills or location in ⚙️ Settings\\.\n"
-        "I'll keep searching and notify you when new jobs match\\!"
+        "😔 *No matching jobs found right now*\n\n"
+        "Try updating your skills or location in ⚙️ Settings\\.\n\n"
+        "✨ *Didn't find what you're looking for?*\n"
+        "Don't worry — you can paste *ANY* job link \\(LinkedIn, Indeed, etc\\.\\) directly into this chat to get an Apply Smart Kit for it\\!"
     )
 
 
