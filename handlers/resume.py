@@ -602,7 +602,7 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
 
         # Show a quick progress message while we parse & check
         progress_msg = await update.message.reply_text(
-            "⏳ Checking your resume\\.\.\\. \\(~5 seconds\\)",
+            r"⏳ Checking your resume\.\.\. \(\~5 seconds\)",
             parse_mode="MarkdownV2"
         )
 
@@ -677,9 +677,9 @@ async def resume_upload_new_callback(update: Update, context: ContextTypes.DEFAU
     context.user_data["pending_resume_text"] = None
     context.user_data["waiting_for_replace_resume"] = True
     await query.edit_message_text(
-        "📎 Please upload a <b>single-column, standard</b> PDF resume \(max 5MB\)\.\n\n"
+        "📎 Please upload a <b>single-column, standard</b> PDF resume (max 5MB).\n\n"
         "<b>Tips for an ATS-friendly format:</b>\n"
-        "• Use a single-column layout \(no tables or text boxes\)\n"
+        "• Use a single-column layout (no tables or text boxes)\n"
         "• Avoid headers/footers, columns, or graphics\n"
         "• Use a simple font like Arial or Calibri\n\n"
         "You can use <a href=\"https://www.overleaf.com/latex/templates\">Overleaf</a> for a free, clean template.",
