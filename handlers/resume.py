@@ -544,29 +544,22 @@ async def explore_loading_jobs_callback(update: Update, context: ContextTypes.DE
     await view_jobs(update, context)
 
 
-# ──────────────────────────────────────────────
-# Replace Resume (standalone — outside onboarding)
-# ──────────────────────────────────────────────
-
 async def replace_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle 'Replace' button from /resume menu — prompt user to send a new PDF."""
     query = update.callback_query
     await query.answer()
     context.user_data["waiting_for_replace_resume"] = True
     await query.edit_message_text(
-        "📎 Send me your new resume as a PDF file \\(max 5MB\\)\\.",
-        parse_mode="MarkdownV2"
+        "📎 Send me your new resume as a PDF file (max 5MB)."
     )
 
 
 async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Process the new PDF when replacing an existing resume.
-    
-    Flow:
-    1. Download & extract text.
-    2. Run a fast AI parseability check (3s, 8B model).
-    3a. If OK → save to DB, confirm to user.
-    3b. If NOT OK → ask user to choose: re-upload clean PDF or request free manual fix.
+
+    Design principle: NEVER show a generic error. If anything fails at any step,
+    we fall through to showing the Complex Layout Detected screen so the user
+    always has a path forward (re-upload or request manual fix).
     """
     if not context.user_data.get("waiting_for_replace_resume") and \
        not context.user_data.get("waiting_for_fixresume_upload"):
@@ -574,13 +567,11 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
 
     document = update.message.document
     if not document or not document.file_name.lower().endswith(".pdf"):
-        await update.message.reply_text("⚠️ Please upload a PDF file\\.", parse_mode="MarkdownV2")
+        await update.message.reply_text("⚠️ Please upload a PDF file.", parse_mode="HTML")
         return
 
     if document.file_size > 5 * 1024 * 1024:
-        await update.message.reply_text(
-            "⚠️ File too large\\. Maximum size is 5MB\\.", parse_mode="MarkdownV2"
-        )
+        await update.message.reply_text("⚠️ File too large. Maximum size is 5MB.", parse_mode="HTML")
         return
 
     # ── Admin uploading a fixed resume on behalf of a user ────────────
@@ -591,85 +582,105 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["waiting_for_replace_resume"] = False
 
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+    from services.resume_parser import save_resume_file, extract_text_from_pdf
+    from services.llm_service import check_resume_parseable
+    from db.users import update_resume
 
+    user_id = update.effective_user.id
+
+    # ── Step 1: Show progress indicator ───────────────────────────────
+    progress_msg = None
     try:
-        from services.resume_parser import save_resume_file, extract_text_from_pdf
-        from services.llm_service import check_resume_parseable
-        from db.users import update_resume
-
-        user_id = update.effective_user.id
-
-        # Show a quick progress message while we parse & check
         progress_msg = await update.message.reply_text(
-            r"⏳ Checking your resume\.\.\. \(\~5 seconds\)",
-            parse_mode="MarkdownV2"
+            "⏳ Checking your resume... (~5 seconds)"
         )
+    except Exception:
+        pass  # Progress message is cosmetic, never fail here
 
+    # ── Step 2: Download & save the PDF file ──────────────────────────
+    raw_bytes = None
+    saved_path = None
+    try:
         file = await document.get_file()
         file_bytes = await file.download_as_bytearray()
         raw_bytes = bytes(file_bytes)
         saved_path = save_resume_file(user_id, raw_bytes, document.file_name)
-        
-        try:
-            resume_text = extract_text_from_pdf(saved_path)
-        except Exception as pdf_err:
-            logger.warning(f"PDF extraction failed for {user_id}: {pdf_err}")
-            resume_text = ""  # Force the parseability check to fail gracefully
-
-        # Strip lone surrogate characters that PostgreSQL UTF-8 cannot encode.
-        if resume_text:
-            resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
-
-        # ── AI Parseability Sanity Check ──────────────────────────────
-        is_parseable = await check_resume_parseable(resume_text or "")
-
-        if is_parseable:
-            # ✅ All good — save and confirm
-            await update_resume(user_id, resume_text, document.file_name)
-            try:
-                await progress_msg.delete()
-            except Exception:
-                pass
-            await update.message.reply_text(
-                messages.resume_uploaded_success(document.file_name),
-                parse_mode="MarkdownV2",
-                reply_markup=back_kb,
-            )
-        else:
-            # ❌ Complex layout — ask user to choose
-            logger.warning(f"User {user_id} uploaded a complex/unparseable resume: {document.file_name}")
-            # Temporarily stash the raw bytes and filename in user_data
-            # so the callback can save them without re-downloading
-            context.user_data["pending_raw_resume_bytes"] = raw_bytes
-            context.user_data["pending_resume_filename"] = document.file_name
-            context.user_data["pending_resume_text"] = resume_text  # save what we could extract
-
-            choice_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📤 I'll upload a standard PDF", callback_data="resume_upload_new")],
-                [InlineKeyboardButton("⏳ Request Free Manual Fix (2–4 hrs)", callback_data="resume_manual_fix")],
-            ])
-            try:
-                await progress_msg.delete()
-            except Exception:
-                pass
-            await update.message.reply_text(
-                "⚠️ <b>Complex Layout Detected</b>\n\n"
-                "Our AI couldn't fully read your resume structure. "
-                "This usually happens with multi-column layouts, tables, or graphics.\n\n"
-                "<b>Why does this matter?</b> Features like Apply Smart, ATS Resume, and Cover Letter "
-                "work best when we can read every bullet point in your resume.\n\n"
-                "<b>What would you like to do?</b>",
-                parse_mode="HTML",
-                reply_markup=choice_kb,
-            )
-
     except Exception as e:
-        logger.error(f"Replace resume failed: {e}")
+        logger.error(f"PDF download/save failed for user {user_id}: {e}")
+        # Can't even save the file — show a real error (network issue, not user fault)
+        if progress_msg:
+            try: await progress_msg.delete()
+            except Exception: pass
         await update.message.reply_text(
-            "⚠️ Failed to process your resume\\. Please try again\\.",
+            "⚠️ Failed to download your file. Please check your connection and try again."
+        )
+        return
+
+    # ── Step 3: Extract text from PDF ─────────────────────────────────
+    resume_text = ""
+    try:
+        resume_text = extract_text_from_pdf(saved_path) or ""
+        resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
+    except Exception as e:
+        logger.warning(f"PDF text extraction failed for user {user_id}: {e}")
+        resume_text = ""  # Extraction failure → force complex layout path below
+
+    # ── Step 4: AI parseability check ─────────────────────────────────
+    is_parseable = False
+    try:
+        if resume_text.strip():
+            is_parseable = await check_resume_parseable(resume_text)
+        else:
+            is_parseable = False  # Empty text → definitely not parseable
+    except Exception as e:
+        logger.warning(f"AI parseability check failed for user {user_id}: {e}")
+        is_parseable = False  # Any AI failure → assume complex layout
+
+    # ── Step 5: Delete progress message ───────────────────────────────
+    if progress_msg:
+        try: await progress_msg.delete()
+        except Exception: pass
+
+    # ── Step 6: Branch on result ──────────────────────────────────────
+    if is_parseable:
+        # ✅ Resume is clean — save to DB and confirm
+        try:
+            await update_resume(user_id, resume_text, document.file_name)
+        except Exception as e:
+            logger.error(f"update_resume DB write failed for user {user_id}: {e}")
+            await update.message.reply_text(
+                "⚠️ Your resume was read successfully but we had a database error saving it. Please try again."
+            )
+            return
+
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+        await update.message.reply_text(
+            messages.resume_uploaded_success(document.file_name),
             parse_mode="MarkdownV2",
             reply_markup=back_kb,
+        )
+    else:
+        # ❌ Complex layout (or any failure) — show choice to user
+        logger.warning(f"User {user_id} resume flagged as complex: {document.file_name}")
+
+        # Stash raw bytes and text in context for the callback handlers
+        context.user_data["pending_raw_resume_bytes"] = raw_bytes
+        context.user_data["pending_resume_filename"] = document.file_name
+        context.user_data["pending_resume_text"] = resume_text
+
+        choice_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 I'll upload a standard PDF", callback_data="resume_upload_new")],
+            [InlineKeyboardButton("⏳ Request Free Manual Fix (2–4 hrs)", callback_data="resume_manual_fix")],
+        ])
+        await update.message.reply_text(
+            "⚠️ <b>Complex Layout Detected</b>\n\n"
+            "Our AI couldn't fully read your resume structure. "
+            "This usually happens with multi-column layouts, tables, or graphics.\n\n"
+            "<b>Why does this matter?</b> Features like Apply Smart, ATS Resume, and Cover Letter "
+            "work best when we can read every bullet point in your resume.\n\n"
+            "<b>What would you like to do?</b>",
+            parse_mode="HTML",
+            reply_markup=choice_kb,
         )
 
 
