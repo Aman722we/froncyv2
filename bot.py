@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, fixresume_command
+from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, getresume_command, fixresume_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
@@ -165,6 +165,7 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("send", send_message_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(CommandHandler("badresumes", badresumes_command))
+    app.add_handler(CommandHandler("getresume", getresume_command))
     app.add_handler(CommandHandler("fixresume", fixresume_command))
 
     # Community Job Submissions (admin checklist flow)

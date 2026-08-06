@@ -370,10 +370,46 @@ async def badresumes_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"{i}. <b>{name}</b> {uname}\n"
             f"   🆔 <code>{uid}</code>\n"
             f"   📄 {file}\n"
-            f"   ➡️ /fixresume {uid}"
+            f"   📥 /getresume {uid}\n"
+            f"   📤 /fixresume {uid}"
         )
 
     await update.message.reply_text("\n\n".join(lines), parse_mode="HTML")
+
+
+async def getresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/getresume <user_id> — Admin only. Download the raw broken PDF for a specific user."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /getresume &lt;user_id&gt;\n\n"
+            "Example:\n<code>/getresume 1384292160</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID. It must be a number.")
+        return
+
+    from db.users import get_raw_resume_bytes
+    raw_bytes, filename = await get_raw_resume_bytes(target_id)
+    
+    if not raw_bytes:
+        await update.message.reply_text("❌ No raw resume found for this user in the database.")
+        return
+
+    await update.message.reply_document(
+        document=raw_bytes,
+        filename=filename or f"resume_{target_id}.pdf",
+        caption=f"Here is the broken resume for user <code>{target_id}</code>.",
+        parse_mode="HTML"
+    )
 
 
 async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

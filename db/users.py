@@ -455,3 +455,16 @@ async def get_users_needing_manual_resume() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+async def get_raw_resume_bytes(telegram_id: int) -> tuple[bytes | None, str | None]:
+    """Return the raw resume bytes and filename for a given user."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT raw_resume_bytes, resume_filename FROM users WHERE telegram_id = $1",
+            telegram_id
+        )
+        if not row:
+            return None, None
+        return row["raw_resume_bytes"], row["resume_filename"]
+
+
