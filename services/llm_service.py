@@ -249,14 +249,14 @@ async def check_resume_parseable(resume_text: str) -> bool:
     snippet = resume_text[:2000]
 
     prompt = (
-        "You are a resume parser quality checker. You will receive raw text extracted from a PDF resume. "
-        "Your ONLY job is to determine if the text is structured enough to extract work experience or projects.\n\n"
-        "Answer YES if:\n"
-        "- You can clearly see at least one job title, company name, or work experience entry.\n"
-        "- OR you can clearly see at least one project name with a description.\n\n"
+        "You are a strict resume parser quality checker. You will receive raw text extracted from a PDF resume. "
+        "Your ONLY job is to determine if the text flows logically top-to-bottom without being scrambled by a multi-column layout.\n\n"
         "Answer NO if:\n"
-        "- The text is completely scrambled (individual words on separate lines with no clear structure).\n"
-        "- You cannot identify any coherent work experience, job titles, or project descriptions.\n\n"
+        "- The text appears scrambled (e.g., words from a sidebar like 'Skills' or 'Contact Info' are randomly mixed into the middle of a job description).\n"
+        "- The text is fragmented with random line breaks splitting words or sentences unnaturally.\n"
+        "- You cannot easily and continuously read a single work experience entry from start to finish without interruption.\n\n"
+        "Answer YES if:\n"
+        "- The text flows cleanly and logically, and job descriptions/projects are grouped together naturally.\n\n"
         "Reply with ONLY the single word YES or NO. Nothing else."
     )
 

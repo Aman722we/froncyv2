@@ -621,6 +621,7 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
     try:
         resume_text = extract_text_from_pdf(saved_path) or ""
         resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
+        resume_text = resume_text.replace("\x00", "")
     except Exception as e:
         logger.warning(f"PDF text extraction failed for user {user_id}: {e}")
         resume_text = ""  # Extraction failure → force complex layout path below
