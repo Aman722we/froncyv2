@@ -16,7 +16,7 @@ httpx
 feedparser
 
 # Resume parsing
-pypdf
+pymupdf
 
 # Auto-apply
 playwright
