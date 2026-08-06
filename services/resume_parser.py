@@ -1,37 +1,21 @@
 """
-Resume PDF text extraction using PyMuPDF (fitz).
+Resume PDF text extraction using PyMuPDF and pymupdf4llm.
 
-Why PyMuPDF over pypdf:
-- pypdf reads text objects in the order they are stored inside the PDF, which often
-  does NOT match visual/reading order (especially for multi-column resumes).
-- PyMuPDF returns text blocks with their (x0, y0, x1, y1) bounding box coordinates.
-  This lets us sort and group blocks spatially, reconstructing the correct reading order.
-
-Spatial sorting strategy:
-1.  Extract all text blocks from the page.
-2.  Detect how many columns exist by clustering blocks on their x0 (left-edge) coordinate.
-3.  Sort blocks within each column top-to-bottom (by y0).
-4.  Merge columns left-to-right, yielding clean, logically ordered text.
-
-This approach handles:
-  - Single-column LaTeX/Word resumes          (pass)
-  - Two-column creative/Canva resumes         (pass)
-  - Resumes with sidebars (Skills, Contact)   (pass)
-  - Embedded hyperlinks (via get_links())     (pass)
-  - Decorative images/icons (ignored)         (pass)
+Why pymupdf4llm:
+- Natively understands reading order, multi-column layouts, tables, and lists.
+- Bypasses PyMuPDF's low-level get_text("blocks") block-fusion bugs which can 
+  scramble text horizontally (e.g. fusing 'ensuring' and 'Intern').
+- Outputs clean Markdown which is highly optimized for LLMs (Llama 70B/8B).
 """
 import os
 from pathlib import Path
 import fitz  # PyMuPDF
+import pymupdf4llm
 from loguru import logger
 
 
 RESUMES_DIR = Path("resumes")
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-
-# X-coordinate gap (in PDF points) needed to consider two blocks as being in
-# different columns. ~35% of a standard A4 page width (595pt) is a good default.
-COLUMN_GAP_THRESHOLD = 200
 
 
 def ensure_resumes_dir():
@@ -39,97 +23,42 @@ def ensure_resumes_dir():
     RESUMES_DIR.mkdir(exist_ok=True)
 
 
-def _detect_columns(blocks: list) -> list:
-    """
-    Given a list of PyMuPDF text blocks, detect visual columns and return
-    them sorted left-to-right. Each column is a list of blocks sorted
-    top-to-bottom by their y0 coordinate.
-
-    Strategy:
-    - Sort all blocks by their x0 (left edge).
-    - Walk through the sorted blocks and start a new column group whenever
-      the x0 gap between consecutive blocks exceeds COLUMN_GAP_THRESHOLD.
-    - Within each column, sort blocks by y0 (top edge) for reading order.
-
-    This is a fast O(n log n) heuristic that correctly handles:
-      - 1-column: all blocks land in the same group.
-      - 2-column: blocks split into two groups by the large x-gap in the middle.
-      - 3-column: three groups are formed.
-    """
-    if not blocks:
-        return []
-
-    # Sort by x0 to detect column boundaries
-    sorted_by_x = sorted(blocks, key=lambda b: b[0])
-
-    columns = []
-    current_column = [sorted_by_x[0]]
-    current_x_center = sorted_by_x[0][0]
-
-    for block in sorted_by_x[1:]:
-        x0 = block[0]
-        # If this block is far to the right of the current column's left edge,
-        # it belongs to a new column
-        if x0 - current_x_center > COLUMN_GAP_THRESHOLD:
-            # Sort the current column top-to-bottom and save it
-            columns.append(sorted(current_column, key=lambda b: b[1]))
-            current_column = [block]
-            current_x_center = x0
-        else:
-            current_column.append(block)
-            # Anchor column to its leftmost block
-            current_x_center = min(current_x_center, x0)
-
-    # Don't forget the last column
-    columns.append(sorted(current_column, key=lambda b: b[1]))
-
-    return columns
-
-
 def extract_text_from_pdf(filepath: str) -> str:
     """
-    Extract spatially-sorted plain text from a PDF file using PyMuPDF.
+    Extract perfectly formatted markdown text from a PDF file using pymupdf4llm.
 
     Also extracts embedded hyperlinks (GitHub, LinkedIn, portfolio URLs)
-    natively via fitz page.get_links(), replacing the brittle /Annots hack.
+    natively via fitz page.get_links() to ensure they are available to the LLM.
 
     Args:
         filepath: Path to the PDF file on disk.
 
     Returns:
-        A clean, logically ordered text string (with an appended [EMBEDDED LINKS]
+        A clean, logically ordered Markdown string (with an appended [EMBEDDED LINKS]
         section if any hyperlinks are found). Raises ValueError if no text
-        can be extracted (image-only / scanned PDF).
+        can be extracted.
     """
     doc = fitz.open(filepath)
-    all_page_texts = []
+    
+    try:
+        # 1. Extract structural markdown using pymupdf4llm
+        full_text = pymupdf4llm.to_markdown(doc)
+    except Exception as e:
+        doc.close()
+        raise ValueError(f"pymupdf4llm extraction failed: {e}")
+
+    # Strip null bytes that would crash PostgreSQL
+    full_text = full_text.replace("\x00", "").strip()
+
+    if not full_text:
+        doc.close()
+        raise ValueError(
+            "Could not extract any text from the PDF. It may be image-based or scanned."
+        )
+
+    # 2. Extract hidden hyperlinks natively
     found_urls = []
-
-    for page_num, page in enumerate(doc):
-        # Each block: (x0, y0, x1, y1, "text", block_no, block_type)
-        # block_type == 0 is a text block; block_type == 1 is an image block.
-        raw_blocks = page.get_text("blocks")
-
-        # Filter to text-only blocks with actual content
-        text_blocks = [
-            b for b in raw_blocks
-            if b[6] == 0 and b[4].strip()
-        ]
-
-        # Reconstruct reading order via spatial column detection
-        columns = _detect_columns(text_blocks)
-
-        page_text_parts = []
-        for column in columns:
-            for block in column:
-                block_text = block[4].strip()
-                if block_text:
-                    page_text_parts.append(block_text)
-
-        if page_text_parts:
-            all_page_texts.append("\n".join(page_text_parts))
-
-        # Extract hyperlinks natively (much cleaner than /Annots)
+    for page in doc:
         for link in page.get_links():
             uri = link.get("uri", "")
             if uri and uri not in found_urls:
@@ -137,25 +66,13 @@ def extract_text_from_pdf(filepath: str) -> str:
 
     doc.close()
 
-    full_text = "\n\n".join(all_page_texts).strip()
-    # Strip null bytes that would crash PostgreSQL
-    full_text = full_text.replace("\x00", "")
-
-    if not full_text:
-        raise ValueError(
-            "Could not extract any text from the PDF. It may be image-based or scanned."
-        )
-
-    # Append links section so the LLM can see them for template filling
+    # 3. Append links section so the LLM can see them for template filling
     if found_urls:
         url_section = "\n\n[EMBEDDED LINKS FROM PDF]\n" + "\n".join(found_urls)
         full_text += url_section
         logger.info(f"Extracted {len(found_urls)} hyperlinks from PDF links layer")
 
-    logger.info(
-        f"Extracted {len(full_text)} chars from '{filepath}' "
-        f"({len(all_page_texts)} page(s))"
-    )
+    logger.info(f"Extracted {len(full_text)} chars from '{filepath}'")
     return full_text
 
 

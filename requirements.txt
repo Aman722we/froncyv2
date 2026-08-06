@@ -17,6 +17,7 @@ feedparser
 
 # Resume parsing
 pymupdf
+pymupdf4llm
 
 # Auto-apply
 playwright
