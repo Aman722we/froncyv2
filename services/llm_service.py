@@ -235,6 +235,50 @@ Analyze the match and provide the JSON:"""
     raise RuntimeError("ATS generation failed after retries")
 
 
+async def check_resume_parseable(resume_text: str) -> bool:
+    """
+    Quick sanity check — uses the fast 8B model to determine if the raw resume
+    text is structured enough for the AI to extract experience/project bullets.
+
+    Returns True if parseable, False if the layout is too complex (columns, tables, etc.)
+    This runs in ~3 seconds and costs a fraction of a full extraction.
+    """
+    client, model = _get_client(LLMMode.FAST, timeout=20.0)
+
+    # Only check the first 2000 chars — enough to detect structure
+    snippet = resume_text[:2000]
+
+    prompt = (
+        "You are a resume parser quality checker. You will receive raw text extracted from a PDF resume. "
+        "Your ONLY job is to determine if the text is structured enough to extract work experience or projects.\n\n"
+        "Answer YES if:\n"
+        "- You can clearly see at least one job title, company name, or work experience entry.\n"
+        "- OR you can clearly see at least one project name with a description.\n\n"
+        "Answer NO if:\n"
+        "- The text is completely scrambled (individual words on separate lines with no clear structure).\n"
+        "- You cannot identify any coherent work experience, job titles, or project descriptions.\n\n"
+        "Reply with ONLY the single word YES or NO. Nothing else."
+    )
+
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"Resume text:\n{snippet}"},
+            ],
+            temperature=0.0,
+            max_tokens=5,
+        )
+        answer = response.choices[0].message.content.strip().upper()
+        logger.info(f"Resume parseability check: {answer}")
+        return answer.startswith("Y")
+    except Exception as e:
+        logger.warning(f"Resume parseability check failed (defaulting to True): {e}")
+        # Default to True on failure — don't block user from uploading
+        return True
+
+
 RESUME_EXTRACTION_SYSTEM_PROMPT = """You are a faithful resume data-entry clerk. Your ONLY job is to lift information out of the resume text and place it into a JSON structure. You are NOT a writer, editor, or advisor.
 
 GOLDEN RULE — READ THIS FIRST:

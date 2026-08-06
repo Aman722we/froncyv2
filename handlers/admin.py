@@ -341,3 +341,75 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         parse_mode="HTML"
     )
     logger.info(f"Broadcast done. Sent={sent}, Blocked={blocked}, Failed={failed}")
+
+
+async def badresumes_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/badresumes — Admin only. Show queue of users needing a manual resume fix."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    from db.users import get_users_needing_manual_resume
+
+    queue = await get_users_needing_manual_resume()
+
+    if not queue:
+        await update.message.reply_text(
+            "✅ <b>No pending manual resume fixes!</b>\n\nThe queue is empty.",
+            parse_mode="HTML"
+        )
+        return
+
+    lines = [f"🛠 <b>Manual Resume Fix Queue</b> — {len(queue)} user(s)\n"]
+    for i, u in enumerate(queue, 1):
+        uname = f"@{u['username']}" if u.get("username") else "(no username)"
+        name = u.get("first_name", "Unknown")
+        file = u.get("resume_filename", "N/A")
+        uid = u["telegram_id"]
+        lines.append(
+            f"{i}. <b>{name}</b> {uname}\n"
+            f"   🆔 <code>{uid}</code>\n"
+            f"   📄 {file}\n"
+            f"   ➡️ /fixresume {uid}"
+        )
+
+    await update.message.reply_text("\n\n".join(lines), parse_mode="HTML")
+
+
+async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/fixresume <user_id> — Admin only. Upload a fixed PDF for a specific user."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /fixresume &lt;user_id&gt;\n\n"
+            "Example:\n<code>/fixresume 1384292160</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID. It must be a number.")
+        return
+
+    # Put admin in the upload state with the target user set
+    context.user_data["waiting_for_fixresume_upload"] = True
+    context.user_data["fixresume_target_user_id"] = target_id
+
+    from db.users import get_user
+    target = await get_user(target_id)
+    name = target.get("first_name", "Unknown") if target else "Unknown"
+    filename = target.get("resume_filename", "N/A") if target else "N/A"
+
+    await update.message.reply_text(
+        f"📎 <b>Fix Resume for {name}</b> (<code>{target_id}</code>)\n"
+        f"📄 Current file: {filename}\n\n"
+        "Now send me the <b>fixed PDF</b>. I'll save it to their profile and notify them automatically.",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin initiated manual resume fix for user {target_id}")
+

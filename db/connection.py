@@ -153,6 +153,13 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply apply_smart migrations: {e}")
 
+        # Concierge Resume Fix — flag for users with unparseable resumes
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_manual_resume BOOLEAN DEFAULT FALSE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS raw_resume_bytes BYTEA;")
+        except Exception as e:
+            logger.warning(f"Failed to apply concierge_resume migrations: {e}")
+
         # Referral system migrations
         try:
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT;")

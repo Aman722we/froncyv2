@@ -408,3 +408,50 @@ async def increment_apply_smart_used(telegram_id: int) -> None:
             telegram_id,
         )
 
+
+# ──────────────────────────────────────────────────────────────────────
+# Concierge Resume Fix helpers
+# ──────────────────────────────────────────────────────────────────────
+
+async def set_manual_resume_flag(telegram_id: int, flag: bool) -> None:
+    """Set or clear the needs_manual_resume flag for a user."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET needs_manual_resume = $2, updated_at = NOW() WHERE telegram_id = $1",
+            telegram_id,
+            flag,
+        )
+
+
+async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str) -> None:
+    """Save the raw PDF bytes for admin manual processing, without replacing resume_text."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET raw_resume_bytes = $2, resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW()
+            WHERE telegram_id = $1
+            """,
+            telegram_id,
+            raw_bytes,
+            filename,
+        )
+
+
+async def get_users_needing_manual_resume() -> list[dict]:
+    """Return all users currently flagged for manual resume fixing."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT telegram_id, first_name, username, resume_filename, updated_at
+            FROM users
+            WHERE needs_manual_resume = TRUE
+            ORDER BY updated_at ASC
+            """
+        )
+        return [dict(r) for r in rows]
+
+

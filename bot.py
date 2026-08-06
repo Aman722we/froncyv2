@@ -13,7 +13,7 @@ from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu, submit_job_link_info_callback
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback, apply_smart_locked_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback
+from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback, resume_upload_new_callback
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, broadcast_command
+from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, fixresume_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
@@ -164,6 +164,8 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(analytics_page_callback, pattern="^analytics_page_\\d+$"))
     app.add_handler(CommandHandler("send", send_message_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
+    app.add_handler(CommandHandler("badresumes", badresumes_command))
+    app.add_handler(CommandHandler("fixresume", fixresume_command))
 
     # Community Job Submissions (admin checklist flow)
     app.add_handler(CommandHandler("links", links_command))
@@ -215,6 +217,8 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(generate_ats_pdf_callback, pattern="^gen_ats_pdf_"))
     app.add_handler(CallbackQueryHandler(get_latex_code_callback, pattern="^get_latex_"))
     app.add_handler(CallbackQueryHandler(explore_loading_jobs_callback, pattern="^explore_loading_jobs$"))
+    app.add_handler(CallbackQueryHandler(resume_manual_fix_callback, pattern="^resume_manual_fix$"))
+    app.add_handler(CallbackQueryHandler(resume_upload_new_callback, pattern="^resume_upload_new$"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     async def text_router(update, context):
         text = update.message.text or update.message.caption or ""

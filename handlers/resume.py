@@ -560,8 +560,16 @@ async def replace_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Process the new PDF when replacing an existing resume."""
-    if not context.user_data.get("waiting_for_replace_resume"):
+    """Process the new PDF when replacing an existing resume.
+    
+    Flow:
+    1. Download & extract text.
+    2. Run a fast AI parseability check (3s, 8B model).
+    3a. If OK → save to DB, confirm to user.
+    3b. If NOT OK → ask user to choose: re-upload clean PDF or request free manual fix.
+    """
+    if not context.user_data.get("waiting_for_replace_resume") and \
+       not context.user_data.get("waiting_for_fixresume_upload"):
         return
 
     document = update.message.document
@@ -575,34 +583,82 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
+    # ── Admin uploading a fixed resume on behalf of a user ────────────
+    if context.user_data.get("waiting_for_fixresume_upload"):
+        await _admin_fixresume_receive(update, context, document)
+        return
+
     context.user_data["waiting_for_replace_resume"] = False
 
-    # Import BEFORE the try block so both try AND except can use them
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
 
     try:
         from services.resume_parser import save_resume_file, extract_text_from_pdf
+        from services.llm_service import check_resume_parseable
         from db.users import update_resume
 
         user_id = update.effective_user.id
+
+        # Show a quick progress message while we parse & check
+        progress_msg = await update.message.reply_text(
+            "⏳ Checking your resume\\.\.\\. \\(~5 seconds\\)",
+            parse_mode="MarkdownV2"
+        )
+
         file = await document.get_file()
         file_bytes = await file.download_as_bytearray()
-        saved_path = save_resume_file(user_id, bytes(file_bytes), document.file_name)
+        raw_bytes = bytes(file_bytes)
+        saved_path = save_resume_file(user_id, raw_bytes, document.file_name)
         resume_text = extract_text_from_pdf(saved_path)
 
         # Strip lone surrogate characters that PostgreSQL UTF-8 cannot encode.
-        # These appear in some PDFs that contain emoji or special glyphs.
         if resume_text:
             resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
 
-        await update_resume(user_id, resume_text, document.file_name)
+        # ── AI Parseability Sanity Check ──────────────────────────────
+        is_parseable = await check_resume_parseable(resume_text or "")
 
-        await update.message.reply_text(
-            messages.resume_uploaded_success(document.file_name),
-            parse_mode="MarkdownV2",
-            reply_markup=back_kb,
-        )
+        if is_parseable:
+            # ✅ All good — save and confirm
+            await update_resume(user_id, resume_text, document.file_name)
+            try:
+                await progress_msg.delete()
+            except Exception:
+                pass
+            await update.message.reply_text(
+                messages.resume_uploaded_success(document.file_name),
+                parse_mode="MarkdownV2",
+                reply_markup=back_kb,
+            )
+        else:
+            # ❌ Complex layout — ask user to choose
+            logger.warning(f"User {user_id} uploaded a complex/unparseable resume: {document.file_name}")
+            # Temporarily stash the raw bytes and filename in user_data
+            # so the callback can save them without re-downloading
+            context.user_data["pending_raw_resume_bytes"] = raw_bytes
+            context.user_data["pending_resume_filename"] = document.file_name
+            context.user_data["pending_resume_text"] = resume_text  # save what we could extract
+
+            choice_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📤 I'll upload a standard PDF", callback_data="resume_upload_new")],
+                [InlineKeyboardButton("⏳ Request Free Manual Fix (2–4 hrs)", callback_data="resume_manual_fix")],
+            ])
+            try:
+                await progress_msg.delete()
+            except Exception:
+                pass
+            await update.message.reply_text(
+                "⚠️ <b>Complex Layout Detected</b>\n\n"
+                "Our AI couldn't fully read your resume structure. "
+                "This usually happens with multi-column layouts, tables, or graphics.\n\n"
+                "<b>Why does this matter?</b> Features like Apply Smart, ATS Resume, and Cover Letter "
+                "work best when we can read every bullet point in your resume.\n\n"
+                "<b>What would you like to do?</b>",
+                parse_mode="HTML",
+                reply_markup=choice_kb,
+            )
+
     except Exception as e:
         logger.error(f"Replace resume failed: {e}")
         await update.message.reply_text(
@@ -610,3 +666,152 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="MarkdownV2",
             reply_markup=back_kb,
         )
+
+
+async def resume_upload_new_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User chose to upload a cleaner, standard PDF. Re-prompt them."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["pending_raw_resume_bytes"] = None
+    context.user_data["pending_resume_filename"] = None
+    context.user_data["pending_resume_text"] = None
+    context.user_data["waiting_for_replace_resume"] = True
+    await query.edit_message_text(
+        "📎 Please upload a <b>single-column, standard</b> PDF resume \(max 5MB\)\.\n\n"
+        "<b>Tips for an ATS-friendly format:</b>\n"
+        "• Use a single-column layout \(no tables or text boxes\)\n"
+        "• Avoid headers/footers, columns, or graphics\n"
+        "• Use a simple font like Arial or Calibri\n\n"
+        "You can use <a href=\"https://www.overleaf.com/latex/templates\">Overleaf</a> for a free, clean template.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
+async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User chose to request a free manual fix. Save raw bytes and flag them."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    raw_bytes = context.user_data.get("pending_raw_resume_bytes")
+    filename = context.user_data.get("pending_resume_filename", "resume.pdf")
+    resume_text = context.user_data.get("pending_resume_text", "")
+
+    from db.users import save_raw_resume_bytes, update_resume
+    from config import settings
+
+    try:
+        if raw_bytes:
+            # Save the raw PDF bytes and flag the user
+            await save_raw_resume_bytes(user_id, raw_bytes, filename)
+            # Also save whatever text we extracted as a fallback for other features
+            if resume_text:
+                await update_resume(user_id, resume_text, filename)
+        else:
+            # Edge case: no bytes (shouldn't happen normally)
+            from db.users import set_manual_resume_flag
+            await set_manual_resume_flag(user_id, True)
+
+        # Clean up context
+        context.user_data["pending_raw_resume_bytes"] = None
+        context.user_data["pending_resume_filename"] = None
+        context.user_data["pending_resume_text"] = None
+
+        # Notify the user
+        await query.edit_message_text(
+            "✅ <b>Got it! Your resume is in the queue.</b>\n\n"
+            "Our team will manually parse and optimize your resume within <b>2–4 hours</b>.\n"
+            "You'll receive a notification here once it's ready — then you can use Apply Smart, "
+            "ATS Resume, and Cover Letter with full accuracy!\n\n"
+            "In the meantime, you can still browse jobs and save ones you like 🔍",
+            parse_mode="HTML",
+        )
+
+        # Alert the admin
+        user = await __import__("db.users", fromlist=["get_user"]).get_user(user_id)
+        first_name = user.get("first_name", "Unknown") if user else "Unknown"
+        username = user.get("username", "") if user else ""
+        uname_str = f"@{username}" if username else "(no username)"
+        try:
+            await context.bot.send_message(
+                chat_id=settings.ADMIN_TELEGRAM_ID,
+                text=(
+                    f"🛠 <b>Manual Resume Fix Request</b>\n\n"
+                    f"👤 {first_name} {uname_str}\n"
+                    f"🆔 <code>{user_id}</code>\n"
+                    f"📄 File: {filename}\n\n"
+                    f"Use /badresumes to see the queue, then /fixresume {user_id} to fix this user's resume."
+                ),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify admin of manual resume request: {e}")
+
+        logger.info(f"User {user_id} requested manual resume fix for {filename}")
+
+    except Exception as e:
+        logger.error(f"Manual resume fix request failed for {user_id}: {e}")
+        await query.edit_message_text(
+            "⚠️ Something went wrong. Please try again or contact support."
+        )
+
+
+async def _admin_fixresume_receive(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    document,
+) -> None:
+    """Internal: called when admin uploads a fixed PDF for a target user."""
+    target_user_id = context.user_data.get("fixresume_target_user_id")
+    if not target_user_id:
+        await update.message.reply_text("⚠️ No target user set. Use /fixresume <user_id> first.")
+        return
+
+    context.user_data["waiting_for_fixresume_upload"] = False
+    context.user_data["fixresume_target_user_id"] = None
+
+    from services.resume_parser import save_resume_file, extract_text_from_pdf
+    from db.users import update_resume, set_manual_resume_flag
+    from config import settings
+
+    try:
+        file = await document.get_file()
+        file_bytes = bytes(await file.download_as_bytearray())
+        saved_path = save_resume_file(target_user_id, file_bytes, document.file_name)
+        resume_text = extract_text_from_pdf(saved_path)
+
+        if resume_text:
+            resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
+
+        # Save the clean resume and clear the flag
+        await update_resume(target_user_id, resume_text, document.file_name)
+        await set_manual_resume_flag(target_user_id, False)
+
+        # Notify the user their resume is ready
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id,
+                text=(
+                    "🎉 <b>Great news! Your resume is ready.</b>\n\n"
+                    "Our team has manually parsed and optimized your resume. "
+                    "You can now use all features — <b>Apply Smart, ATS Resume, Cover Letter</b> — with full accuracy!\n\n"
+                    "Tap below to get started:"
+                ),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🚀 Go to Menu", callback_data="back_menu")],
+                ])
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify user {target_user_id} of fixed resume: {e}")
+
+        await update.message.reply_text(
+            f"✅ Resume fixed for user <code>{target_user_id}</code>! They have been notified.",
+            parse_mode="HTML",
+        )
+        logger.info(f"Admin fixed resume for user {target_user_id}")
+
+    except Exception as e:
+        logger.error(f"Admin fixresume failed for user {target_user_id}: {e}")
+        await update.message.reply_text(f"❌ Failed to process fixed resume: {e}")
