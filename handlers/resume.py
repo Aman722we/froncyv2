@@ -610,7 +610,12 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         file_bytes = await file.download_as_bytearray()
         raw_bytes = bytes(file_bytes)
         saved_path = save_resume_file(user_id, raw_bytes, document.file_name)
-        resume_text = extract_text_from_pdf(saved_path)
+        
+        try:
+            resume_text = extract_text_from_pdf(saved_path)
+        except Exception as pdf_err:
+            logger.warning(f"PDF extraction failed for {user_id}: {pdf_err}")
+            resume_text = ""  # Force the parseability check to fail gracefully
 
         # Strip lone surrogate characters that PostgreSQL UTF-8 cannot encode.
         if resume_text:
