@@ -670,6 +670,11 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             pdf_bytes = await compile_resume_pdf(optimized_json)
 
             step_states["resume"] = "✅"
+            
+            # Save state for "Edit in LaTeX" button
+            context.user_data["last_optimized_json"] = optimized_json
+            context.user_data["pdf_job_id"] = job_id
+            context.user_data["pdf_is_manual"] = is_manual
 
             # Step 2: Cover Letter
             await _refresh_loading("⚙️ Step 2/4 — Writing Cover Letter...")
@@ -801,12 +806,19 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             ]
 
             # Navigation buttons
-            nav_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔗 Open Apply Link", url=job_url)] if job_url else [],
-                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"revisit_manual_{job_id}")],
-            ]) if job_url else InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Back to Job", callback_data=f"revisit_manual_{job_id}")],
-            ])
+            nav_kb_buttons = []
+            if job_url:
+                nav_kb_buttons.append([
+                    InlineKeyboardButton("📝 Edit in LaTeX", callback_data=f"get_latex_{job_id}"),
+                    InlineKeyboardButton("🔗 Apply Link", url=job_url)
+                ])
+            else:
+                nav_kb_buttons.append([
+                    InlineKeyboardButton("📝 Edit in LaTeX", callback_data=f"get_latex_{job_id}")
+                ])
+            
+            nav_kb_buttons.append([InlineKeyboardButton("🔙 Back to Job", callback_data=f"revisit_manual_{job_id}")])
+            nav_kb = InlineKeyboardMarkup(nav_kb_buttons)
 
             kit_text = "\n".join(kit_parts)
 
