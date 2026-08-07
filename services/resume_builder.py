@@ -43,8 +43,30 @@ LATEX_SUBS = (
     (re.compile(r'~'), r'\~{}'),
     (re.compile(r'\^'), r'\^{}'),
     (re.compile(r'"'), r"''"),
-    (re.compile(r'\.\.\.'), r'\\dots '),
+    # NOTE: '...' -> '\dots' is intentionally NOT here.
+    # URLs may contain '...' as placeholders (e.g. linkedin.com/in/...)
+    # and \dots inside \href{} is an undefined control sequence that
+    # crashes pdflatex. We handle '...' in plain text at the call site.
 )
+
+def sanitise_url(url: str) -> str:
+    """
+    Clean a URL for safe use inside LaTeX \href{}{}.
+    - Strips '...' / placeholder text that would cause pdflatex to crash.
+    - Returns empty string if the value doesn't look like a real URL.
+    """
+    if not isinstance(url, str):
+        return ""
+    # Remove common placeholder suffixes
+    url = url.strip()
+    url = re.sub(r'\.\.\.*$', '', url)       # trailing ...
+    url = re.sub(r'\s*\(link not provided\)', '', url, flags=re.IGNORECASE)
+    url = re.sub(r'\s*\(not provided\)', '', url, flags=re.IGNORECASE)
+    url = url.strip().rstrip('/')
+    # Must start with a protocol or www to be a real URL
+    if not re.match(r'^(https?://|www\.)', url, re.IGNORECASE):
+        return ""
+    return url
 
 def escape_latex(value: str) -> str:
     """Escapes special characters for LaTeX and removes unsupported Unicode."""
@@ -62,6 +84,10 @@ def escape_latex(value: str) -> str:
     # 2. Escape standard LaTeX special characters
     for pattern, replacement in LATEX_SUBS:
         newval = pattern.sub(replacement, newval)
+
+    # 3. Now safely convert '...' → '\dots' in plain text (not inside URLs)
+    newval = re.sub(r'\.\.\.', r'\\dots ', newval)
+
     return newval
 
 def escape_dict_for_latex(data):
@@ -75,9 +101,60 @@ def escape_dict_for_latex(data):
     else:
         return data
 
+# URL fields that must be sanitised (not escaped like plain text)
+URL_FIELDS = {"linkedin", "github", "portfolio"}
+
+def _sanitise_url_fields(data: dict) -> dict:
+    """
+    Sanitise known top-level URL fields before the rest of the data
+    is LaTeX-escaped. Also sanitises exp.link and proj.live_link/code_link.
+    """
+    data = dict(data)
+    for key in URL_FIELDS:
+        if key in data:
+            data[key] = sanitise_url(data[key])
+    if "experience" in data:
+        data["experience"] = [
+            {**exp, "link": sanitise_url(exp.get("link", ""))}
+            for exp in (data["experience"] or [])
+        ]
+    if "projects" in data:
+        data["projects"] = [
+            {
+                **proj,
+                "live_link": sanitise_url(proj.get("live_link", "")),
+                "code_link": sanitise_url(proj.get("code_link", "")),
+            }
+            for proj in (data["projects"] or [])
+        ]
+    if "coding_profiles" in data:
+        data["coding_profiles"] = [
+            {**cp, "link": sanitise_url(cp.get("link", ""))}
+            for cp in (data["coding_profiles"] or [])
+        ]
+    return data
+
+
 def _render_latex(resume_data: dict, font_size: str = "11pt") -> str:
     """Render the Jinja2 template with the given resume data."""
-    escaped_data = escape_dict_for_latex(resume_data)
+    # 1. Sanitise URL fields first (must NOT go through escape_latex)
+    sanitised = _sanitise_url_fields(resume_data)
+    # 2. Escape all remaining plain-text fields for LaTeX
+    escaped_data = escape_dict_for_latex(sanitised)
+    # 3. Restore sanitised URLs (escape_dict_for_latex would corrupt them)
+    for key in URL_FIELDS:
+        if key in sanitised:
+            escaped_data[key] = sanitised[key]  # already clean, don't re-escape
+    if "experience" in sanitised:
+        for i, exp in enumerate(sanitised["experience"]):
+            escaped_data["experience"][i]["link"] = exp["link"]
+    if "projects" in sanitised:
+        for i, proj in enumerate(sanitised["projects"]):
+            escaped_data["projects"][i]["live_link"] = proj["live_link"]
+            escaped_data["projects"][i]["code_link"] = proj["code_link"]
+    if "coding_profiles" in sanitised:
+        for i, cp in enumerate(sanitised["coding_profiles"]):
+            escaped_data["coding_profiles"][i]["link"] = cp["link"]
     env = _get_jinja_env()
     template = env.get_template(TEMPLATE_NAME)
     return template.render(**escaped_data, font_size=font_size)
