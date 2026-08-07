@@ -222,22 +222,23 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     await query.edit_message_text(
         f"{step2_bar}\n\n"
         "*Your experience level* 📅\n"
-        "How many years of frontend experience do you have?",
-        reply_markup=keyboards.experience_keyboard(prefix="exp_"),
+        "How many years of frontend experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
         parse_mode="MarkdownV2",
     )
     return EXPERIENCE
 
 
-async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def experience_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Save experience level (Fresher=0 or 1 YOE=1) and complete onboarding immediately.
-    Location defaults to 'all', batch year and resume upload are collected later from Settings.
+    Save experience level from user text input and complete onboarding immediately.
     """
-    query = update.callback_query
-    await query.answer()
+    text = (update.message.text or "").strip()
+    
+    if not text.isdigit():
+        await update.message.reply_text("Please enter a valid number (e.g., 0, 2, 5).")
+        return EXPERIENCE
 
-    exp_val = query.data.replace("exp_", "")   # '0' or '1'
+    exp_val = text
     user_id = update.effective_user.id
 
     await update_user_profile(user_id, experience_level=exp_val)
@@ -245,7 +246,7 @@ async def experience_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["experience_level"] = exp_val
     context.user_data["location"] = "all"
 
-    return await _complete_onboarding(update, context, has_resume=False, query=query)
+    return await _complete_onboarding(update, context, has_resume=False, query=None)
 
 
 
@@ -472,7 +473,7 @@ def get_start_handler() -> ConversationHandler:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
             EXPERIENCE: [
-                CallbackQueryHandler(experience_callback, pattern="^exp_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, experience_message_handler),
             ],
             # FUTURE placeholders kept for state-enum validity
             WELCOME:       [],

@@ -170,7 +170,11 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
     
     # ── Experience Component (30% weight) ──
     u_map = {"0": 0, "1": 1, "2": 2, "3_5": 4, "5_plus": 6, "5+": 6}
-    u_exp_years = u_map.get(str(user_exp), 0)
+    user_exp_str = str(user_exp).strip()
+    if user_exp_str.isdigit():
+        u_exp_years = int(user_exp_str)
+    else:
+        u_exp_years = u_map.get(user_exp_str, 0)
     
     exp_pct = 50  # default: unknown job requirement
     exp_note = None
@@ -261,9 +265,12 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
 
     # ── Experience (25%) ──
-    user_exp = str(user.get("experience_level", "0"))
+    user_exp = str(user.get("experience_level", "0")).strip()
     u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
-    u_exp_years = u_map.get(user_exp, 0)
+    if user_exp.isdigit():
+        u_exp_years = int(user_exp)
+    else:
+        u_exp_years = u_map.get(user_exp, 0)
 
     min_yoe = job.get("min_yoe") or job.get("experience_required") or 0
     if u_exp_years >= min_yoe:

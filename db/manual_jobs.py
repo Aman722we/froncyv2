@@ -150,24 +150,20 @@ async def get_personalized_manual_jobs(
         "machine learning", "ml engineer", "ai engineer",
     ]
 
-    def is_frontend_fresher_job(job: dict) -> bool:
+    def is_frontend_job(job: dict) -> bool:
         job_skills = [s.lower() for s in (job.get("skills") or [])]
         has_frontend_skill = any(s in FRONTEND_SKILLS for s in job_skills)
-        min_yoe = job.get("min_yoe") or 0
-        is_fresher_level = min_yoe <= 1
         # Reject if job title is clearly backend/fullstack
         title_lower = (job.get("title") or "").lower()
         is_backend_title = any(kw in title_lower for kw in BACKEND_TITLE_KEYWORDS)
-        return has_frontend_skill and is_fresher_level and not is_backend_title
+        return has_frontend_skill and not is_backend_title
 
-    filtered_jobs = [j for j in all_jobs if is_frontend_fresher_job(j)]
+    filtered_jobs = [j for j in all_jobs if is_frontend_job(j)]
     if not filtered_jobs:
-        # Fallback: if admin hasn't tagged skills yet, show all with min_yoe <= 1
-        # but still exclude clearly backend titles
+        # Fallback: if admin hasn't tagged skills yet, show all but still exclude clearly backend titles
         filtered_jobs = [
             j for j in all_jobs
-            if (j.get("min_yoe") or 0) <= 1
-            and not any(kw in (j.get("title") or "").lower() for kw in BACKEND_TITLE_KEYWORDS)
+            if not any(kw in (j.get("title") or "").lower() for kw in BACKEND_TITLE_KEYWORDS)
         ]
 
     for job in filtered_jobs:

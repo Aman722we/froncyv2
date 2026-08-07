@@ -276,6 +276,10 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("✅ 0 YOE" if f_exp == "0" else "0 YOE", callback_data="filter_exp_0"),
             InlineKeyboardButton("✅ 1 YOE" if f_exp == "1" else "1 YOE", callback_data="filter_exp_1"),
+            InlineKeyboardButton("✅ 2 YOE" if f_exp == "2" else "2 YOE", callback_data="filter_exp_2"),
+        ],
+        [
+            InlineKeyboardButton("✅ 3+ YOE" if f_exp == "3" else "3+ YOE", callback_data="filter_exp_3"),
             InlineKeyboardButton("✅ Any" if f_exp == "any" else "Any", callback_data="filter_exp_any"),
         ],
         [InlineKeyboardButton("── Location ──", callback_data="ignore")],

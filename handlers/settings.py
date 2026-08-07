@@ -146,32 +146,37 @@ async def settings_skills_done(update: Update, context: ContextTypes.DEFAULT_TYP
 # ──────────────────────────────────────────────
 
 async def settings_change_experience(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show experience selection."""
+    """Show experience selection text prompt."""
     query = update.callback_query
     await query.answer()
 
+    context.user_data["awaiting_settings_experience"] = True
     await query.edit_message_text(
-        "🧠 *Edit Experience Level*\n\nHow many years of professional experience do you have?",
-        reply_markup=keyboards.experience_keyboard(prefix="setexp_"),
+        "🧠 *Edit Experience Level*\n\nHow many years of professional experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
         parse_mode="MarkdownV2",
     )
 
-async def settings_experience_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Save the new experience level."""
-    query = update.callback_query
-    await query.answer()
+async def settings_experience_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save the new experience level from text input."""
+    text = (update.message.text or "").strip()
+    
+    if not text.isdigit():
+        await update.message.reply_text("Please enter a valid number (e.g., 0, 2, 5).")
+        return
 
-    exp_val = query.data.replace("setexp_", "")
+    exp_val = text
     user_id = update.effective_user.id
+    
+    # Clear the flag
+    context.user_data.pop("awaiting_settings_experience", None)
     
     await update_user_profile(user_id, experience_level=exp_val)
 
     exp_display = exp_val.replace('_plus', '+').replace('_', '-')
-    await query.edit_message_text(
-        f"✅ Experience updated to: *{escape_md(exp_display)}*\n",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
-        parse_mode="MarkdownV2",
-    )
+    
+    from handlers.settings import settings_command
+    await update.message.reply_text(f"✅ Experience updated to: *{exp_display}* years", parse_mode="Markdown")
+    await settings_command(update, context)
 
 
 

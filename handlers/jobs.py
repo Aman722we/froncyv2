@@ -203,6 +203,8 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if f_exp != "any":
             if f_exp == "0" and job_exp > 0: continue
             elif f_exp == "1" and job_exp != 1: continue
+            elif f_exp == "2" and job_exp != 2: continue
+            elif f_exp == "3" and job_exp < 3: continue
             
         # 2. Location Filter
         if f_loc != "any":
