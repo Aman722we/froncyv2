@@ -291,8 +291,9 @@ CRITICAL RULES:
 - GitHub links usually contain "github.com". LinkedIn links contain "linkedin.com". Project live links contain vercel.app, netlify.app, or a custom domain.
 - Escape ALL special LaTeX characters in text: & → \\&, % → \\%, $ → \\$, # → \\#, _ → \\_, { → \\{, } → \\}, ~ → \\textasciitilde{}, ^ → \\textasciicircum{}
 - Include ALL projects found — do NOT drop any project. Extract every single one.
-- For experience: include ALL jobs found.
-- CRITICAL: Do NOT duplicate entries. If a company/startup is extracted under "experience", DO NOT extract it again under "projects". Every entry must be unique to its category.
+- For experience: include ALL formal employment, internships, and organization-based roles.
+- For projects: include ALL personal, academic, open-source, and side projects without a formal employer.
+- CRITICAL: Do NOT duplicate entries. If an entry is classified as "experience", DO NOT extract it again under "projects". Every entry must be unique to its proper category.
 
 Return JSON in EXACTLY this format:
 {
