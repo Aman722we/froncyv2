@@ -50,7 +50,7 @@ LATEX_SUBS = (
 )
 
 def sanitise_url(url: str) -> str:
-    """
+    r"""
     Clean a URL for safe use inside LaTeX \href{}{}.
     - Strips '...' / placeholder text that would cause pdflatex to crash.
     - Returns empty string if the value doesn't look like a real URL.
