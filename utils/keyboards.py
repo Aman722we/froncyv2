@@ -481,7 +481,7 @@ def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
             # FUTURE (multi-role): InlineKeyboardButton("💼 Edit Role", callback_data="settings_role"),
         ],
         [
-            # FUTURE (mid-senior): InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
+            InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
             InlineKeyboardButton("🎓 Edit Batch Year", callback_data="settings_batch"),
         ],
         [
