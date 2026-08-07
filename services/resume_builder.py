@@ -12,7 +12,7 @@ import asyncio
 import tempfile
 import subprocess
 import re
-import pypdf
+import pymupdf
 from pathlib import Path
 from loguru import logger
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -149,8 +149,9 @@ async def _compile_pdf_with_font(resume_data: dict, font_size: str) -> tuple[byt
         
         # Parse the PDF to count pages
         try:
-            reader = pypdf.PdfReader(pdf_path)
-            page_count = len(reader.pages)
+            doc = pymupdf.open(pdf_path)
+            page_count = len(doc)
+            doc.close()
         except Exception as e:
             logger.error(f"Failed to read PDF page count: {e}")
             page_count = 1  # Fallback to 1 on read error

@@ -641,13 +641,13 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 logger.warning(f"Apply Smart loading edit failed: {e}")
 
         try:
+            from db.connection import get_pool as _get_pool
             from services.llm_service import (
                 extract_resume_json, optimize_resume_bullets,
                 generate_cover_letter, generate_outreach_templates, LLMMode,
                 generate_ats_analysis,
             )
             from services.resume_builder import compile_resume_pdf
-            from db.connection import get_pool as _get_pool
             import io as _io
 
             # Step 1: ATS Resume
@@ -859,7 +859,6 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Step 5: Track application + set reminder (AFTER successful delivery)
             await _refresh_loading("⚙️ Step 5/5 — Tracking application & setting reminder...")
-            from db.connection import get_pool as _get_pool
             from datetime import datetime, timedelta, timezone as _tz
             pool = _get_pool()
             async with pool.acquire() as conn:
