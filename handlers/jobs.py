@@ -674,7 +674,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Save state for "Edit in LaTeX" button
             context.user_data["last_optimized_json"] = optimized_json
             context.user_data["pdf_job_id"] = job_id
-            context.user_data["pdf_is_manual"] = is_manual
+            context.user_data["pdf_is_manual"] = True
 
             # Step 2: Cover Letter
             await _refresh_loading("⚙️ Step 2/4 — Writing Cover Letter...")
