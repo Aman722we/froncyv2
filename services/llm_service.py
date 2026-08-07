@@ -656,7 +656,7 @@ Generate the outreach messages now:"""
             if result.endswith("```"):
                 result = result[:-3]
 
-            data = _json.loads(result.strip())
+            data = _json.loads(result.strip(), strict=False)
             logger.info(f"Outreach templates generated: {list(data.keys())}")
             return data
 

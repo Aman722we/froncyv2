@@ -556,10 +556,10 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("⚠️ Job not found.", show_alert=True)
         return
 
-    hm_name = job.get("hm_name")
-    hm_role = job.get("hm_role")
-    hm_linkedin = job.get("hm_linkedin")
-    hm_email = job.get("hm_email")
+    hm_name = (job.get("hm_name") or "").strip()
+    hm_role = (job.get("hm_role") or "").strip()
+    hm_linkedin = (job.get("hm_linkedin") or "").strip()
+    hm_email = (job.get("hm_email") or "").strip()
     has_linkedin = bool(hm_name and hm_linkedin)
     has_email = bool(hm_name and hm_email)
 
