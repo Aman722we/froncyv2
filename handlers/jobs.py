@@ -740,7 +740,11 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Message 3: Full kit as a single message with tap-to-copy code blocks
             # Cover Letter block
-            job_url = job.get("url", "")
+            job_url_raw = job.get("url", "") or ""
+            # Validate URL — Telegram rejects malformed URLs in inline buttons
+            import re as _re
+            _valid_url = bool(_re.match(r'^https?://[^\s/$.?#][^\s]*\.[^\s]{2,}', job_url_raw, _re.IGNORECASE))
+            job_url = job_url_raw if _valid_url else ""
             job_url_esc = escape_md(job_url) if job_url else ""
             kit_parts = [
                 f"✍️ *Cover Letter* — tap to copy:",
