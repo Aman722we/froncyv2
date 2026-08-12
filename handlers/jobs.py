@@ -924,13 +924,23 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 InlineKeyboardButton("🔄 Retry Apply Smart", callback_data=f"apply_smart_{job_id}")
             ]])
 
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=(
+            error_str = str(e).lower()
+            if "timeout" in error_str or "timed out" in error_str:
+                err_msg = (
+                    "⏱️ Our AI is under heavy load right now and timed out.\n"
+                    "Your resume is perfectly fine! Your usage credit has been refunded.\n\n"
+                    "Tap the button below to try again in a few minutes."
+                )
+            else:
+                err_msg = (
                     "❌ Oops! Something went wrong while generating your Apply Kit.\n"
                     "Don't worry — your usage credit has been refunded.\n\n"
                     "Tap the button below to try again instantly!"
-                ),
+                )
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=err_msg,
                 reply_markup=retry_kb,
             )
 
