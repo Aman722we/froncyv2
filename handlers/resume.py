@@ -399,7 +399,7 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logger.error(f"Resume JSON extraction failed: {e}")
         error_str = str(e).lower()
-        if "timeout" in error_str:
+        if "timeout" in error_str or "timed out" in error_str:
             user_msg = (
                 r"⏱️ Our AI is under heavy load right now and timed out\. "
                 r"Your resume is perfectly fine\! "

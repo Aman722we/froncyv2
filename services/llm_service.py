@@ -30,6 +30,7 @@ def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_70B,
             timeout=timeout,
+            max_retries=0,
         )
         model = settings.NVIDIA_MODEL_70B
     else:
@@ -37,6 +38,7 @@ def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]
             base_url=settings.NVIDIA_BASE_URL,
             api_key=settings.NVIDIA_API_KEY_8B,
             timeout=timeout,
+            max_retries=0,
         )
         model = settings.NVIDIA_MODEL_8B
 
@@ -409,7 +411,8 @@ Return the JSON now:"""
             if attempt == 0:
                 await asyncio.sleep(2)
             else:
-                raise RuntimeError(f"Resume extraction failed: {'LLM timeout' if 'timeout' in str(e).lower() else 'parsing error'}")
+                error_str = str(e).lower()
+                raise RuntimeError(f"Resume extraction failed: {'LLM timeout' if 'timeout' in error_str or 'timed out' in error_str else 'parsing error'}")
 
     raise RuntimeError("Resume extraction failed after retries")
 
