@@ -351,7 +351,7 @@ async def extract_resume_json(resume_text: str) -> dict:
     """
     import json as _json
     # Resume extraction produces a large JSON output — give it a longer timeout
-    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
+    client, model = _get_client(LLMMode.QUALITY, timeout=60.0)
 
     user_message = f"""Parse this resume into the exact JSON format specified:
 
@@ -405,11 +405,11 @@ Return the JSON now:"""
             logger.info(f"Resume JSON extracted: {len(data.get('projects', []))} projects, {len(data.get('experience', []))} jobs")
             return data
         except Exception as e:
-            logger.error(f"Resume extraction error (attempt {attempt + 1}): {e}")
+            logger.error(f"Resume JSON extraction failed: {e}")
             if attempt == 0:
                 await asyncio.sleep(2)
             else:
-                raise RuntimeError(f"Failed to extract resume JSON: {e}")
+                raise RuntimeError(f"Resume extraction failed: {'LLM timeout' if 'timeout' in str(e).lower() else 'parsing error'}")
 
     raise RuntimeError("Resume extraction failed after retries")
 

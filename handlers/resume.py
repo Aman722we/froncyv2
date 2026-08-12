@@ -398,10 +398,16 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         resume_json = await extract_resume_json(user["resume_text"])
     except Exception as e:
         logger.error(f"Resume JSON extraction failed: {e}")
-        await query.edit_message_text(
-            r"⚠️ Couldn't parse your resume\. Please try re\-uploading your PDF with /resume\.",
-            parse_mode="MarkdownV2"
-        )
+        error_str = str(e).lower()
+        if "timeout" in error_str:
+            user_msg = (
+                r"⏱️ Our AI is under heavy load right now and timed out\. "
+                r"Your resume is perfectly fine\! "
+                r"Please try again in a few minutes\."
+            )
+        else:
+            user_msg = r"⚠️ Couldn't parse your resume\. Please try re\-uploading your PDF with /resume\."
+        await query.edit_message_text(user_msg, parse_mode="MarkdownV2")
         return
 
     # Check for missing critical fields and ask user
