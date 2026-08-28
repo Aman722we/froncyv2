@@ -507,9 +507,11 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     resume_text = user.get("resume_text")
 
     if not resume_text:
-        await query.answer(
-            "⚠️ Upload your resume first! Go to ⚙️ Settings → Resume.",
-            show_alert=True,
+        await query.answer()
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ *Upload your resume first!*\n\nI need your resume to generate personalised cover letters and answers\\. Go to ⚙️ Settings → Resume to upload it\\.",
+            parse_mode="MarkdownV2"
         )
         return
 

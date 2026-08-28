@@ -136,3 +136,11 @@ CREATE INDEX IF NOT EXISTS idx_reminders_remind_at
 
 -- 4. Add is_manual to applications to prevent cross-joins with jobs/manual_jobs tables
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE;
+
+-- Daily active users tracking
+CREATE TABLE IF NOT EXISTS daily_active_users (
+    id SERIAL PRIMARY KEY,
+    telegram_id BIGINT NOT NULL,
+    active_date DATE NOT NULL,
+    UNIQUE(telegram_id, active_date)
+);

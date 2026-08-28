@@ -1,4 +1,4 @@
-"""
+﻿"""
 Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
@@ -489,7 +489,7 @@ def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton("🏷 Edit Skills", callback_data="settings_skills"),
-            # FUTURE (multi-role): InlineKeyboardButton("💼 Edit Role", callback_data="settings_role"),
+            InlineKeyboardButton("🎯 Change Stream", callback_data="settings_role"),
         ],
         [
             InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),

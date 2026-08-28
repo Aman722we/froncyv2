@@ -90,45 +90,48 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             f"🆔 ID: <code>{user.id}</code>"
         )
 
-    # Jump straight to Step 1: Skills
+    # Jump straight to Step 1: Role Selection
     try:
+        step1_bar = messages.escape_md("[🟢⚪⚪] Step 1 of 3")
         await update.message.reply_text(
-            messages.skills_prompt(first_name=user.first_name),
-            reply_markup=keyboards.skills_keyboard([]),
+            f"{step1_bar}\n\n"
+            "*What kind of tech jobs are you looking for?* 🎯\n\n"
+            "Choose your role stream so we can personalise your job feed and application kit\\.",
+            reply_markup=keyboards.role_keyboard(prefix="onboard_role_"),
             parse_mode="MarkdownV2",
         )
     except BadRequest as e:
         logger.warning(
             f"Chat unreachable for user {user.id} ({e}). "
-            "Scheduling a 5-second delayed skills retry."
+            "Scheduling a 5-second delayed role retry."
         )
 
-        async def _retry_skills(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-            """One-shot job: try sending the skills screen one final time."""
+        async def _retry_role(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+            """One-shot job: try sending the role screen one final time."""
             chat_id   = ctx.job.data["chat_id"]
-            name      = ctx.job.data["first_name"]
             try:
+                step1_bar = messages.escape_md("[🟢⚪⚪] Step 1 of 3")
                 await ctx.bot.send_message(
                     chat_id=chat_id,
-                    text=messages.skills_prompt(first_name=name),
-                    reply_markup=keyboards.skills_keyboard([]),
+                    text=f"{step1_bar}\n\n*What kind of tech jobs are you looking for?* 🎯\n\nChoose your role stream so we can personalise your job feed and application kit\\.",
+                    reply_markup=keyboards.role_keyboard(prefix="onboard_role_"),
                     parse_mode="MarkdownV2",
                 )
-                logger.info(f"Delayed skills retry succeeded for user {chat_id}.")
+                logger.info(f"Delayed role retry succeeded for user {chat_id}.")
             except Exception as retry_err:
                 logger.warning(
-                    f"Delayed skills retry also failed for user {chat_id}: {retry_err}."
+                    f"Delayed role retry also failed for user {chat_id}: {retry_err}."
                 )
 
         context.job_queue.run_once(
-            _retry_skills,
+            _retry_role,
             when=5,
-            data={"chat_id": update.effective_chat.id, "first_name": user.first_name},
-            name=f"skills_retry_{user.id}",
+            data={"chat_id": update.effective_chat.id},
+            name=f"role_retry_{user.id}",
         )
 
     await placeholder.delete()
-    return SKILLS
+    return ROLE
 
 
 
@@ -183,26 +186,27 @@ async def add_custom_skill_prompt(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Receive and normalize custom typed skills, then return to skill grid."""
+    """Receive and normalize custom typed skills, then move to experience step."""
     text = update.message.text
     raw_skills = [s.strip() for s in text.split(',') if s.strip()]
     
     from utils.helpers import normalize_skills
     normalized = normalize_skills(raw_skills)
     
-    selected = context.user_data.get("selected_skills", [])
-    for s in normalized:
-        if s.lower() not in [x.lower() for x in selected]:
-            selected.append(s)
-            
-    context.user_data["selected_skills"] = selected
+    context.user_data["selected_skills"] = normalized
+    user_id = update.effective_user.id
     
+    # Save skills
+    await update_user_profile(user_id, skills=[s.lower() for s in normalized])
+    
+    step3_bar = messages.escape_md("[🟢🟢🟢] Step 3 of 3")
     await update.message.reply_text(
-        messages.skills_prompt(),
-        reply_markup=keyboards.skills_keyboard(selected),
+        f"{step3_bar}\n\n"
+        "*Your experience level* 📅\n"
+        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
         parse_mode="MarkdownV2",
     )
-    return SKILLS
+    return EXPERIENCE
 
 
 async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -245,12 +249,15 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await update_user_profile(user_id, role_pref=role)
     context.user_data["role_pref"] = role
 
+    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
     await query.edit_message_text(
-        "*Your experience level* 📅\n"
-        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
+        f"{step2_bar}\n\n"
+        "✍️ *What are your top skills?* 🛠️\n"
+        "Type them below, separated by commas\n"
+        "\\(e\\.g\\. React, Node\\.js, AWS\\):",
         parse_mode="MarkdownV2",
     )
-    return EXPERIENCE
+    return WAITING_CUSTOM_SKILL
 
 
 async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -262,13 +269,16 @@ async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update_user_profile(user_id, role_pref=role)
     context.user_data["role_pref"] = role
 
+    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
     await update.message.reply_text(
         f"✅ Got it — we'll find you *{messages.escape_md(role)}* jobs\\!\n\n"
-        "*Your experience level* 📅\n"
-        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
+        f"{step2_bar}\n\n"
+        "✍️ *What are your top skills?* 🛠️\n"
+        "Type them below, separated by commas\n"
+        "\\(e\\.g\\. React, Node\\.js, AWS\\):",
         parse_mode="MarkdownV2",
     )
-    return EXPERIENCE
+    return WAITING_CUSTOM_SKILL
 
 
 
@@ -443,12 +453,14 @@ async def _complete_onboarding(
     loc_esc = html.escape(str(location))
     exp_esc = html.escape(str(exp))
     resume_str = "✅ Uploaded" if has_resume else "⏭️ Skipped"
+    role_pref = user_tg.role_pref if hasattr(user_tg, "role_pref") else context.user_data.get("role_pref", "unknown")
     
     await notify_admin(
         context.bot,
         f"✅ <b>User Onboarded!</b>\n"
         f"👤 {first_name_esc} {username_str}\n"
         f"🆔 ID: <code>{user_id}</code>\n"
+        f"🎯 Stream: {role_pref.capitalize()}\n"
         f"🛠 Skills: {skills_str}\n"
         f"📍 Location: {loc_esc} | Exp: {exp_esc} yrs\n"
         f"📄 Resume: {resume_str}"
