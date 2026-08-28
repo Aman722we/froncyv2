@@ -4,7 +4,7 @@ CRUD operations for manually curated jobs.
 from datetime import datetime, timezone
 from loguru import logger
 from db.connection import get_pool
-from utils.constants import FRONTEND_SKILLS, ACTIVE_EXPERIENCE
+from utils.constants import ROLE_KEYWORDS
 
 
 async def add_manual_job(data: dict) -> int:
@@ -139,32 +139,23 @@ async def get_personalized_manual_jobs(
 
     from utils.messages import compute_manual_job_match
 
-    # NICHE FILTER: Keep only frontend-relevant jobs with fresher experience level
-    # FUTURE (multi-role): Remove or loosen this filter when expanding
-    BACKEND_TITLE_KEYWORDS = [
-        "fullstack", "full stack", "full-stack",
-        "backend", "back-end", "back end",
-        "node.js developer", "node developer",
-        "django", "flask", "rails", "laravel",
-        "devops", "cloud engineer", "data engineer",
-        "machine learning", "ml engineer", "ai engineer",
-    ]
+    # ROLE FILTER: Keep only jobs matching the user's selected role stream
+    user_role = (user.get("role_pref") or "other").lower()
+    role_keywords = ROLE_KEYWORDS.get(user_role, [])
 
-    def is_frontend_job(job: dict) -> bool:
+    def is_role_match(job: dict) -> bool:
+        """Return True if the job matches the user's selected role stream."""
+        if not role_keywords:
+            return True  # "other" or unknown role: show everything
         job_skills = [s.lower() for s in (job.get("skills") or [])]
-        has_frontend_skill = any(s in FRONTEND_SKILLS for s in job_skills)
-        # Reject if job title is clearly backend/fullstack
         title_lower = (job.get("title") or "").lower()
-        is_backend_title = any(kw in title_lower for kw in BACKEND_TITLE_KEYWORDS)
-        return has_frontend_skill and not is_backend_title
+        return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
 
-    filtered_jobs = [j for j in all_jobs if is_frontend_job(j)]
+    filtered_jobs = [j for j in all_jobs if is_role_match(j)]
     if not filtered_jobs:
-        # Fallback: if admin hasn't tagged skills yet, show all but still exclude clearly backend titles
-        filtered_jobs = [
-            j for j in all_jobs
-            if not any(kw in (j.get("title") or "").lower() for kw in BACKEND_TITLE_KEYWORDS)
-        ]
+        # Fallback: if no jobs match the user's role yet, show all jobs
+        # This prevents new users from seeing an empty feed
+        filtered_jobs = all_jobs
 
     for job in filtered_jobs:
         details = compute_manual_job_match(user, job)

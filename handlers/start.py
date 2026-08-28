@@ -1,6 +1,6 @@
 """
 /start — Onboarding ConversationHandler.
-Flow: Welcome → Skills → Location → Resume Prompt → Complete
+Flow: Welcome → Skills → Role Selection → Experience → Resume Prompt → Complete
 """
 from telegram import Update
 from telegram.error import BadRequest
@@ -22,7 +22,7 @@ from utils import keyboards, messages
 from utils.admin_notify import notify_admin
 
 # Conversation states
-WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME = range(9)
+WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME, WAITING_CUSTOM_ROLE = range(10)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -206,26 +206,70 @@ async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Save selected skills, auto-set role=frontend, then show the experience step."""
+    """Save selected skills, then show role selection step."""
     query = update.callback_query
     await query.answer()
 
     selected = context.user_data.get("selected_skills", [])
     user_id = update.effective_user.id
 
-    # Persist skills and always frontend role (fresher niche)
+    # Persist skills
     await update_user_profile(user_id, skills=[s.lower() for s in selected])
-    await update_user_profile(user_id, role_pref="frontend")
-    context.user_data["role_pref"] = "frontend"
 
     step2_bar = messages.escape_md("[🟢⚪] Step 2 of 2")
     await query.edit_message_text(
         f"{step2_bar}\n\n"
+        "*What kind of tech jobs are you looking for?* 🎯\n\n"
+        "Choose your role stream so we can personalise your job feed and application kit\\.",
+        reply_markup=keyboards.role_keyboard(prefix="onboard_role_"),
+        parse_mode="MarkdownV2",
+    )
+    return ROLE
+
+
+async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save selected role then show experience step."""
+    query = update.callback_query
+    await query.answer()
+
+    role = query.data.replace("onboard_role_", "")
+    user_id = update.effective_user.id
+
+    if role == "custom":
+        await query.edit_message_text(
+            "✍️ *Type your role below* \\(e\\.g\\., Game Dev, AR/VR, Security\\):",
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_ROLE
+
+    await update_user_profile(user_id, role_pref=role)
+    context.user_data["role_pref"] = role
+
+    await query.edit_message_text(
         "*Your experience level* 📅\n"
-        "How many years of frontend experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
+        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
         parse_mode="MarkdownV2",
     )
     return EXPERIENCE
+
+
+async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save a custom-typed role then move to experience step."""
+    raw = (update.message.text or "").strip().lower()
+    role = raw[:50]  # Clamp to 50 chars to avoid abuse
+    user_id = update.effective_user.id
+
+    await update_user_profile(user_id, role_pref=role)
+    context.user_data["role_pref"] = role
+
+    await update.message.reply_text(
+        f"✅ Got it — we'll find you *{messages.escape_md(role)}* jobs\\!\n\n"
+        "*Your experience level* 📅\n"
+        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
+        parse_mode="MarkdownV2",
+    )
+    return EXPERIENCE
+
 
 
 async def experience_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -460,7 +504,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 def get_start_handler() -> ConversationHandler:
-    """Build the /start ConversationHandler — 2-step onboarding, no welcome gate."""
+    """Build the /start ConversationHandler — 3-step onboarding (Skills → Role → Experience)."""
     return ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -472,12 +516,17 @@ def get_start_handler() -> ConversationHandler:
             WAITING_CUSTOM_SKILL: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
             ],
+            ROLE: [
+                CallbackQueryHandler(role_selected, pattern="^onboard_role_"),
+            ],
+            WAITING_CUSTOM_ROLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, custom_role_receive),
+            ],
             EXPERIENCE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, experience_message_handler),
             ],
-            # FUTURE placeholders kept for state-enum validity
+            # Kept for state-enum validity
             WELCOME:       [],
-            ROLE:          [],
             LOCATION:      [],
             BATCH_YEAR:    [],
             RESUME_PROMPT: [],

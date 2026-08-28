@@ -23,6 +23,7 @@ from config import settings
 from db.submissions import (
     create_submission, get_submission, get_pending_submissions,
     check_url_status, mark_submission_rejected, mark_submission_approved,
+    get_user_submissions,
 )
 from db.manual_jobs import add_manual_job
 from utils.helpers import normalize_job_url
@@ -701,3 +702,89 @@ async def sub_admin_view_callback(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=kb,
         disable_web_page_preview=True,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# USER FLOW: My Submitted Links Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _render_my_links(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1) -> None:
+    """Render a paginated list of the user's own submitted links."""
+    user_id = update.effective_user.id
+    limit = 8
+    offset = (page - 1) * limit
+
+    submissions, total = await get_user_submissions(user_id, limit=limit, offset=offset)
+
+    if not submissions and page == 1:
+        text = (
+            "📂 <b>My Submitted Links</b>\n\n"
+            "You haven't submitted any job links yet!\n\n"
+            "Whenever you find a job posting, just paste the link in the chat "
+            "and we'll verify it and add it to the board for you. 🔗"
+        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+        else:
+            await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        return
+
+    STATUS_ICONS = {
+        "pending":  "⏳",
+        "approved": "✅",
+        "rejected": "❌",
+    }
+
+    lines = [f"📂 <b>My Submitted Links</b> (Page {page} of {max(1, -(-total // limit))})\n"]
+    buttons = []
+
+    for sub in submissions:
+        icon = STATUS_ICONS.get(sub["status"], "❓")
+        domain = (sub["url"] or "").split("//")[-1].split("/")[0][:25]
+        date_str = sub["submitted_at"].strftime("%d %b") if sub.get("submitted_at") else ""
+
+        if sub["status"] == "approved" and sub.get("job_title"):
+            lines.append(f"{icon} <b>{sub['job_title']}</b> @ {sub.get('job_company', '?')} <i>({date_str})</i>")
+            buttons.append([
+                InlineKeyboardButton(
+                    f"⚡ Apply Smart — {sub['job_title'][:30]}",
+                    callback_data=f"apply_smart_{sub['manual_job_id']}"
+                )
+            ])
+        else:
+            lines.append(f"{icon} {domain} <i>({date_str}) — {sub['status'].capitalize()}</i>")
+
+    text = "\n".join(lines)
+
+    # Pagination
+    nav_row = []
+    if page > 1:
+        nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"my_links_page_{page - 1}"))
+    if offset + limit < total:
+        nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_links_page_{page + 1}"))
+    if nav_row:
+        buttons.append(nav_row)
+
+    buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
+    kb = InlineKeyboardMarkup(buttons)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+    else:
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+async def my_links_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Entry point: /my_links command or 📂 My Submitted Links button."""
+    if update.callback_query:
+        await update.callback_query.answer()
+    await _render_my_links(update, context, page=1)
+
+
+async def my_links_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pagination for my links dashboard."""
+    query = update.callback_query
+    await query.answer()
+    page = int(query.data.split("_")[-1])
+    await _render_my_links(update, context, page=page)

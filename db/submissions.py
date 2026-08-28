@@ -86,3 +86,32 @@ async def get_pending_submissions(limit: int = 10, offset: int = 0) -> tuple[lis
             limit, offset
         )
         return [dict(row) for row in rows], total
+
+
+async def get_user_submissions(telegram_id: int, limit: int = 10, offset: int = 0) -> tuple[list[dict], int]:
+    """
+    Fetch a specific user's submission history with optional join to manual_jobs for approved ones.
+    Returns (submissions_with_job_info, total_count).
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM user_submissions WHERE telegram_id = $1",
+            telegram_id
+        )
+        rows = await conn.fetch(
+            """
+            SELECT
+                us.id, us.url, us.status, us.submitted_at, us.reviewed_at,
+                us.manual_job_id,
+                mj.title   AS job_title,
+                mj.company AS job_company
+            FROM user_submissions us
+            LEFT JOIN manual_jobs mj ON us.manual_job_id = mj.id
+            WHERE us.telegram_id = $1
+            ORDER BY us.submitted_at DESC
+            LIMIT $2 OFFSET $3
+            """,
+            telegram_id, limit, offset
+        )
+        return [dict(row) for row in rows], int(total or 0)

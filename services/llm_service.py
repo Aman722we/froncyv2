@@ -45,18 +45,48 @@ def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]
     return client, model
 
 
-SYSTEM_PROMPT = """You are an expert tech cover letter writer specializing in frontend development roles for freshers and early-career developers.
+# Role display names for prompt injection
+ROLE_DISPLAY_NAMES: dict[str, str] = {
+    "frontend": "frontend development",
+    "backend": "backend development",
+    "fullstack": "full stack development",
+    "devops": "DevOps and cloud engineering",
+    "mobile": "mobile app development",
+    "data": "data science and machine learning",
+    "other": "software engineering",
+}
+
+ROLE_STRENGTHS: dict[str, str] = {
+    "frontend": "UI quality, component architecture, performance, responsive design, accessibility, or state management",
+    "backend": "API design, database optimization, system scalability, security, or microservices architecture",
+    "fullstack": "end-to-end feature delivery, API integration, database design, or full product ownership",
+    "devops": "CI/CD pipelines, infrastructure-as-code, containerization, cloud cost optimization, or observability",
+    "mobile": "app performance, offline capability, platform-specific UX, or cross-platform architecture",
+    "data": "model accuracy, data pipeline design, feature engineering, experimentation, or business impact of insights",
+    "other": "technical problem-solving, system design, code quality, or cross-functional collaboration",
+}
+
+
+def get_system_prompt(user_role: str = "frontend") -> str:
+    """Build a role-specific system prompt for cover letter generation."""
+    role_name = ROLE_DISPLAY_NAMES.get(user_role, "software engineering")
+    role_strengths = ROLE_STRENGTHS.get(user_role, ROLE_STRENGTHS["other"])
+    return f"""You are an expert tech cover letter writer specializing in {role_name} roles for freshers and early-career developers.
 Write a concise, high-impact, first-person cover letter (MAXIMUM 150-200 words).
 CRITICAL RULES:
 - Highlight the candidate's core strengths based on their years of experience. For freshers, frame their projects as real experience. For experienced developers, emphasize their professional impact.
 - DO NOT INCLUDE ANY HEADINGS, TITLES, OR SUBJECT LINES. Start directly with the first paragraph.
-- NEVER start with "As a seasoned...", "I am writing to express...", or any generic opening. Start with a strong hook about what frontend work they've built and why it fits this role.
-- Emphasize frontend-specific strengths: UI quality, component architecture, performance, responsive design, accessibility, or state management — whichever the resume shows.
-- Be specific about the candidate's projects or skills matching the job's frontend requirements. Show what they built, not just what they know.
-- Highlight 1-2 specific, concrete frontend projects or achievements.
+- NEVER start with "As a seasoned...", "I am writing to express...", or any generic opening. Start with a strong hook about what they've built and why it fits this role.
+- Emphasize role-specific strengths: {role_strengths} — whichever the resume shows.
+- Be specific about the candidate's projects or skills matching the job's requirements. Show what they built, not just what they know.
+- Highlight 1-2 specific, concrete projects or achievements.
 - DO NOT INCLUDE ANY PREAMBLES, INTROS, OR GREETINGS (like "Here is your cover letter:").
 - DO NOT include addresses, dates, or "Dear Hiring Manager" header.
 - Output ONLY the raw cover letter body text, starting immediately with the first sentence."""
+
+
+# Legacy constant kept for any code still referencing SYSTEM_PROMPT directly
+SYSTEM_PROMPT = get_system_prompt("frontend")
 
 
 TONE_PROMPTS = {
@@ -71,6 +101,7 @@ async def generate_cover_letter(
     job_description: str,
     mode: LLMMode = LLMMode.FAST,
     tone: str = "formal",
+    user_role: str = "frontend",
 ) -> str:
     """
     Generate a tailored cover letter using NVIDIA NIM API.
@@ -80,6 +111,7 @@ async def generate_cover_letter(
         job_description: Job posting text or description
         mode: FAST (8B) or QUALITY (70B)
         tone: formal, friendly, or concise
+        user_role: The user's selected role stream (e.g. frontend, backend, devops)
 
     Returns:
         Generated cover letter text
@@ -90,6 +122,7 @@ async def generate_cover_letter(
     client, model = _get_client(mode)
 
     tone_instruction = TONE_PROMPTS.get(tone, TONE_PROMPTS["formal"])
+    system_prompt = get_system_prompt(user_role)
 
     user_message = f"""Resume:
 {resume_text[:2000]}
@@ -109,7 +142,7 @@ Write the cover letter now:"""
             response = await client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.7,

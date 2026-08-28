@@ -37,7 +37,8 @@ from handlers.submissions import (
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
     sub_reject_callback,
     get_submission_conversation_handler,
-    links_command, links_page_callback, sub_admin_view_callback
+    links_command, links_page_callback, sub_admin_view_callback,
+    my_links_callback, my_links_page_callback,
 )
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
@@ -177,6 +178,11 @@ def build_bot() -> Application:
     app.add_handler(CallbackQueryHandler(sub_reject_callback, pattern=r"^sub_reject_\d+$"))
     app.add_handler(CallbackQueryHandler(links_page_callback, pattern=r"^links_page_\d+$"))
     app.add_handler(CallbackQueryHandler(sub_admin_view_callback, pattern=r"^sub_admin_view_\d+$"))
+
+    # User: My Submitted Links Dashboard
+    app.add_handler(CommandHandler("my_links", my_links_callback))
+    app.add_handler(CallbackQueryHandler(my_links_callback, pattern="^my_links$"))
+    app.add_handler(CallbackQueryHandler(my_links_page_callback, pattern=r"^my_links_page_\d+$"))
 
     # Navigation Callbacks
     app.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_menu$"))

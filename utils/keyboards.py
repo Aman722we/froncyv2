@@ -94,15 +94,23 @@ def location_keyboard() -> InlineKeyboardMarkup:
 
 
 def role_keyboard(prefix: str = "role_") -> InlineKeyboardMarkup:
-    """Role preference selection — frontend only in current niche."""
+    """Role preference selection — full tech role picker."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💻 Frontend", callback_data=f"{prefix}frontend"),
-            # FUTURE (multi-role): InlineKeyboardButton("⚙️ Backend", callback_data=f"{prefix}backend"),
+            InlineKeyboardButton("🎨 Frontend", callback_data=f"{prefix}frontend"),
+            InlineKeyboardButton("⚙️ Backend", callback_data=f"{prefix}backend"),
         ],
-        # FUTURE (multi-role): [
-        #     InlineKeyboardButton("🚀 Fullstack", callback_data=f"{prefix}fullstack"),
-        # ]
+        [
+            InlineKeyboardButton("🌐 Full Stack", callback_data=f"{prefix}fullstack"),
+            InlineKeyboardButton("🚀 DevOps", callback_data=f"{prefix}devops"),
+        ],
+        [
+            InlineKeyboardButton("📱 Mobile", callback_data=f"{prefix}mobile"),
+            InlineKeyboardButton("📊 Data / ML", callback_data=f"{prefix}data"),
+        ],
+        [
+            InlineKeyboardButton("✍️ Type my own role", callback_data=f"{prefix}custom"),
+        ],
     ])
 
 
@@ -148,6 +156,9 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
         [
             InlineKeyboardButton("✍️ Cover Letter", callback_data="menu_coverletter"),
             InlineKeyboardButton("🔗 Submit Job Link", callback_data="submit_job_link_info"),
+        ],
+        [
+            InlineKeyboardButton("📂 My Submitted Links", callback_data="my_links"),
         ],
     ]
     if plan == "pro":
