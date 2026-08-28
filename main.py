@@ -48,6 +48,10 @@ async def lifespan(app: FastAPI):
         logger.info(f"Setting webhook URL: {webhook}")
         await bot_app.bot.set_webhook(url=f"{webhook}/telegram-webhook")
     else:
+        # Development: clear any stale webhook (e.g. from a previously deployed Railway instance)
+        # so Telegram stops forwarding updates to the old server and uses polling instead.
+        logger.info("Dev mode: deleting any stale webhook...")
+        await bot_app.bot.delete_webhook(drop_pending_updates=True)
         logger.info("Polling mode enabled (development).")
         # In dev, we start polling natively
         await bot_app.updater.start_polling(drop_pending_updates=True)
