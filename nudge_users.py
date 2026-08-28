@@ -1,12 +1,12 @@
 import asyncio
-from config import TELEGRAM_BOT_TOKEN
+from config import settings
 from telegram import Bot
 from telegram.error import Forbidden, BadRequest
 from db.database import get_pool
 from loguru import logger
 
 async def run_nudge():
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     pool = get_pool()
     
     logger.info("Starting nudge broadcast for users who haven't completed onboarding...")

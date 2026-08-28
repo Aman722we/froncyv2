@@ -30,11 +30,22 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     MAX_COVER_LETTERS_FREE: int = 3
 
+    # Development Overrides
+    DEV_TELEGRAM_BOT_TOKEN: str = ""
+    DEV_DATABASE_URL: str = ""
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.ENVIRONMENT == "development":
+            if self.DEV_TELEGRAM_BOT_TOKEN:
+                self.TELEGRAM_BOT_TOKEN = self.DEV_TELEGRAM_BOT_TOKEN
+            if self.DEV_DATABASE_URL:
+                self.DATABASE_URL = self.DEV_DATABASE_URL
 
 
 # Singleton settings instance
