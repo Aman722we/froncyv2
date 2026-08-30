@@ -85,7 +85,8 @@ async def get_personalized_manual_jobs(
     seen_job_ids: list[int] = None, 
     limit: int = 12,
     exclude_sent_within_days: int = None,
-    max_age_days: int = None
+    max_age_days: int = None,
+    ignore_role_filter: bool = False
 ) -> list[dict]:
     """
     Fetch all active manual jobs, score them based on user skills/experience/batch,
@@ -140,22 +141,24 @@ async def get_personalized_manual_jobs(
     from utils.messages import compute_manual_job_match
 
     # ROLE FILTER: Keep only jobs matching the user's selected role stream
-    user_role = (user.get("role_pref") or "other").lower()
-    role_keywords = ROLE_KEYWORDS.get(user_role, [])
+    filtered_jobs = all_jobs
+    if not ignore_role_filter:
+        user_role = (user.get("role_pref") or "other").lower()
+        role_keywords = ROLE_KEYWORDS.get(user_role)
+        if role_keywords is None and user_role != "other":
+            # For custom roles like "unity developer", use the role text as keyword
+            role_keywords = [user_role]
+        
+        def is_role_match(job: dict) -> bool:
+            """Return True if the job matches the user's selected role stream."""
+            if not role_keywords:
+                return True  # "other" role: show everything
+            job_skills = [s.lower() for s in (job.get("skills") or [])]
+            title_lower = (job.get("title") or "").lower()
+            return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
 
-    def is_role_match(job: dict) -> bool:
-        """Return True if the job matches the user's selected role stream."""
-        if not role_keywords:
-            return True  # "other" or unknown role: show everything
-        job_skills = [s.lower() for s in (job.get("skills") or [])]
-        title_lower = (job.get("title") or "").lower()
-        return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
-
-    filtered_jobs = [j for j in all_jobs if is_role_match(j)]
-    if not filtered_jobs:
-        # Fallback: if no jobs match the user's role yet, show all jobs
-        # This prevents new users from seeing an empty feed
-        filtered_jobs = all_jobs
+        filtered_jobs = [j for j in all_jobs if is_role_match(j)]
+        # Removed fallback so users ONLY see jobs matching their stream
 
     for job in filtered_jobs:
         details = compute_manual_job_match(user, job)

@@ -182,7 +182,10 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         count_manual_jobs()
     )
     
-    all_jobs = await get_personalized_manual_jobs(user_dict, limit=100)
+    f_stream = filters.get("stream", "mine")
+    ignore_role = True if f_stream == "all" else False
+    
+    all_jobs = await get_personalized_manual_jobs(user_dict, limit=100, ignore_role_filter=ignore_role)
     
     # Filter out seen_jobs manually here (since we removed it from the args above)
     all_jobs = [j for j in all_jobs if j["id"] not in seen_jobs]

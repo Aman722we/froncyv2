@@ -1,4 +1,4 @@
-﻿"""
+"""
 Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
@@ -281,8 +281,14 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     f_time = filters.get("time", "any")
     f_match = filters.get("match", "any")
     f_loc = filters.get("loc", "any")
+    f_stream = filters.get("stream", "mine")
 
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("— Stream —", callback_data="ignore")],
+        [
+            InlineKeyboardButton("✅ My Stream" if f_stream == "mine" else "My Stream", callback_data="filter_stream_mine"),
+            InlineKeyboardButton("✅ All Streams" if f_stream == "all" else "All Streams", callback_data="filter_stream_all"),
+        ],
         [InlineKeyboardButton("── Experience ──", callback_data="ignore")],
         [
             InlineKeyboardButton("✅ 0 YOE" if f_exp == "0" else "0 YOE", callback_data="filter_exp_0"),
