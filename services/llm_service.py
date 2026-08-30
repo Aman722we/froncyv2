@@ -12,8 +12,8 @@ from config import settings
 
 
 class LLMMode(Enum):
-    FAST = "fast"       # Llama 3 8B — ~3s, all users
-    QUALITY = "quality"  # Llama 3 70B — ~12s, Pro+/Premium only
+    FAST = "fast"       # DeepSeek-V4 Flash — ~3s, all users
+    QUALITY = "quality"  # DeepSeek-V4 Pro — ~12s, Pro+/Premium only
 
 
 def get_mode_for_plan(plan: str) -> LLMMode:
@@ -183,8 +183,8 @@ I would welcome the opportunity to discuss how my background and skills would be
 def get_mode_display(mode: LLMMode) -> str:
     """Get user-friendly display text for the LLM mode."""
     if mode == LLMMode.QUALITY:
-        return "✨ Quality Mode (Llama 3 70B)"
-    return "⚡ Fast Mode (Llama 3 8B)"
+        return "✨ Quality Mode (DeepSeek-V4 Pro)"
+    return "⚡ Fast Mode (DeepSeek-V4 Flash)"
 
 
 ATS_SYSTEM_PROMPT = """You are an expert Tech Recruiter and ATS system that compares a candidate's resume to a job description with strict, literal accuracy.

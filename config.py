@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     NVIDIA_API_KEY_70B: str
     NVIDIA_API_KEY_8B: str
-    NVIDIA_MODEL_70B: str = "meta/llama-3.1-70b-instruct"
-    NVIDIA_MODEL_8B: str = "meta/llama-3.1-8b-instruct"
+    NVIDIA_MODEL_70B: str = "deepseek-ai/deepseek-v4-pro-0813"
+    NVIDIA_MODEL_8B: str = "deepseek-ai/deepseek-v4-flash-0731"
 
     # Payments — Razorpay
     RAZORPAY_KEY_ID: str = ""
