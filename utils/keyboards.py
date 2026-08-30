@@ -1,4 +1,4 @@
-"""
+﻿"""
 Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
@@ -369,7 +369,7 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     # Row 2: ATS + Cover Letter
     if plan in ("pro", "trial"):
         buttons.append([
-            InlineKeyboardButton("📄 ATS Resume", callback_data=f"{ats_prefix}_job_{job['id']}"),
+            InlineKeyboardButton("📄 ATS Resume \[BETA\]", callback_data=f"{ats_prefix}_job_{job['id']}"),
             InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
     else:

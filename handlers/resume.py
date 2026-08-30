@@ -377,9 +377,11 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
         if not context.user_data.get("navigated_away_from_loading"):
             try:
                 full_text = (
-                    f"⚙️ *Generating your ATS Resume\\.\\.\\.*\n\n{step_text}\n\n"
+                    f"⚙️ *Generating your ATS Resume \\[BETA\\]\\.\\.\\.*\n\n{step_text}\n\n"
                     r"_This requires heavy AI reasoning and can take 2\-3 minutes\. "
                     r"You don't need to wait here, feel free to explore other jobs, and we'll send the PDF here when it's ready\!_"
+                    "\n\n"
+                    r"_⚠️ Note: This beta generator may occasionally fail on complex resume layouts\._"
                 )
                 await query.edit_message_text(
                     full_text,
@@ -394,20 +396,25 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     from services.llm_service import extract_resume_json, optimize_resume_bullets
     from services.resume_builder import compile_resume_pdf
 
+    # Shared fallback keyboard for parse/compile failures
+    back_to_job_cb = f"manual_view_{job_id}" if is_manual else f"job_view_{job_id}"
+    parse_fail_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📤 Upload a standard resume", callback_data="resume_upload_new")],
+        [InlineKeyboardButton("🛠️ Request Free Manual Fix", callback_data="resume_manual_fix")],
+        [InlineKeyboardButton("🔙 Back to Job", callback_data=back_to_job_cb)],
+    ])
+
     try:
         resume_json = await extract_resume_json(user["resume_text"])
     except Exception as e:
         logger.error(f"Resume JSON extraction failed: {e}")
-        error_str = str(e).lower()
-        if "timeout" in error_str or "timed out" in error_str:
-            user_msg = (
-                r"⏱️ Our AI is under heavy load right now and timed out\. "
-                r"Your resume is perfectly fine\! "
-                r"Please try again in a few minutes\."
-            )
-        else:
-            user_msg = r"⚠️ Couldn't parse your resume\. Please try re\-uploading your PDF with /resume\."
-        await query.edit_message_text(user_msg, parse_mode="MarkdownV2")
+        await query.edit_message_text(
+            "⚠️ *Unable to parse your resume*\n\n"
+            "The layout might be too complex for the beta generator\\.\n\n"
+            "*What would you like to do?*",
+            parse_mode="MarkdownV2",
+            reply_markup=parse_fail_kb,
+        )
         return
 
     # Check for missing critical fields and ask user
@@ -454,8 +461,11 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logger.error(f"PDF compilation failed: {e}")
         await query.edit_message_text(
-            "⚠️ PDF generation failed\\. Our team has been notified\\. Please try again in a few minutes\\.",
-            parse_mode="MarkdownV2"
+            "⚠️ *Unable to generate PDF*\n\n"
+            "The beta generator couldn't compile your resume layout\\.\n\n"
+            "*What would you like to do?*",
+            parse_mode="MarkdownV2",
+            reply_markup=parse_fail_kb,
         )
         return
 
