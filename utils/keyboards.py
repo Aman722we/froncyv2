@@ -1,4 +1,4 @@
-﻿"""
+"""
 Reusable InlineKeyboardMarkup builders for all bot flows.
 Matches the UX Design document exactly.
 """
@@ -324,7 +324,7 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False) -> InlineKeyboardMarkup:
+def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False, is_applied: bool = False) -> InlineKeyboardMarkup:
     """Actions for a single job detail view.
     Layout:
         Row 1: [🚀 Apply Smart (Complete Kit)]        ← Full Width
@@ -369,7 +369,7 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     # Row 2: ATS + Cover Letter
     if plan in ("pro", "trial"):
         buttons.append([
-            InlineKeyboardButton("📄 ATS Resume \[BETA\]", callback_data=f"{ats_prefix}_job_{job['id']}"),
+            InlineKeyboardButton("📄 ATS Resume [BETA]", callback_data=f"{ats_prefix}_job_{job['id']}"),
             InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
     else:
@@ -378,9 +378,10 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
             InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
         ])
 
-    # Row 3: Mark as Applied + Remind Me
+    # Row 3: Mark as Applied (or "✅ Applied" if already applied) + Remind Me
+    applied_label = "✅ Applied" if is_applied else "✅ Mark as Applied"
     buttons.append([
-        InlineKeyboardButton("✅ Mark as Applied", callback_data=applied_cb),
+        InlineKeyboardButton(applied_label, callback_data=applied_cb),
         InlineKeyboardButton("⏳ Remind Me", callback_data=remind_callback),
     ])
 

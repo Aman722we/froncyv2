@@ -177,18 +177,26 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
     
     # Run independent DB queries concurrently to slash network latency
-    seen_jobs, total_active_jobs = await asyncio.gather(
-        get_seen_jobs(user_id),
-        count_manual_jobs()
-    )
+    total_active_jobs = await count_manual_jobs()
     
     f_stream = filters.get("stream", "mine")
     ignore_role = True if f_stream == "all" else False
     
     all_jobs = await get_personalized_manual_jobs(user_dict, limit=100, ignore_role_filter=ignore_role)
     
-    # Filter out seen_jobs manually here (since we removed it from the args above)
-    all_jobs = [j for j in all_jobs if j["id"] not in seen_jobs]
+    # Fetch applied job IDs to show ✅ Applied badge (DO NOT filter out — let all jobs show)
+    from db.connection import get_pool as _get_pool_jobs
+    applied_job_ids = set()
+    try:
+        pool = _get_pool_jobs()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT job_id FROM applications WHERE telegram_id = $1 AND is_manual = TRUE",
+                user_id
+            )
+            applied_job_ids = {r["job_id"] for r in rows}
+    except Exception as e:
+        logger.warning(f"Could not fetch applied jobs for badge: {e}")
     
     # Apply filters
     filtered_jobs = []
@@ -259,7 +267,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
-    msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user)
+    msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user, applied_job_ids=applied_job_ids)
     kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
 
     if update.callback_query and not force_new:
@@ -332,11 +340,24 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Check Apply Smart usage to decide whether to show lock icon on the button
     from db.users import get_apply_smart_usage
+    from db.connection import get_pool as _get_pool_detail
     _as_usage = await get_apply_smart_usage(user_id)
     _as_limit = {"free": 1, "trial": 5, "pro": 10}.get(plan, 1)
     _as_locked = _as_usage.get("used", 0) >= _as_limit
 
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked)
+    # Check if user has already applied to this job
+    _is_applied = False
+    try:
+        pool = _get_pool_detail()
+        async with pool.acquire() as conn:
+            _is_applied = bool(await conn.fetchval(
+                "SELECT 1 FROM applications WHERE telegram_id = $1 AND job_id = $2 AND is_manual = TRUE",
+                user_id, job_id
+            ))
+    except Exception:
+        pass
+
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked, is_applied=_is_applied)
 
     is_revisit = query.data.startswith("revisit_")
 

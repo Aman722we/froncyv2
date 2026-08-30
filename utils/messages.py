@@ -401,28 +401,42 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         "has_salary": has_salary,
     }
 
-def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user: dict = None) -> str:
+
+def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user: dict = None, applied_job_ids: set = None) -> str:
     """Format a list of jobs for display."""
     showing = len(jobs)
-    header = f"🔍 *Today's Frontend Jobs* \\({showing} of {total_count} available\\)\n"
-    header += "━━━━━━━━━━━━━━━━━━\n\n"
+    
+    # Build dynamic stream label from user's role_pref
+    stream_label = "Jobs"
+    if user:
+        role_pref = (user.get("role_pref") or "").strip()
+        if role_pref and role_pref.lower() not in ("", "other", "fullstack"):
+            # Title-case it nicely, e.g. "unity developer" -> "Unity Developer"
+            stream_label = role_pref.title() + " Jobs"
+        else:
+            stream_label = "Jobs"
+    
+    header = f"🔍 *Today's {escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
+    header += "──────────────────\n\n"
+
+    if applied_job_ids is None:
+        applied_job_ids = set()
 
     lines = []
     nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
     for i, job in enumerate(jobs[:5]):
-        # Keep 1, 2, 3, 4, 5 for the /jobs pagination display, though _render_job_line uses [1]
-        # But _render_job_line takes `i` and uses `[{i}]`. Let's just pass `i+1` so it prints [1], [2] etc.
-        lines.append(_render_job_line(i + 1, job, user, plan))
+        is_applied = job.get("id") in applied_job_ids
+        lines.append(_render_job_line(i + 1, job, user, plan, applied=is_applied))
 
-    footer = "━━━━━━━━━━━━━━━━━━\n"
+    footer = "──────────────────\n"
     if plan == "free":
         footer += escape_md(f"Showing {showing} of {total_count} (Free plan)")
 
     return header + "".join(lines) + footer
 
 
-def _render_job_line(i: int, job: dict, user: dict, plan: str) -> str:
+def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:
     """Helper to render a single job for list/feed views."""
     nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
     if i <= len(nums):
@@ -460,6 +474,8 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str) -> str:
             pass
 
     line = f"{num}  *{title}* — {company}\n"
+    if applied:
+        line += "     ✅ *Applied*\n"
         
     job_type = job.get("job_type", "full-time")
     duration = job.get("duration")
