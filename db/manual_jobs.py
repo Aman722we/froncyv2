@@ -145,17 +145,28 @@ async def get_personalized_manual_jobs(
     if not ignore_role_filter:
         user_role = (user.get("role_pref") or "other").lower()
         role_keywords = ROLE_KEYWORDS.get(user_role)
-        if role_keywords is None and user_role != "other":
-            # For custom roles like "unity developer", use the role text as keyword
-            role_keywords = [user_role]
+        
+        is_custom_role = (role_keywords is None and user_role != "other")
+        
+        if is_custom_role:
+            common_words = {"developer", "engineer", "programmer", "specialist", "designer", "architect", "expert", "role", "job"}
+            custom_words = [w for w in user_role.split() if w not in common_words]
+            if not custom_words:
+                custom_words = [user_role]
         
         def is_role_match(job: dict) -> bool:
             """Return True if the job matches the user's selected role stream."""
-            if not role_keywords:
-                return True  # "other" role: show everything
+            if user_role == "other":
+                return True
+                
             job_skills = [s.lower() for s in (job.get("skills") or [])]
             title_lower = (job.get("title") or "").lower()
-            return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
+            
+            if is_custom_role:
+                search_space = " ".join(job_skills) + " " + title_lower
+                return all(w in search_space for w in custom_words)
+            else:
+                return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
 
         filtered_jobs = [j for j in all_jobs if is_role_match(j)]
         # Removed fallback so users ONLY see jobs matching their stream
