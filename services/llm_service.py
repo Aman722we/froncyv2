@@ -246,7 +246,7 @@ Analyze the match and provide the JSON:"""
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.1,  # Low temperature for strict JSON adherence
-                max_tokens=600,
+                max_tokens=2000,
                 top_p=1,
             )
 
