@@ -66,7 +66,7 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
         return result
 
     except Exception as e:
-        logger.error(f"Failed to parse LLM ATS analysis: {e}")
+        logger.error(f"Failed to parse LLM ATS analysis: {e}. Raw output: {json_output}")
         return {
             "score": 0,
             "matching_keywords": [],

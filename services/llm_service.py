@@ -234,6 +234,7 @@ Job Description:
 
 Analyze the match and provide the JSON:"""
 
+    import re
     for attempt in range(2):
         try:
             logger.info(f"Generating ATS analysis with {model} (attempt {attempt + 1})")
@@ -247,18 +248,17 @@ Analyze the match and provide the JSON:"""
                 temperature=0.1,  # Low temperature for strict JSON adherence
                 max_tokens=600,
                 top_p=1,
+                response_format={"type": "json_object"},
             )
 
             result = response.choices[0].message.content.strip()
-            # Clean up markdown JSON wrappers if Llama injects them defensively
-            if result.startswith("```json"):
-                result = result[7:]
-            if result.startswith("```"):
-                result = result[3:]
-            if result.endswith("```"):
-                result = result[:-3]
+            
+            # Robust JSON extraction: Find the first { and last }
+            json_match = re.search(r"\{.*\}", result, re.DOTALL)
+            if json_match:
+                result = json_match.group(0)
 
-            return result.strip()
+            return result
 
         except Exception as e:
             logger.error(f"LLM ATS API error (attempt {attempt + 1}): {e}")
