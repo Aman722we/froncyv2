@@ -12,8 +12,8 @@ from config import settings
 
 
 class LLMMode(Enum):
-    FAST = "fast"       # Llama 3.1 8B Instant
-    QUALITY = "quality"  # Llama 3.3 70B Versatile
+    FAST = "fast"       # GPT-OSS 20B
+    QUALITY = "quality"  # GPT-OSS 120B
 
 
 def get_mode_for_plan(plan: str) -> LLMMode:
@@ -183,8 +183,8 @@ I would welcome the opportunity to discuss how my background and skills would be
 def get_mode_display(mode: LLMMode) -> str:
     """Get user-friendly display text for the LLM mode."""
     if mode == LLMMode.QUALITY:
-        return "✨ Quality Mode (Llama 3.3 70B)"
-    return "⚡ Fast Mode (Llama 3.1 8B)"
+        return "✨ Quality Mode (GPT-OSS 120B)"
+    return "⚡ Fast Mode (GPT-OSS 20B)"
 
 
 ATS_SYSTEM_PROMPT = """You are an expert Tech Recruiter and ATS system that compares a candidate's resume to a job description with strict, literal accuracy.
