@@ -33,6 +33,7 @@ async def analyze_resume_match(resume_text: str, job_description: str, mode=None
     if mode is None:
         mode = _LLMMode.QUALITY
 
+    json_output = "<not generated>"
     try:
         # Call LLM logic
         json_output = await generate_ats_analysis(resume_text, job_description, mode=mode)

@@ -248,7 +248,6 @@ Analyze the match and provide the JSON:"""
                 temperature=0.1,  # Low temperature for strict JSON adherence
                 max_tokens=600,
                 top_p=1,
-                response_format={"type": "json_object"},
             )
 
             result = response.choices[0].message.content.strip()
