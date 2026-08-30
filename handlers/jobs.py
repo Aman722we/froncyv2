@@ -513,7 +513,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer()
         await context.bot.send_message(
             chat_id=user_id,
-            text="⚠️ *Upload your resume first!*\n\nI need your resume to generate personalised cover letters and answers\\. Go to ⚙️ Settings → Resume to upload it\\.",
+            text="⚠️ *Upload your resume first\\!*\n\nI need your resume to generate personalised cover letters and answers\\. Go to ⚙️ Settings → Resume to upload it\\.",
             parse_mode="MarkdownV2"
         )
         return
