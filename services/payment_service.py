@@ -60,9 +60,13 @@ async def create_subscription_link(
     db_pool,
     amount: int | None = None,
     is_early_adopter: bool = False,
+    bot_id: int = 1,
 ) -> str | None:
     """
     Create a Razorpay Subscription link.
+    
+    bot_id is stored in the subscription notes so revenue can be attributed
+    to the correct Guru bot for monthly payout calculations.
     """
     if plan not in PLAN_PRICES and amount is None:
         logger.error(f"Invalid plan: {plan}")
@@ -75,13 +79,10 @@ async def create_subscription_link(
     try:
         client = _get_client()
         
-        # 1. Ensure user has a razorpay_customer_id (if required, though subscriptions can just be created without it to let user fill it. 
-        # But for easier tracking, it's better to just create the subscription. Razorpay subscription creation does not STRICTLY require customer_id if we want them to checkout as guest, BUT it does require customer_notify: 1)
-        
-        # 2. Get the proper plan ID
+        # Get the proper plan ID
         plan_id = await _get_or_create_plan(client, db_pool, is_early_adopter, amount_val)
 
-        # 3. Create Subscription
+        # Create Subscription with bot_id tagged in notes for revenue attribution
         subscription = client.subscription.create({
             "plan_id": plan_id,
             "total_count": 12, # Auto-renews for up to 1 year, then requires new authorization
@@ -89,6 +90,7 @@ async def create_subscription_link(
             "notes": {
                 "telegram_id": str(telegram_id),
                 "plan": plan,
+                "bot_id": str(bot_id),  # Revenue attribution for Guru splits
                 "is_early_adopter": "true" if is_early_adopter else "false",
             }
         })
@@ -96,7 +98,7 @@ async def create_subscription_link(
         url = subscription.get("short_url")
         sub_id = subscription.get("id")
         
-        logger.info(f"Subscription link created for user {telegram_id}: {url}")
+        logger.info(f"Subscription link created for user {telegram_id} (bot_id={bot_id}): {url}")
         return url
 
     except Exception as e:

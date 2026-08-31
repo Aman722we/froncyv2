@@ -77,6 +77,9 @@ async def checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         is_early = pricing["is_early_adopter_active"]
         amount = pricing["current_price"]
+        
+        # Get the Guru bot_id so the subscription is attributed to the correct tenant
+        bot_id = context.bot_data.get("bot_id", 1)
 
         url = await create_subscription_link(
             plan="pro",
@@ -84,6 +87,7 @@ async def checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             db_pool=db_pool,
             amount=amount,
             is_early_adopter=is_early,
+            bot_id=bot_id,
         )
 
         if url:
