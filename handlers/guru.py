@@ -1,13 +1,13 @@
 ﻿"""
-handlers/guru.py -- Guru Dashboard
+handlers/guru.py -- Creator Dashboard
 
-Commands accessible to the Guru (the influencer who owns the bot).
-The Guru is identified by their telegram_id stored in bots.guru_telegram_id.
+Commands accessible to the Creator (the influencer who owns the bot).
+The Creator is identified by their telegram_id stored in bots.guru_telegram_id.
 
 Commands:
-  /guruanalytics  -- Read-only audience stats + estimated monthly payout
-  /gurubcast       -- Broadcast a message to their bot's audience only
-  /guruhelp        -- Show all available Guru commands
+  /dashboard  -- Read-only audience stats + estimated monthly payout
+  /broadcast  -- Broadcast a message to their bot's audience only
+  /creator    -- Show all available Creator commands
 """
 import asyncio
 from telegram import Update
@@ -22,7 +22,7 @@ from db.users import get_all_users
 
 async def _check_guru_access(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
     """
-    Guard function: returns bot_id if the user is an authorised Guru OR the super admin.
+    Guard function: returns bot_id if the user is an authorised Creator OR the super admin.
     Returns None and replies with an error if access is denied.
     """
     user_id = update.effective_user.id
@@ -32,7 +32,7 @@ async def _check_guru_access(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if user_id == settings.ADMIN_TELEGRAM_ID:
         return bot_id
 
-    # Check if the user is the registered Guru for this specific bot
+    # Check if the user is the registered Creator for this specific bot
     if await is_guru_of_bot(user_id, bot_id):
         return bot_id
 
@@ -40,23 +40,23 @@ async def _check_guru_access(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return None
 
 
-async def guruhelp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/guruhelp -- List all commands available to the Guru."""
+async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/creator -- List all commands available to the Creator."""
     bot_id = await _check_guru_access(update, context)
     if bot_id is None:
         return
 
     await update.message.reply_text(
-        "🎛️ <b>Your Guru Dashboard Commands</b>\n\n"
-        "/guruanalytics — View your audience stats and estimated payout\n"
-        "/gurubcast &lt;message&gt; — Send a message to all your bot's users\n"
-        "/guruhelp — Show this help menu",
+        "🎛️ <b>Creator Dashboard Commands</b>\n\n"
+        "/dashboard — View your audience stats and estimated payout\n"
+        "/broadcast &lt;message&gt; — Send a message to all your bot's users\n"
+        "/creator — Show this help menu",
         parse_mode="HTML",
     )
 
 
-async def guruanalytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/guruanalytics -- Show read-only audience stats + estimated monthly payout."""
+async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/dashboard -- Show read-only audience stats + estimated monthly payout."""
     bot_id = await _check_guru_access(update, context)
     if bot_id is None:
         return
@@ -70,7 +70,7 @@ async def guruanalytics_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("❌ Could not load stats. Try again in a moment.")
         return
 
-    guru_name      = stats.get("guru_name", "Guru")
+    guru_name      = stats.get("guru_name", "Creator")
     total          = stats.get("total_users", 0)
     onboarded      = stats.get("onboarded_users", 0)
     with_resume    = stats.get("with_resume", 0)
@@ -86,7 +86,7 @@ async def guruanalytics_command(update: Update, context: ContextTypes.DEFAULT_TY
     payout_str = f"₹{guru_payout:.2f}" if guru_payout != int(guru_payout) else f"₹{int(guru_payout)}"
 
     msg = (
-        f"📊 <b>{guru_name} — Audience Dashboard</b>\n"
+        f"📊 <b>{guru_name} — Creator Dashboard</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "👥 <b>Users</b>\n"
         f"  • Total registered  : <b>{total}</b>\n"
@@ -106,17 +106,17 @@ async def guruanalytics_command(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
-async def gurubcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/gurubcast <message> -- Broadcast to all users of this Guru's bot."""
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/broadcast <message> -- Broadcast to all users of this bot (used by Creator and Super Admin)."""
     bot_id = await _check_guru_access(update, context)
     if bot_id is None:
         return
 
     if not context.args:
         await update.message.reply_text(
-            "📢 <b>Usage:</b> /gurubcast &lt;message&gt;\n\n"
+            "📢 <b>Usage:</b> /broadcast &lt;message&gt;\n\n"
             "Example:\n"
-            "<code>/gurubcast 🎬 New React tutorial just dropped! Check it out now.</code>\n\n"
+            "<code>/broadcast 🎬 New React tutorial just dropped! Check it out now.</code>\n\n"
             "Your message will be sent to <b>all users of your bot</b>.",
             parse_mode="HTML",
         )
@@ -146,7 +146,7 @@ async def gurubcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except Forbidden:
             blocked += 1
         except RetryAfter as e:
-            logger.warning(f"Guru broadcast rate-limited, sleeping {e.retry_after}s")
+            logger.warning(f"Creator broadcast rate-limited, sleeping {e.retry_after}s")
             await asyncio.sleep(e.retry_after)
             try:
                 await context.bot.send_message(chat_id=tid, text=message_text)
@@ -154,7 +154,7 @@ async def gurubcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             except Exception:
                 failed += 1
         except Exception as e:
-            logger.warning(f"Guru broadcast failed for {tid}: {e}")
+            logger.warning(f"Creator broadcast failed for {tid}: {e}")
             failed += 1
 
     await status_msg.edit_text(
@@ -164,4 +164,4 @@ async def gurubcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"❌ Failed  : <b>{failed}</b>",
         parse_mode="HTML",
     )
-    logger.info(f"Guru broadcast (bot_id={bot_id}) done. Sent={sent}, Blocked={blocked}, Failed={failed}")
+    logger.info(f"Creator broadcast (bot_id={bot_id}) done. Sent={sent}, Blocked={blocked}, Failed={failed}")

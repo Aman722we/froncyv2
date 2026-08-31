@@ -523,14 +523,14 @@ async def addbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await app.bot.set_webhook(url=f"{webhook_base.rstrip('/')}/webhook/{new_token}")
 
         await update.message.reply_text(
-            f"✅ <b>Guru Bot Registered!</b>\n\n"
+            f"✅ <b>Creator Bot Registered!</b>\n\n"
             f"🤖 @{bot_username}\n"
-            f"👤 Guru: {guru_name}\n"
-            f"💸 Revenue Split: {split_pct}% to Guru\n"
+            f"👤 Creator: {guru_name}\n"
+            f"💸 Revenue Split: {split_pct}% to Creator\n"
             f"🆔 bot_id: {bot_id}\n\n"
             f"Webhook is set. The bot is live! 🚀\n\n"
-            f"<b>Next step:</b> Ask the Guru for their Telegram ID, then run:\n"
-            f"<code>/setguru {bot_id} &lt;their_telegram_id&gt;</code>",
+            f"<b>Next step:</b> Ask the Creator for their Telegram ID, then run:\n"
+            f"<code>/setcreator {bot_id} &lt;their_telegram_id&gt;</code>",
             parse_mode="HTML",
         )
         logger.info(f"Admin registered new Guru bot @{bot_username} (bot_id={bot_id})")
@@ -540,13 +540,13 @@ async def addbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"addbot_command failed: {e}", exc_info=True)
 
 
-async def setguru_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/setguru <bot_id> <guru_telegram_id> — Admin only. Link a Guru's Telegram ID to their bot.
+async def setcreator_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/setcreator <bot_id> <creator_telegram_id> — Admin only. Link a Creator's Telegram ID to their bot.
 
-    This gives the Guru access to /guruanalytics and /gurubcast inside their bot.
+    This gives the Creator access to /dashboard and /broadcast inside their bot.
 
     Usage:
-      /setguru 2 987654321
+      /setcreator 2 987654321
     """
     user_id = update.effective_user.id
     if user_id != settings.ADMIN_TELEGRAM_ID:
@@ -555,15 +555,15 @@ async def setguru_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     args = context.args
     if not args or len(args) < 2 or not args[0].isdigit() or not args[1].isdigit():
         await update.message.reply_text(
-            "⚙️ <b>Usage:</b> /setguru &lt;bot_id&gt; &lt;guru_telegram_id&gt;\n\n"
-            "Example:\n<code>/setguru 2 987654321</code>\n\n"
-            "Get the Guru's Telegram ID by asking them to forward a message to @userinfobot.",
+            "⚙️ <b>Usage:</b> /setcreator &lt;bot_id&gt; &lt;creator_telegram_id&gt;\n\n"
+            "Example:\n<code>/setcreator 2 987654321</code>\n\n"
+            "Get the Creator's Telegram ID by asking them to forward a message to @userinfobot.",
             parse_mode="HTML",
         )
         return
 
     bot_id          = int(args[0])
-    guru_tg_id      = int(args[1])
+    creator_tg_id   = int(args[1])
 
     from db.bots import set_guru_telegram_id, get_bot_by_id
     bot_cfg = await get_bot_by_id(bot_id)
@@ -571,15 +571,15 @@ async def setguru_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(f"❌ No bot found with bot_id={bot_id}.")
         return
 
-    success = await set_guru_telegram_id(bot_id, guru_tg_id)
+    success = await set_guru_telegram_id(bot_id, creator_tg_id)
     if success:
         await update.message.reply_text(
-            f"✅ <b>Guru linked!</b>\n\n"
+            f"✅ <b>Creator linked!</b>\n\n"
             f"Bot: @{bot_cfg['bot_username']} (id={bot_id})\n"
-            f"Guru Telegram ID: <code>{guru_tg_id}</code>\n\n"
-            f"The Guru can now use <b>/guruanalytics</b> and <b>/gurubcast</b> inside their bot.",
+            f"Creator Telegram ID: <code>{creator_tg_id}</code>\n\n"
+            f"The Creator can now use <b>/dashboard</b>, <b>/broadcast</b>, and <b>/creator</b> inside their bot.",
             parse_mode="HTML",
         )
-        logger.info(f"Admin linked guru_telegram_id={guru_tg_id} to bot_id={bot_id}")
+        logger.info(f"Admin linked creator_telegram_id={creator_tg_id} to bot_id={bot_id}")
     else:
         await update.message.reply_text(f"❌ Failed to link. Check that bot_id={bot_id} exists.")
