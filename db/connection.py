@@ -235,6 +235,10 @@ async def init_db() -> asyncpg.Pool:
                 VALUES (1, $1, 'FroncyJobsBot', 'Froncy (Primary)', 100)
                 ON CONFLICT (bot_token) DO NOTHING
             """, _s.TELEGRAM_BOT_TOKEN)
+            
+            # Fix sequence since we manually inserted id=1
+            await conn.execute("SELECT setval('bots_id_seq', (SELECT COALESCE(MAX(id), 1) FROM bots));")
+            
             # Add guru_telegram_id so the Guru can access their own dashboard
             await conn.execute(
                 "ALTER TABLE bots ADD COLUMN IF NOT EXISTS guru_telegram_id BIGINT;"
