@@ -88,6 +88,9 @@ def escape_latex(value: str) -> str:
     # 3. Now safely convert '...' → '\dots' in plain text (not inside URLs)
     newval = re.sub(r'\.\.\.', r'\\dots ', newval)
 
+    # 4. Convert markdown bold (**text**) to LaTeX \textbf{text}
+    newval = re.sub(r'\*\*(.*?)\*\*', r'\\textbf{\1}', newval)
+
     return newval
 
 def escape_dict_for_latex(data):

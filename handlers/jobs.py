@@ -692,7 +692,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 step_states["outreach"] = "✅"
 
-            # Step 3: Send the kit
+            # Step 3: Sending the kit
             await _refresh_loading("⚙️ Step 3/3 — Sending your kit...")
             await _refresh_loading("✅ All done! Your kit is below 👇")
 
@@ -702,7 +702,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             import random as _random
             has_outreach = has_linkedin or has_email
-            mins_saved = _random.randint(12, 18) if has_outreach else _random.randint(7, 12)
+            mins_saved = _random.randint(25, 35) if has_outreach else _random.randint(15, 20)
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
