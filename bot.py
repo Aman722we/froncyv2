@@ -31,7 +31,8 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, getresume_command, fixresume_command, addbot_command
+from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setguru_command
+from handlers.guru import guruanalytics_command, gurubcast_command, guruhelp_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
@@ -185,6 +186,12 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("getresume", getresume_command))
     app.add_handler(CommandHandler("fixresume", fixresume_command))
     app.add_handler(CommandHandler("addbot", addbot_command))
+    app.add_handler(CommandHandler("setguru", setguru_command))
+
+    # ── Guru Dashboard (accessible to the Guru + super admin) ──
+    app.add_handler(CommandHandler("guruanalytics", guruanalytics_command))
+    app.add_handler(CommandHandler("gurubcast", gurubcast_command))
+    app.add_handler(CommandHandler("guruhelp", guruhelp_command))
 
     # Community Job Submissions (admin checklist flow)
     app.add_handler(CommandHandler("links", links_command))

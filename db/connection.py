@@ -235,6 +235,10 @@ async def init_db() -> asyncpg.Pool:
                 VALUES (1, $1, 'FroncyJobsBot', 'Froncy (Primary)', 100)
                 ON CONFLICT (bot_token) DO NOTHING
             """, _s.TELEGRAM_BOT_TOKEN)
+            # Add guru_telegram_id so the Guru can access their own dashboard
+            await conn.execute(
+                "ALTER TABLE bots ADD COLUMN IF NOT EXISTS guru_telegram_id BIGINT;"
+            )
         except Exception as e:
             logger.warning(f"Failed to apply multi-tenant migrations: {e}")
 
