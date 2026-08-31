@@ -275,17 +275,10 @@ async def init_db() -> asyncpg.Pool:
                 """
             )
             if pk_exists and not composite_pk_exists:
-                # We MUST drop any foreign keys that reference the old primary key
-                # before we can drop the primary key itself!
-                try:
-                    await conn.execute(
-                        "ALTER TABLE ai_usage_logs DROP CONSTRAINT IF EXISTS ai_usage_logs_telegram_id_fkey;"
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not drop ai_usage_logs_telegram_id_fkey: {e}")
-                
+                # Use CASCADE to automatically drop all foreign keys in other tables
+                # that reference this primary key before creating the new composite one.
                 await conn.execute(
-                    "ALTER TABLE users DROP CONSTRAINT users_pkey;"
+                    "ALTER TABLE users DROP CONSTRAINT users_pkey CASCADE;"
                 )
                 await conn.execute(
                     "ALTER TABLE users ADD CONSTRAINT users_bot_telegram_pkey "
