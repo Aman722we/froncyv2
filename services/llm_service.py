@@ -301,11 +301,11 @@ async def check_resume_parseable(resume_text: str) -> bool:
                 {"role": "user", "content": f"Resume text:\n{snippet}"},
             ],
             temperature=0.0,
-            max_tokens=5,
+            max_tokens=50,
         )
         answer = response.choices[0].message.content.strip().upper()
         logger.info(f"Resume parseability check: {answer}")
-        return answer.startswith("Y")
+        return "YES" in answer
     except Exception as e:
         logger.warning(f"Resume parseability check failed (defaulting to True): {e}")
         # Default to True on failure — don't block user from uploading
@@ -385,11 +385,11 @@ async def extract_resume_json(resume_text: str) -> dict:
     """
     import json as _json
     # Resume extraction produces a large JSON output — give it a longer timeout
-    client, model = _get_client(LLMMode.QUALITY, timeout=60.0)
+    client, model = _get_client(LLMMode.QUALITY, timeout=90.0)
 
     user_message = f"""Parse this resume into the exact JSON format specified:
 
-{resume_text[:4000]}
+{resume_text[:12000]}
 
 Return the JSON now:"""
 
@@ -402,18 +402,15 @@ Return the JSON now:"""
                     {"role": "system", "content": RESUME_EXTRACTION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                temperature=0.1,
-                max_tokens=3000,
+                temperature=0.0,
+                max_tokens=5000,
                 top_p=1,
             )
+            import re
             result = response.choices[0].message.content.strip()
-            if result.startswith("```json"):
-                result = result[7:]
-            if result.startswith("```"):
-                result = result[3:]
-            if result.endswith("```"):
-                result = result[:-3]
-            result = result.strip()
+            match = re.search(r"\{.*\}", result, re.DOTALL)
+            if match:
+                result = match.group(0).strip()
             
             try:
                 data = _json.loads(result)
@@ -428,13 +425,11 @@ Return the JSON now:"""
                     max_tokens=3000
                 )
                 repaired = repair_res.choices[0].message.content.strip()
-                if repaired.startswith("```json"):
-                    repaired = repaired[7:]
-                if repaired.startswith("```"):
-                    repaired = repaired[3:]
-                if repaired.endswith("```"):
-                    repaired = repaired[:-3]
-                data = _json.loads(repaired.strip())
+                import re
+                match = re.search(r"\{.*\}", repaired, re.DOTALL)
+                if match:
+                    repaired = match.group(0).strip()
+                data = _json.loads(repaired)
                 
             logger.info(f"Resume JSON extracted: {len(data.get('projects', []))} projects, {len(data.get('experience', []))} jobs")
             return data
