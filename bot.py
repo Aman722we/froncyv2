@@ -185,7 +185,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("getresume", getresume_command))
     app.add_handler(CommandHandler("fixresume", fixresume_command))
     app.add_handler(CommandHandler("addbot", addbot_command))
-    app.add_handler(CommandHandler("setcreator", setguru_command))
+    app.add_handler(CommandHandler("setcreator", setcreator_command))
 
     # ── Creator Dashboard (accessible to the Creator + super admin) ──
     app.add_handler(CommandHandler("dashboard", dashboard_command))
