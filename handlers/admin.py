@@ -456,30 +456,22 @@ async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def addbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/addbot <token> <guru_name> [split%] — Admin only. Register a new Guru bot.
-    
-    Usage:
-      /addbot 1234567890:ABCDEF... "Code With Rahul" 50
-    
-    This command:
-    1. Registers the bot token in the database.
-    2. Immediately boots the PTB Application for that token.
-    3. Sets the Telegram webhook to /webhook/{token} on the running server.
-    4. Sends a confirmation message with the bot's user info.
-    """
+    """/addbot <token> <guru_name> [split%] — Admin only. Register a new Creator bot."""
     user_id = update.effective_user.id
+    logger.info(f"/addbot received from user_id={user_id}, ADMIN_TELEGRAM_ID={settings.ADMIN_TELEGRAM_ID}")
     if user_id != settings.ADMIN_TELEGRAM_ID:
+        logger.warning(f"/addbot rejected: user {user_id} is not admin ({settings.ADMIN_TELEGRAM_ID})")
         return
 
     args = context.args
     if not args or len(args) < 2:
         await update.message.reply_text(
-            "⚙️ <b>Usage:</b> /addbot &lt;token&gt; &lt;guru_name&gt; [split_pct]\n\n"
+            "⚙️ <b>Usage:</b> /addbot &lt;token&gt; &lt;creator_name&gt; [split_pct]\n\n"
             "Example:\n"
             "<code>/addbot 1234567890:ABCDEFGH CodeWithRahul 50</code>\n\n"
             "• <b>token</b>: Telegram bot token from BotFather\n"
-            "• <b>guru_name</b>: Display name for the influencer\n"
-            "• <b>split_pct</b>: Revenue split % for Guru (default: 50)",
+            "• <b>creator_name</b>: Display name for the Creator\n"
+            "• <b>split_pct</b>: Revenue split % for Creator (default: 50)",
             parse_mode="HTML",
         )
         return
