@@ -282,28 +282,33 @@ async def send_message_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/broadcast <message> — Admin only. Send a message to ALL onboarded users."""
+    """/broadcast <message> - Send a message to all users of THIS bot (tenant-scoped)."""
     user_id = update.effective_user.id
     if user_id != settings.ADMIN_TELEGRAM_ID:
         return
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ <b>Usage:</b> /broadcast &lt;message&gt;\n\n"
-            "Example:\n<code>/broadcast 🎉 New features just dropped! Check the bot now.</code>",
+            "📢 <b>Usage:</b> /broadcast &lt;message&gt;\n\n"
+            "Example:\n<code>/broadcast 🚀 New features just dropped! Check the bot now.</code>\n\n"
+            "Broadcasts are scoped to <b>this bot's users only</b>.",
             parse_mode="HTML"
         )
         return
 
     message_text = " ".join(context.args)
-    all_user_ids = await get_all_users()
+    
+    # Get the bot_id for this tenant from context (injected by the pre-processor)
+    bot_id = context.bot_data.get("bot_id")
+    all_user_ids = await get_all_users(bot_id=bot_id)
 
     if not all_user_ids:
-        await update.message.reply_text("⚠️ No onboarded users found in the database.")
+        await update.message.reply_text("❌ No onboarded users found for this bot.")
         return
 
+    bot_label = f"bot_id={bot_id}" if bot_id else "all bots (super-admin)"
     status_msg = await update.message.reply_text(
-        f"📤 Broadcasting to <b>{len(all_user_ids)}</b> users...",
+        f"📢 Broadcasting to <b>{len(all_user_ids)}</b> users ({bot_label})...",
         parse_mode="HTML"
     )
 
@@ -449,3 +454,85 @@ async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     )
     logger.info(f"Admin initiated manual resume fix for user {target_id}")
 
+
+async def addbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/addbot <token> <guru_name> [split%] — Admin only. Register a new Guru bot.
+    
+    Usage:
+      /addbot 1234567890:ABCDEF... "Code With Rahul" 50
+    
+    This command:
+    1. Registers the bot token in the database.
+    2. Immediately boots the PTB Application for that token.
+    3. Sets the Telegram webhook to /webhook/{token} on the running server.
+    4. Sends a confirmation message with the bot's user info.
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    if not args or len(args) < 2:
+        await update.message.reply_text(
+            "⚙️ <b>Usage:</b> /addbot &lt;token&gt; &lt;guru_name&gt; [split_pct]\n\n"
+            "Example:\n"
+            "<code>/addbot 1234567890:ABCDEFGH CodeWithRahul 50</code>\n\n"
+            "• <b>token</b>: Telegram bot token from BotFather\n"
+            "• <b>guru_name</b>: Display name for the influencer\n"
+            "• <b>split_pct</b>: Revenue split % for Guru (default: 50)",
+            parse_mode="HTML",
+        )
+        return
+
+    new_token = args[0]
+    guru_name = args[1]
+    split_pct = int(args[2]) if len(args) >= 3 and args[2].isdigit() else 50
+
+    await update.message.reply_text(f"⏳ Registering bot for <b>{guru_name}</b>...", parse_mode="HTML")
+
+    try:
+        # 1. Fetch bot info from Telegram to get the username
+        from telegram import Bot
+        temp_bot = Bot(token=new_token)
+        bot_info = await temp_bot.get_me()
+        bot_username = bot_info.username
+
+        # 2. Register in DB
+        from db.bots import register_bot
+        bot_cfg = await register_bot(
+            bot_token=new_token,
+            bot_username=bot_username,
+            guru_name=guru_name,
+            split_percentage=split_pct,
+        )
+        bot_id = bot_cfg["id"]
+
+        # 3. Boot the PTB Application in-memory
+        from bot import build_bot
+        from bot_registry import add_bot, get_app_for_token
+        from config import settings as _s
+        
+        app = await add_bot(new_token, bot_id, build_fn=build_bot)
+
+        # 4. Set Telegram webhook
+        if _s.ENVIRONMENT == "production":
+            import os
+            webhook_base = _s.WEBHOOK_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN") or ""
+            if webhook_base:
+                webhook_base = webhook_base if webhook_base.startswith("http") else f"https://{webhook_base}"
+                await app.bot.set_webhook(url=f"{webhook_base.rstrip('/')}/webhook/{new_token}")
+
+        await update.message.reply_text(
+            f"✅ <b>Guru Bot Registered!</b>\n\n"
+            f"🤖 @{bot_username}\n"
+            f"👤 Guru: {guru_name}\n"
+            f"💸 Revenue Split: {split_pct}% to Guru\n"
+            f"🆔 bot_id: {bot_id}\n\n"
+            f"Webhook is set. The bot is live! 🚀",
+            parse_mode="HTML",
+        )
+        logger.info(f"Admin registered new Guru bot @{bot_username} (bot_id={bot_id})")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to register bot: <code>{e}</code>", parse_mode="HTML")
+        logger.error(f"addbot_command failed: {e}", exc_info=True)

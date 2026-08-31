@@ -202,6 +202,42 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply ai_usage_logs migrations: {e}")
 
+        # ── Multi-Tenant Architecture ─────────────────────────────────────────
+        # Creates the `bots` table for Guru white-label bots and adds a `bot_id`
+        # foreign key to `users` so each tenant's audience is fully isolated.
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS bots (
+                    id                   SERIAL PRIMARY KEY,
+                    bot_token            TEXT UNIQUE NOT NULL,
+                    bot_username         TEXT NOT NULL,
+                    guru_name            TEXT NOT NULL,
+                    razorpay_account_id  TEXT DEFAULT '',
+                    split_percentage     INT DEFAULT 50,
+                    is_active            BOOLEAN DEFAULT TRUE,
+                    created_at           TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            # Add bot_id FK to users. NULL = original primary FroncyBot (bot_id = 1)
+            await conn.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_id INT REFERENCES bots(id) ON DELETE SET NULL;"
+            )
+            # Composite B-Tree index: all user lookups go through (bot_id, telegram_id)
+            # O(log N) lookup time regardless of total user count across all tenants
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_users_bot_telegram ON users (bot_id, telegram_id);"
+            )
+            # Ensure the primary FroncyBot always has a row in bots (id=1)
+            # We use ON CONFLICT so this is idempotent on every restart
+            from config import settings as _s
+            await conn.execute("""
+                INSERT INTO bots (id, bot_token, bot_username, guru_name, split_percentage)
+                VALUES (1, $1, 'FroncyJobsBot', 'Froncy (Primary)', 100)
+                ON CONFLICT (bot_token) DO NOTHING
+            """, _s.TELEGRAM_BOT_TOKEN)
+        except Exception as e:
+            logger.warning(f"Failed to apply multi-tenant migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

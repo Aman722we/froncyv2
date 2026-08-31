@@ -2,6 +2,12 @@
 Main Application Entry Point.
 FastAPI server that manages the Telegram webhook and Razorpay callbacks.
 Also handles bot initialization and the background scheduler.
+
+Multi-Tenant Architecture:
+  - One FastAPI server serves all Guru bots.
+  - Each bot has its own PTB Application instance in `bot_registry`.
+  - Webhooks are routed via /webhook/{token} to the correct Application.
+  - Backward-compatible /telegram-webhook routes to the primary bot.
 """
 import sys
 import traceback
@@ -13,6 +19,7 @@ from loguru import logger
 from config import settings
 from db.connection import init_db, close_db
 from bot import build_bot
+from bot_registry import boot_all_bots, shutdown_all_bots, get_primary_app, get_app_for_token
 from services.scheduler import start_scheduler, stop_scheduler, set_bot_app
 from utils.error_alert import send_error_alert
 
@@ -21,43 +28,52 @@ from utils.error_alert import send_error_alert
 logger.remove()
 logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <level>{message}</level>")
 
-# Global bot application instance
-bot_app = build_bot()
-set_bot_app(bot_app)
+
+async def _set_webhook(app, token: str, bot_id: int) -> None:
+    """Set the Telegram webhook for a single bot Application."""
+    import os
+    webhook = settings.WEBHOOK_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN") or ""
+    if not webhook:
+        raise ValueError("CRITICAL: WEBHOOK_URL is missing. Please set it in Railway variables!")
+    webhook = webhook if webhook.startswith("http") else f"https://{webhook}"
+    webhook = webhook.rstrip('/')
+    webhook_url = f"{webhook}/webhook/{token}"
+    logger.info(f"Setting webhook for bot_id={bot_id}: {webhook_url[:60]}...")
+    await app.bot.set_webhook(url=webhook_url)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI."""
-    logger.info("🚀 Starting FroncyBot...")
+    logger.info("🚀 Starting FroncyBot (Multi-Tenant)...")
 
-    # 1. Init Database
+    # 1. Init Database — this runs migrations including bots table creation
     await init_db()
 
-    # 2. Start Bot
-    await bot_app.initialize()
-    if settings.ENVIRONMENT == "production":
-        import os
-        webhook = settings.WEBHOOK_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN") or ""
-        if not webhook:
-            raise ValueError("CRITICAL: WEBHOOK_URL is missing. Please set it in Railway variables!")
-            
-        webhook = webhook if webhook.startswith("http") else f"https://{webhook}"
-        webhook = webhook.rstrip('/')
-        
-        logger.info(f"Setting webhook URL: {webhook}")
-        await bot_app.bot.set_webhook(url=f"{webhook}/telegram-webhook")
-    else:
-        # Development: clear any stale webhook (e.g. from a previously deployed Railway instance)
-        # so Telegram stops forwarding updates to the old server and uses polling instead.
+    # 2. Boot all Guru bots from the database
+    set_webhook_fn = _set_webhook if settings.ENVIRONMENT == "production" else None
+    
+    if settings.ENVIRONMENT != "production":
+        # Dev: boot just the primary bot in polling mode
+        primary_app = build_bot(settings.TELEGRAM_BOT_TOKEN)
+        await primary_app.initialize()
         logger.info("Dev mode: deleting any stale webhook...")
-        await bot_app.bot.delete_webhook(drop_pending_updates=True)
+        await primary_app.bot.delete_webhook(drop_pending_updates=True)
         logger.info("Polling mode enabled (development).")
-        # In dev, we start polling natively
-        await bot_app.updater.start_polling(drop_pending_updates=True)
-    await bot_app.start()
+        await primary_app.updater.start_polling(drop_pending_updates=True)
+        await primary_app.start()
+        from bot_registry import _registry
+        _registry[settings.TELEGRAM_BOT_TOKEN] = (primary_app, 1)
+    else:
+        await boot_all_bots(
+            primary_token=settings.TELEGRAM_BOT_TOKEN,
+            build_fn=build_bot,
+            set_webhook_fn=set_webhook_fn,
+        )
 
-    # 3. Start Background Scheduler
+    # 3. Start Background Scheduler (uses primary bot for alerts)
+    primary_app = get_primary_app()
+    set_bot_app(primary_app)
     start_scheduler()
 
     yield
@@ -65,15 +81,13 @@ async def lifespan(app: FastAPI):
     # Shutdown sequence
     logger.info("🛑 Shutting down FroncyBot...")
     stop_scheduler()
-    
-    
-    # We consciously avoid deleting the webhook on production shutdown 
-    # to prevent breaking Railway's zero-downtime deploys when the old container dies.
+
     if settings.ENVIRONMENT != "production":
-        await bot_app.updater.stop()
-        
-    await bot_app.stop()
-    await bot_app.shutdown()
+        primary_app = get_primary_app()
+        if primary_app and primary_app.updater:
+            await primary_app.updater.stop()
+
+    await shutdown_all_bots()
     await close_db()
 
 
@@ -86,12 +100,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Catch-all FastAPI exception handler — alerts admin on any unhandled API error."""
     logger.error(f"Unhandled FastAPI exception on {request.url.path}: {exc}", exc_info=True)
     try:
-        await send_error_alert(
-            bot=bot_app.bot,
-            source=f"FastAPI — {request.method} {request.url.path}",
-            error=exc,
-            extra=f"client={request.client.host if request.client else 'unknown'}",
-        )
+        primary = get_primary_app()
+        if primary:
+            await send_error_alert(
+                bot=primary.bot,
+                source=f"FastAPI — {request.method} {request.url.path}",
+                error=exc,
+                extra=f"client={request.client.host if request.client else 'unknown'}",
+            )
     except Exception:
         pass
     return JSONResponse(status_code=500, content={"status": "error", "detail": "Internal server error"})
@@ -156,36 +172,62 @@ async def redirect_to_bot():
     return RedirectResponse(url=f"https://t.me/{bot_username}", status_code=302)
 
 
-@app.post("/telegram-webhook")
-async def telegram_webhook(request: Request):
-    """Receive updates from Telegram in production."""
-    if settings.ENVIRONMENT != "production":
-        return {"status": "ignored", "reason": "Not in production mode"}
-    
+async def _process_telegram_update(request: Request, app_instance, log_prefix: str = ""):
+    """Shared logic: parse the incoming update and dispatch to a PTB Application."""
     from telegram import Update
-    json_data = await request.json()
-    update = Update.de_json(json_data, bot_app.bot)
+    import asyncio
     
-    # Log what we received
+    json_data = await request.json()
+    update = Update.de_json(json_data, app_instance.bot)
+    
     update_type = "unknown"
     if update.message:
         update_type = f"message: {update.message.text or '(non-text)'}"
     elif update.callback_query:
         update_type = f"callback: {update.callback_query.data}"
-    logger.info(f"Webhook received: {update_type} from user {update.effective_user.id if update.effective_user else '?'}")
+    logger.info(f"Webhook received{log_prefix}: {update_type} from user {update.effective_user.id if update.effective_user else '?'}")
     
-    # Process update with error catching
-    import asyncio
     try:
-        # Run in background so we instantly return 200 OK to Telegram.
-        # This stops Telegram from throttling the bot or queueing updates.
-        asyncio.create_task(bot_app.process_update(update))
+        asyncio.create_task(app_instance.process_update(update))
     except Exception as e:
         logger.error(f"Error queueing update: {e}", exc_info=True)
-        # bot_app error_handler will already fire — no double alert needed
         return {"status": "error", "message": str(e)}
     
     return {"status": "ok"}
+
+
+@app.post("/webhook/{token}")
+async def multi_tenant_webhook(token: str, request: Request):
+    """
+    Multi-Tenant Telegram Webhook.
+    Telegram sends updates to /webhook/{bot_token}.
+    We look up the correct PTB Application from the registry and dispatch to it.
+    """
+    if settings.ENVIRONMENT != "production":
+        return {"status": "ignored", "reason": "Not in production mode"}
+    
+    app_instance = get_app_for_token(token)
+    if not app_instance:
+        logger.warning(f"Webhook received for unknown token: {token[:20]}...")
+        raise HTTPException(status_code=404, detail="Bot not found")
+    
+    return await _process_telegram_update(request, app_instance, log_prefix=f" [token={token[:10]}...]")
+
+
+@app.post("/telegram-webhook")
+async def telegram_webhook(request: Request):
+    """
+    Legacy single-bot webhook endpoint. Kept for backward compatibility.
+    Routes to the primary FroncyBot application.
+    """
+    if settings.ENVIRONMENT != "production":
+        return {"status": "ignored", "reason": "Not in production mode"}
+    
+    primary = get_primary_app()
+    if not primary:
+        raise HTTPException(status_code=503, detail="Primary bot not ready")
+    
+    return await _process_telegram_update(request, primary)
 
 
 @app.post("/razorpay-webhook")
@@ -233,7 +275,9 @@ async def razorpay_webhook(request: Request):
             if amount == 0:
                 amount = data.get("payload", {}).get("subscription", {}).get("entity", {}).get("total_count", 0) # Just fallback if we don't have it
             
-            await bot_app.bot.send_message(
+            primary = get_primary_app()
+            if primary:
+                await primary.bot.send_message(
                 chat_id=telegram_id,
                 text=(
                     f"🎉 *You're now on Pro\\!*\n\n"

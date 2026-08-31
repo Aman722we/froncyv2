@@ -343,13 +343,23 @@ async def increment_ats_check(telegram_id: int) -> None:
         )
 
 
-async def get_all_users() -> list[int]:
-    """Return telegram_ids of all onboarded users (for broadcast)."""
+async def get_all_users(bot_id: int | None = None) -> list[int]:
+    """Return telegram_ids of all onboarded users (for broadcast).
+    
+    If bot_id is provided, only returns users belonging to that tenant bot.
+    If bot_id is None, returns all users (super-admin use only).
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT telegram_id FROM users WHERE is_onboarded = TRUE"
-        )
+        if bot_id is not None:
+            rows = await conn.fetch(
+                "SELECT telegram_id FROM users WHERE is_onboarded = TRUE AND bot_id = $1",
+                bot_id
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT telegram_id FROM users WHERE is_onboarded = TRUE"
+            )
         return [row["telegram_id"] for row in rows]
 
 

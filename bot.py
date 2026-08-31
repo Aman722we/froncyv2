@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, getresume_command, fixresume_command
+from handlers.admin import get_addjob_handler, send_message_command, broadcast_command, badresumes_command, getresume_command, fixresume_command, addbot_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
     sub_check_callback, sub_ignore_callback, sub_toggle_callback,
@@ -89,8 +89,12 @@ async def help_command(update, context):
 
 
 
-def build_bot() -> Application:
-    """Build and configure the Telegram bot application."""
+def build_bot(token: str | None = None) -> Application:
+    """Build and configure the Telegram bot application.
+    
+    In multi-tenant mode, pass a specific token for each Guru bot.
+    Defaults to the primary TELEGRAM_BOT_TOKEN from settings.
+    """
     logger.info("Building Telegram bot application...")
     
     from telegram.request import HTTPXRequest
@@ -108,7 +112,7 @@ def build_bot() -> Application:
     
     builder = (
         Application.builder()
-        .token(settings.TELEGRAM_BOT_TOKEN)
+        .token(token or settings.TELEGRAM_BOT_TOKEN)
         .request(telegram_request)
         .get_updates_request(telegram_request)
     )
@@ -123,11 +127,23 @@ def build_bot() -> Application:
 
     # ── Global Pre-Processor (runs before all other handlers, group=-1) ──
     async def _global_pre_processor(update: Update, context) -> None:
-        """Instantly stop loading spinners, and log activity in the background."""
+        """Instantly stop loading spinners, and log activity in the background.
+        
+        Also injects `bot_id` into context.bot_data so every handler can
+        identify which Guru tenant this bot belongs to.
+        """
         import asyncio
         
         if update.callback_query:
             pass
+        
+        # Inject tenant bot_id from the registry (set once at startup per app)
+        # bot_data persists for the lifetime of the Application, so this is O(1)
+        if "bot_id" not in context.bot_data:
+            from bot_registry import get_bot_id_for_token
+            token = context.bot.token
+            bid = get_bot_id_for_token(token)
+            context.bot_data["bot_id"] = bid if bid is not None else 1
                 
         # Run DB tracking in the background so it doesn't block the next handler
         if update.effective_user:
@@ -168,6 +184,7 @@ def build_bot() -> Application:
     app.add_handler(CommandHandler("badresumes", badresumes_command))
     app.add_handler(CommandHandler("getresume", getresume_command))
     app.add_handler(CommandHandler("fixresume", fixresume_command))
+    app.add_handler(CommandHandler("addbot", addbot_command))
 
     # Community Job Submissions (admin checklist flow)
     app.add_handler(CommandHandler("links", links_command))
