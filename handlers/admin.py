@@ -442,7 +442,7 @@ async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["fixresume_target_user_id"] = target_id
 
     from db.users import get_user
-    target = await get_user(target_id)
+    target = await get_user(target_id, bot_id=1)
     name = target.get("first_name", "Unknown") if target else "Unknown"
     filename = target.get("resume_filename", "N/A") if target else "N/A"
 

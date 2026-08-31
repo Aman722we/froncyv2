@@ -56,7 +56,8 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
 
     user_id = update.effective_user.id
     await check_and_reset_daily(user_id, get_pool())
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user.get("resume_text"):
         await query.message.reply_text(messages.no_resume_error(), parse_mode="MarkdownV2")

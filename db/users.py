@@ -10,38 +10,46 @@ async def get_or_create_user(
     telegram_id: int,
     username: str | None = None,
     first_name: str | None = None,
+    bot_id: int = 1,
 ) -> dict:
-    """Get existing user or create a new one. Returns user record as dict."""
+    """Get existing user for this bot or create a new one. Returns user record as dict.
+    
+    Scoped to (telegram_id, bot_id) so the same Telegram user is treated
+    as a brand-new user on each Creator's bot — proper white-label isolation.
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Try to get existing user
+        # Try to get existing user scoped to this bot
         row = await conn.fetchrow(
-            "SELECT * FROM users WHERE telegram_id = $1", telegram_id
+            "SELECT * FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id, bot_id
         )
         if row:
             return dict(row)
 
-        # Create new user
+        # Create new user for this bot
         row = await conn.fetchrow(
             """
-            INSERT INTO users (telegram_id, username, first_name)
-            VALUES ($1, $2, $3)
+            INSERT INTO users (telegram_id, username, first_name, bot_id)
+            VALUES ($1, $2, $3, $4)
             RETURNING *
             """,
             telegram_id,
             username,
             first_name,
+            bot_id,
         )
-        logger.info(f"New user created: {telegram_id} ({first_name})")
+        logger.info(f"New user created: {telegram_id} ({first_name}) on bot_id={bot_id}")
         return dict(row)
 
 
-async def get_user(telegram_id: int) -> dict | None:
-    """Get user by telegram_id. Returns None if not found."""
+async def get_user(telegram_id: int, bot_id: int = 1) -> dict | None:
+    """Get user by telegram_id scoped to the given bot. Returns None if not found."""
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * FROM users WHERE telegram_id = $1", telegram_id
+            "SELECT * FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id, bot_id
         )
         return dict(row) if row else None
 

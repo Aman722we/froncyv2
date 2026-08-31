@@ -20,7 +20,8 @@ async def _get_upgrade_price() -> int | None:
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /menu command."""
-    user = await get_user(update.effective_user.id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(update.effective_user.id, bot_id=bot_id)
     plan = user.get("plan", "free") if user else "free"
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 
@@ -35,7 +36,8 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Handle 'Back to Menu' callback button."""
     query = update.callback_query
     await query.answer()
-    user = await get_user(update.effective_user.id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(update.effective_user.id, bot_id=bot_id)
     plan = user.get("plan", "free") if user else "free"
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 

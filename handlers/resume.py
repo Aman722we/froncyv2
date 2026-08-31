@@ -24,7 +24,8 @@ PRO_PLANS = ("pro", "trial", "proplus", "premium")
 async def view_resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /resume and Menu -> My Resume."""
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user:
         if update.callback_query:
@@ -54,7 +55,8 @@ async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     plan = user.get("plan", "free")
 
     # Check resume first (regardless of plan)
@@ -127,7 +129,8 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         user_id = update.effective_user.id
-        user = await get_user(user_id)
+        bot_id = context.bot_data.get('bot_id', 1)
+        user = await get_user(user_id, bot_id=bot_id)
         plan = user.get("plan", "free")
         resume_text = user.get("resume_text", "")
         jd_text = (update.message.text or update.message.caption or "").strip()
@@ -172,7 +175,8 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer("⏳ Running AI analysis...")
 
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     plan = user.get("plan", "free")
 
     from db.users import check_ats_limit, increment_ats_check
@@ -326,7 +330,8 @@ async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer("🚀 Starting PDF generation...")
 
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user or not user.get("resume_text"):
         await query.message.reply_text(
@@ -762,7 +767,8 @@ async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAU
         )
 
         # Alert the admin
-        user = await __import__("db.users", fromlist=["get_user"]).get_user(user_id)
+        bot_id = context.bot_data.get('bot_id', 1)
+        user = await __import__("db.users", fromlist=["get_user"]).get_user(user_id, bot_id=bot_id)
         first_name = user.get("first_name", "Unknown") if user else "Unknown"
         username = user.get("username", "") if user else ""
         uname_str = f"@{username}" if username else "(no username)"

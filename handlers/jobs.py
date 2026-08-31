@@ -23,8 +23,9 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent, count_new_jobs_since
     
     # Fire all independent queries in parallel
+    bot_id = context.bot_data.get('bot_id', 1)
     user, seen_jobs, total_active_jobs = await asyncio.gather(
-        get_user(user_id),
+        get_user(user_id, bot_id=bot_id),
         get_seen_jobs(user_id),
         count_manual_jobs(),
     )
@@ -114,7 +115,8 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /jobs command and 'View Jobs' / pagination buttons."""
     user_id = update.effective_user.id
     await check_and_reset_daily(user_id, get_pool())
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user or not user.get("is_onboarded"):
         msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
@@ -323,7 +325,8 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # User actually clicked to view the job, so mark it permanently seen
     from db.manual_jobs import mark_jobs_seen
     await mark_jobs_seen(user_id, [job_id])
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     plan = get_effective_plan(user)
     user_skills = user.get("skills", [])
     user_exp = user.get("experience_level", "0")
@@ -522,7 +525,8 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     # ── 1. Fetch user & plan ──────────────────────────────
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     if not user:
         await query.edit_message_text("⚠️ User not found. Please type /start to set up your profile.")
         return

@@ -16,7 +16,8 @@ from utils.helpers import escape_md
 async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /upgrade — show dynamic pricing based on early adopter status."""
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user:
         if update.callback_query:

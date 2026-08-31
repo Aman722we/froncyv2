@@ -239,10 +239,50 @@ async def init_db() -> asyncpg.Pool:
             # Fix sequence since we manually inserted id=1
             await conn.execute("SELECT setval('bots_id_seq', (SELECT COALESCE(MAX(id), 1) FROM bots));")
             
-            # Add guru_telegram_id so the Guru can access their own dashboard
+            # Add guru_telegram_id so the Creator can access their own dashboard
             await conn.execute(
                 "ALTER TABLE bots ADD COLUMN IF NOT EXISTS guru_telegram_id BIGINT;"
             )
+
+            # ── Multi-Tenant User Isolation ──────────────────────────────────────
+            # Change the users PK from telegram_id alone to (telegram_id, bot_id).
+            # This means the same Telegram user is treated as a SEPARATE new user
+            # on each Creator bot — proper white-label isolation.
+            # We do this in two safe steps:
+            #   1. Ensure bot_id is NOT NULL for all existing rows (default to 1)
+            #   2. Drop the old single-column PK and add the composite PK
+            await conn.execute(
+                "UPDATE users SET bot_id = 1 WHERE bot_id IS NULL;"
+            )
+            await conn.execute(
+                "ALTER TABLE users ALTER COLUMN bot_id SET DEFAULT 1;"
+            )
+            await conn.execute(
+                "ALTER TABLE users ALTER COLUMN bot_id SET NOT NULL;"
+            )
+            # Only add composite PK if the old one still exists
+            pk_exists = await conn.fetchval(
+                """
+                SELECT 1 FROM information_schema.table_constraints
+                WHERE table_name='users' AND constraint_type='PRIMARY KEY'
+                  AND constraint_name='users_pkey'
+                """
+            )
+            composite_pk_exists = await conn.fetchval(
+                """
+                SELECT 1 FROM pg_indexes
+                WHERE tablename='users' AND indexname='users_bot_telegram_pkey'
+                """
+            )
+            if pk_exists and not composite_pk_exists:
+                await conn.execute(
+                    "ALTER TABLE users DROP CONSTRAINT users_pkey;"
+                )
+                await conn.execute(
+                    "ALTER TABLE users ADD CONSTRAINT users_bot_telegram_pkey "
+                    "PRIMARY KEY (telegram_id, bot_id);"
+                )
+                logger.info("Migrated users PK to composite (telegram_id, bot_id)")
         except Exception as e:
             logger.warning(f"Failed to apply multi-tenant migrations: {e}")
 

@@ -14,7 +14,8 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
     is_manual = "manual_applied" in query.data
     job_id = int(query.data.split("_")[-1])
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     
     plan = user.get("plan", "free")
     limit = get_limit(plan, "application_tracking_max") or 999
@@ -179,7 +180,8 @@ async def weekly_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer()
     
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     
     if user.get("plan", "free") != "pro":
         await query.message.reply_text("This feature is for Pro users only.")

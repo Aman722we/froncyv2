@@ -29,18 +29,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Handle /start — begin onboarding or show main menu if already onboarded."""
     user = update.effective_user
     
+    # Get the tenant bot_id (injected by the multi-tenant pre-processor)
+    bot_id = context.bot_data.get("bot_id", 1)
+    
     # Send instant placeholder to prevent drop-off during DB load
     placeholder = await update.message.reply_text("⏳ Give me a second, setting up your profile...")
     
-    # Check if they existed before this exact /start click
-    is_new_user = (await get_user(user.id)) is None
+    # Check if they existed before this exact /start click — scoped to this bot
+    is_new_user = (await get_user(user.id, bot_id=bot_id)) is None
     
-    db_user = await get_or_create_user(user.id, user.username, user.first_name)
+    db_user = await get_or_create_user(user.id, user.username, user.first_name, bot_id=bot_id)
 
     if db_user.get("is_deleted"):
         from db.users import restore_user
         await restore_user(user.id)
-        db_user = await get_user(user.id)  # Refresh db_user
+        db_user = await get_user(user.id, bot_id=bot_id)  # Refresh db_user
         
         await update.message.reply_text(
             "🎉 *Welcome back\\! Your previous data has been restored\\.*",
@@ -497,7 +500,8 @@ async def _complete_onboarding(
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel onboarding and return to menu."""
-    user = await get_user(update.effective_user.id)
+    bot_id = context.bot_data.get("bot_id", 1)
+    user = await get_user(update.effective_user.id, bot_id=bot_id)
     plan = user.get("plan", "free") if user else "free"
     upgrade_price = None
     if plan not in ("pro",):

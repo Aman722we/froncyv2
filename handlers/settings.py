@@ -14,7 +14,8 @@ from utils.helpers import escape_md
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /settings."""
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     is_active_pro = False
     if user and user.get("plan") != "free" and user.get("subscription_status") == "active":
         is_active_pro = True
@@ -44,7 +45,8 @@ async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
     current_skills = user.get("skills", []) if user else []
     context.user_data["edit_skills"] = list(current_skills)
 
@@ -373,7 +375,8 @@ async def settings_alert_time_save(update: Update, context: ContextTypes.DEFAULT
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /status and View Status from settings."""
     user_id = update.effective_user.id
-    user = await get_user(user_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
 
     if not user:
         await update.message.reply_text("Please /start first.")
