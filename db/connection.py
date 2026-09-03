@@ -215,9 +215,13 @@ async def init_db() -> asyncpg.Pool:
                     razorpay_account_id  TEXT DEFAULT '',
                     split_percentage     INT DEFAULT 50,
                     is_active            BOOLEAN DEFAULT TRUE,
-                    created_at           TIMESTAMPTZ DEFAULT NOW()
+                    created_at           TIMESTAMPTZ DEFAULT NOW(),
+                    guru_telegram_id     BIGINT
                 );
             """)
+            # Handle existing installations by adding the column if missing
+            await conn.execute("ALTER TABLE bots ADD COLUMN IF NOT EXISTS guru_telegram_id BIGINT;")
+            
             # Add bot_id FK to users. NULL = original primary FroncyBot (bot_id = 1)
             await conn.execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_id INT REFERENCES bots(id) ON DELETE SET NULL;"

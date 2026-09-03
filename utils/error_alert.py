@@ -9,7 +9,8 @@ from config import settings
 
 def _format_alert(source: str, error: Exception, extra: str = "") -> str:
     """Format a crash alert message with full traceback, truncated to Telegram's 4096 char limit."""
-    tb = traceback.format_exc()
+    import html
+    tb = html.escape(traceback.format_exc())
     # Truncate traceback if too long
     if len(tb) > 2000:
         tb = "..." + tb[-2000:]
