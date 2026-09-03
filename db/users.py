@@ -111,7 +111,7 @@ async def update_user_profile(
 
 
 async def update_resume(
-    telegram_id: int, resume_text: str, filename: str
+    telegram_id: int, resume_text: str, filename: str, bot_id: int = 1
 ) -> dict:
     """Store extracted resume text and filename."""
     pool = get_pool()
@@ -120,12 +120,13 @@ async def update_resume(
             """
             UPDATE users
             SET resume_text = $2, resume_filename = $3, updated_at = NOW()
-            WHERE telegram_id = $1
+            WHERE telegram_id = $1 AND bot_id = $4
             RETURNING *
             """,
             telegram_id,
             resume_text,
             filename,
+            bot_id,
         )
         return dict(row) if row else None
 
@@ -431,18 +432,19 @@ async def increment_apply_smart_used(telegram_id: int) -> None:
 # Concierge Resume Fix helpers
 # ──────────────────────────────────────────────────────────────────────
 
-async def set_manual_resume_flag(telegram_id: int, flag: bool) -> None:
+async def set_manual_resume_flag(telegram_id: int, flag: bool, bot_id: int = 1) -> None:
     """Set or clear the needs_manual_resume flag for a user."""
     pool = get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE users SET needs_manual_resume = $2, updated_at = NOW() WHERE telegram_id = $1",
+            "UPDATE users SET needs_manual_resume = $2, updated_at = NOW() WHERE telegram_id = $1 AND bot_id = $3",
             telegram_id,
             flag,
+            bot_id,
         )
 
 
-async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str) -> None:
+async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str, bot_id: int = 1) -> None:
     """Save the raw PDF bytes for admin manual processing, without replacing resume_text."""
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -450,11 +452,12 @@ async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: st
             """
             UPDATE users
             SET raw_resume_bytes = $2, resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW()
-            WHERE telegram_id = $1
+            WHERE telegram_id = $1 AND bot_id = $4
             """,
             telegram_id,
             raw_bytes,
             filename,
+            bot_id,
         )
 
 
@@ -473,13 +476,13 @@ async def get_users_needing_manual_resume() -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def get_raw_resume_bytes(telegram_id: int) -> tuple[bytes | None, str | None]:
+async def get_raw_resume_bytes(telegram_id: int, bot_id: int = 1) -> tuple[bytes | None, str | None]:
     """Return the raw resume bytes and filename for a given user."""
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT raw_resume_bytes, resume_filename FROM users WHERE telegram_id = $1",
-            telegram_id
+            "SELECT raw_resume_bytes, resume_filename FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id, bot_id
         )
         if not row:
             return None, None

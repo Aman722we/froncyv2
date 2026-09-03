@@ -403,7 +403,8 @@ async def getresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     from db.users import get_raw_resume_bytes
-    raw_bytes, filename = await get_raw_resume_bytes(target_id)
+    bot_id = context.bot_data.get('bot_id', 1)
+    raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
     
     if not raw_bytes:
         await update.message.reply_text("❌ No raw resume found for this user in the database.")
@@ -442,7 +443,11 @@ async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["fixresume_target_user_id"] = target_id
 
     from db.users import get_user
-    target = await get_user(target_id, bot_id=1)
+    bot_id = context.bot_data.get('bot_id', 1)
+    target = await get_user(target_id, bot_id=bot_id)
+    if not target:
+        await update.message.reply_text("❌ User not found on this bot.")
+        return
     name = target.get("first_name", "Unknown") if target else "Unknown"
     filename = target.get("resume_filename", "N/A") if target else "N/A"
 

@@ -667,11 +667,12 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
     if is_parseable:
         # ✅ Resume is clean — save to DB and confirm
         try:
-            await update_resume(user_id, resume_text, document.file_name)
+            bot_id = context.bot_data.get('bot_id', 1)
+            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id)
         except Exception as e:
             logger.error(f"update_resume DB write failed for user {user_id}: {e}")
             await update.message.reply_text(
-                "⚠️ Your resume was read successfully but we had a database error saving it. Please try again."
+                "❌ Your resume was read successfully but we had a database error saving it. Please try again."
             )
             return
 
@@ -740,16 +741,17 @@ async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAU
     from config import settings
 
     try:
+        bot_id = context.bot_data.get('bot_id', 1)
         if raw_bytes:
             # Save the raw PDF bytes and flag the user
-            await save_raw_resume_bytes(user_id, raw_bytes, filename)
+            await save_raw_resume_bytes(user_id, raw_bytes, filename, bot_id=bot_id)
             # Also save whatever text we extracted as a fallback for other features
             if resume_text:
-                await update_resume(user_id, resume_text, filename)
+                await update_resume(user_id, resume_text, filename, bot_id=bot_id)
         else:
             # Edge case: no bytes (shouldn't happen normally)
             from db.users import set_manual_resume_flag
-            await set_manual_resume_flag(user_id, True)
+            await set_manual_resume_flag(user_id, True, bot_id=bot_id)
 
         # Clean up context
         context.user_data["pending_raw_resume_bytes"] = None
@@ -824,8 +826,9 @@ async def _admin_fixresume_receive(
             resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
 
         # Save the clean resume and clear the flag
-        await update_resume(target_user_id, resume_text, document.file_name)
-        await set_manual_resume_flag(target_user_id, False)
+        bot_id = context.bot_data.get('bot_id', 1)
+        await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id)
+        await set_manual_resume_flag(target_user_id, False, bot_id=bot_id)
 
         # Notify the user their resume is ready
         try:
