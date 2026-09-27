@@ -39,3 +39,8 @@ resumes/
 
 # Docs (keep originals)
 # *.docx
+
+# Local-only dev notes
+todo.md
+suggestions.md
+learnings.md
