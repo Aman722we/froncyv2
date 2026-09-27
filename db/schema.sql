@@ -1,5 +1,5 @@
 -- ================================================
--- ApplixyBot Database Schema
+-- FroncyBot Database Schema
 -- PostgreSQL 15 (Supabase)
 -- ================================================
 
