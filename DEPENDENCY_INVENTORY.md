@@ -1,6 +1,6 @@
 # Dependency & Licensing Inventory
 
-This document outlines the provenance, licensing, and dependencies for the **Applixy Bot** repository to ensure full compliance for data procurement, AI training, and enterprise review.
+This document outlines the provenance, licensing, and dependencies for the **Froncy Bot** repository to ensure full compliance for data procurement, AI training, and enterprise review.
 
 ## 1. Code Provenance
 * **Authorship:** 100% proprietary code developed by the original repository owner (Shubham Verma).
@@ -35,7 +35,7 @@ All backend dependencies are imported via `pip`. None are modified or embedded d
 *(Note: `pymupdf` is utilized strictly as an external library for PDF text extraction. No PyMuPDF source code is included or modified in this repository).*
 
 ## 4. Frontend Dependencies (Next.js / TypeScript)
-Located in the `applixy-web` directory. All frontend packages are highly permissive standard web libraries.
+Located in the `froncy-web` directory. All frontend packages are highly permissive standard web libraries.
 
 | Package | Purpose | License Type |
 |---|---|---|

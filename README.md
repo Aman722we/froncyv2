@@ -1,4 +1,4 @@
-# Applixy Bot — AI-Powered Job Alert & Resume Platform
+# Froncy Bot — AI-Powered Job Alert & Resume Platform
 
 > A production-grade, multi-tenant Telegram SaaS that delivers hyper-personalized job alerts, AI-generated ATS resumes, and automated cover letters to job-seekers via their Telegram inbox.
 
@@ -6,7 +6,7 @@
 
 ## 📌 What the Product Does
 
-Applixy Bot is a **white-label Telegram bot platform** built around job seekers. Instead of a traditional web app, the entire product is delivered through Telegram.
+Froncy Bot is a **white-label Telegram bot platform** built around job seekers. Instead of a traditional web app, the entire product is delivered through Telegram.
 
 **Core user-facing features:**
 - **Smart Job Alerts:** Scans job boards daily and delivers matched roles directly to a user's Telegram chat based on their skills, experience level, and location preferences.
@@ -126,7 +126,7 @@ Shared utilities:
 - `constants.py` — Shared constants
 - `admin_notify.py` — Admin notification helpers
 
-### `applixy-web/`
+### `froncy-web/`
 Next.js 14 landing page and marketing site for the platform. Built with App Router, Tailwind CSS, and deployed on Vercel.
 
 ---
@@ -200,7 +200,7 @@ AI tools were used to accelerate implementation of boilerplate, repetitive handl
 - All application source code (Python bot, services, DB layer, utils)
 - Database schema and all migration logic (`db/connection.py`)
 - Jinja2 / LaTeX resume template (`assets/resume_template.tex.j2`)
-- Next.js landing page source (`applixy-web/src/`)
+- Next.js landing page source (`froncy-web/src/`)
 - Deployment configuration (`nixpacks.toml`, `Procfile`, `railway.json`)
 - Environment variable template (`.env.example`) with blank/placeholder values
 
