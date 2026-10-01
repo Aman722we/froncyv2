@@ -41,7 +41,7 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
                 'CAREER_PAGE', $6, $7,
                 $8, $9
             )
-            ON CONFLICT (source_provider, source_external_id) DO NOTHING
+            ON CONFLICT (source_provider, source_external_id) WHERE source_external_id IS NOT NULL DO NOTHING
             RETURNING id
             """,
             normalized_job["title"],
