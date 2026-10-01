@@ -428,6 +428,20 @@ async def _send_evening_digest():
                 pass
 
 
+async def _run_career_sync_job():
+    """Background scheduled job: sync all active career page sources."""
+    try:
+        from services.career_sync import run_career_sync
+        await run_career_sync()
+    except Exception as e:
+        logger.error(f"❌ Career sync job failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _run_career_sync_job", e)
+            except Exception:
+                pass
+
+
 from datetime import datetime
 
 def start_scheduler():
@@ -474,6 +488,15 @@ def start_scheduler():
         CronTrigger(hour=0, minute=5),
         id="downgrade_expired_trials",
         name="Downgrade expired trials to free plan",
+        replace_existing=True,
+    )
+
+    # Career Page Sync (Froncy V2) — every 15 minutes
+    scheduler.add_job(
+        _run_career_sync_job,
+        CronTrigger(minute="*/15"),
+        id="career_page_sync",
+        name="Sync career pages every 15 min",
         replace_existing=True,
     )
 

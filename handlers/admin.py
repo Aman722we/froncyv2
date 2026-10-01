@@ -580,3 +580,126 @@ async def setcreator_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.info(f"Admin linked creator_telegram_id={creator_tg_id} to bot_id={bot_id}")
     else:
         await update.message.reply_text(f"❌ Failed to link. Check that bot_id={bot_id} exists.")
+
+
+async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/addsource <provider> <board_token> <Company Name> — Add a career source to monitor."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    args = context.args
+    if not args or len(args) < 3:
+        await update.message.reply_text(
+            "<b>Usage:</b> /addsource <provider> <board_token> <Company Name>\n\n"
+            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/addsource GREENHOUSE gatherai Gather AI</code>\n"
+            "<code>/addsource LEVER notion Notion</code>\n"
+            "<code>/addsource ASHBY linear Linear</code>",
+            parse_mode="HTML"
+        )
+        return
+    
+    provider = args[0].upper()
+    if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
+        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, or ASHBY.", parse_mode="HTML")
+        return
+    
+    board_token = args[1].lower()
+    company_name = " ".join(args[2:])
+    
+    from db.career_sources import add_career_source
+    new_id = await add_career_source(company_name, provider, board_token)
+    await update.message.reply_text(
+        f"✅ <b>Source added!</b>\n\n"
+        f"<b>ID:</b> {new_id}\n"
+        f"<b>Company:</b> {company_name}\n"
+        f"<b>Provider:</b> {provider}\n"
+        f"<b>Token:</b> <code>{board_token}</code>\n\n"
+        f"Use /listsources to verify, or /syncnow to test immediately.",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin added career source: {company_name} ({provider}/{board_token})")
+
+
+async def listsources_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/listsources — List all configured career sources."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    from db.career_sources import get_all_career_sources
+    sources = await get_all_career_sources()
+    
+    if not sources:
+        await update.message.reply_text("No career sources configured yet. Use /addsource to add one.")
+        return
+    
+    from datetime import timezone, datetime
+    now = datetime.now(timezone.utc)
+    
+    lines = [f"<b>📡 Career Sources ({len(sources)} total)</b>\n"]
+    for s in sources:
+        status = "🟢" if s["is_active"] else "🔴"
+        last_check = s["last_checked_at"]
+        last_ok = s["last_successful_check_at"]
+        err = s["last_error"]
+        
+        if last_check:
+            mins = int((now - last_check.replace(tzinfo=timezone.utc) if last_check.tzinfo is None else (now - last_check)).total_seconds() / 60)
+            check_str = f"{mins}m ago"
+        else:
+            check_str = "never"
+        
+        lines.append(
+            f"{status} <b>{s['company_name']}</b> [{s['provider']}]\n"
+            f"   Token: <code>{s['board_token']}</code> | ID: {s['id']}\n"
+            f"   Last checked: {check_str}"
+            + (f" | ⚠️ {err[:60]}" if err else "")
+        )
+    
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/syncnow [source_id] — Manually trigger a career page sync."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    from datetime import timezone
+    
+    args = context.args
+    specific_id = int(args[0]) if args and args[0].isdigit() else None
+    
+    msg = await update.message.reply_text("⚡ Running career sync...")
+    
+    if specific_id:
+        from db.career_sources import get_all_career_sources
+        from services.career_sync import sync_one_source
+        sources = await get_all_career_sources()
+        source = next((s for s in sources if s["id"] == specific_id), None)
+        if not source:
+            await msg.edit_text(f"❌ No source found with ID {specific_id}")
+            return
+        summaries = [await sync_one_source(source)]
+    else:
+        from services.career_sync import run_career_sync
+        summaries = await run_career_sync()
+    
+    if not summaries:
+        await msg.edit_text("No active sources to sync. Add some with /addsource.")
+        return
+    
+    lines = ["<b>⚡ Sync Complete</b>\n"]
+    total_new = 0
+    for s in summaries:
+        total_new += s.get("new", 0)
+        lines.append(
+            f"<b>{s['company']}</b>\n"
+            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']} | Errors: {s['errors']}"
+        )
+    
+    lines.append(f"\n🎉 <b>Total new jobs discovered: {total_new}</b>")
+    await msg.edit_text("\n".join(lines), parse_mode="HTML")
