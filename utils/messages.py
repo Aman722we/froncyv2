@@ -233,37 +233,46 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     from datetime import datetime, timezone
     import re
 
-    # ── Skills (40%) ──
+    # ?? Skills (40%) ??
     user_skills = user.get("skills", [])
     job_skills = job.get("skills", [])
+    job_desc = (job.get("description") or "").lower()
 
-    if not job_skills:
+    matched_disp, missing_disp = [], []
+    skill_pct = 50
+
+    if not job_skills and not job_desc:
         skill_pct = 50
-        matched_disp, missing_disp = [], []
     else:
         user_set = set(s.lower() for s in user_skills)
-        matched_disp, missing_disp = [], []
         matched_count = 0
         
-        for raw_jskill in job_skills:
-            jskill_lower = raw_jskill.lower()
-            if "/" in jskill_lower:
-                # Treat as an "OR" condition
-                sub_skills = [s.strip() for s in jskill_lower.split("/")]
-                if any(sub in user_set for sub in sub_skills):
-                    matched_count += 1
-                    matched_disp.append(raw_jskill)
+        if job_skills:
+            for raw_jskill in job_skills:
+                jskill_lower = raw_jskill.lower()
+                if "/" in jskill_lower:
+                    sub_skills = [s.strip() for s in jskill_lower.split("/")]
+                    if any(sub in user_set for sub in sub_skills):
+                        matched_count += 1
+                        matched_disp.append(raw_jskill)
+                    else:
+                        missing_disp.append(raw_jskill)
                 else:
-                    missing_disp.append(raw_jskill)
-            else:
-                if jskill_lower in user_set:
+                    if jskill_lower in user_set:
+                        matched_count += 1
+                        matched_disp.append(raw_jskill)
+                    else:
+                        missing_disp.append(raw_jskill)
+            skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
+        elif job_desc and user_set:
+            for s in user_set:
+                if re.search(r"\b" + re.escape(s) + r"\b", job_desc):
                     matched_count += 1
-                    matched_disp.append(raw_jskill)
+                    matched_disp.append(s)
                 else:
-                    missing_disp.append(raw_jskill)
-
-        skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
-
+                    missing_disp.append(s)
+            denominator = min(3, max(1, len(user_set)))
+            skill_pct = min(100, int((matched_count / denominator) * 100))
     # ── Experience (25%) ──
     user_exp = str(user.get("experience_level", "0")).strip()
     u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
@@ -283,20 +292,21 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ── Role Preference (10%) ──
+    # ?? Role Preference (10%) ??
     role_pref = (user.get("role_pref") or "fullstack").lower()
     job_title = (job.get("title") or "").lower()
     job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
 
+    TECH_GENERIC = ["engineer", "developer", "sde", "programmer", "software", "coder", "architect"]
+    
     ROLE_KEYWORDS = {
-        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"],
-        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"],
-        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"],
+        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"] + TECH_GENERIC,
+        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"] + TECH_GENERIC,
+        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"] + TECH_GENERIC,
     }
     role_words = ROLE_KEYWORDS.get(role_pref, [])
     if role_pref == "fullstack":
-        role_words = ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]
-
+        role_words = list(set(ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]))
     title_match = any(kw in job_title for kw in role_words)
     skills_match = any(kw in s for kw in role_words for s in job_skills_lower)
 
@@ -375,7 +385,7 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         batch_str = "/".join(str(b) for b in eligible_batches)
         batch_note = f"⚠️ Batch mismatch: Job requires {batch_str}, your batch is {user_batch or 'unknown'}"
 
-    # ── Final weighted score ──
+    # ?? Final weighted score ??
     total_score = int(
         (skill_pct * 0.40) +
         (exp_pct   * 0.25) +
@@ -383,8 +393,15 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         (role_pct  * 0.10) +
         (salary_pct * 0.10)
     )
-    total_score = max(0, min(100, total_score))
 
+    NON_TECH = ["marketing", "sales", "account executive", "hr ", "human resources", "recruiter", "finance", "legal", "customer", "advocacy", "content", "copywriter", "business", "operations", "vp ", "chief ", "director ", "counsel"]
+    if any(kw in job_title for kw in NON_TECH) and not any(kw in job_title for kw in ["engineer", "developer"]):
+        total_score = 0
+        
+    if role_pct == 20 and skill_pct <= 50:
+        total_score = int(total_score * 0.5)
+
+    total_score = max(0, min(100, total_score))
     return {
         "score": total_score,
         "skill_pct": skill_pct,
