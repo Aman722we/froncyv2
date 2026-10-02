@@ -768,7 +768,7 @@ Do not include markdown formatting or backticks, just the raw JSON.
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.0,
-                max_tokens=200,
+                max_tokens=1000,
                 extra_body={"reasoning_effort": "low"},
             )
             result = response.choices[0].message.content.strip()
