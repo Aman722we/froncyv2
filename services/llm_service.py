@@ -701,13 +701,21 @@ Generate the outreach messages now:"""
     return {}
 
 
+_llm_cooldown_until = 0.0
+
 async def extract_job_metadata(job_description: str) -> dict:
     """
     Extract skills and minimum years of experience from a raw job description using AI.
     Returns: {"skills": ["skill1", "skill2"], "min_yoe": 2}
     """
     import json
+    import time
+    global _llm_cooldown_until
     
+    # Circuit breaker: if we are rate limited, don't even try, just return fallback
+    if time.time() < _llm_cooldown_until:
+        return {"skills": [], "min_yoe": 0}
+        
     client, model = _get_client(LLMMode.FAST, timeout=30.0)
 
     system_prompt = """You are an expert technical recruiter. Your task is to extract structured data from a raw job description.
@@ -760,6 +768,16 @@ Do not include markdown formatting or backticks, just the raw JSON.
                 "min_yoe": min_yoe
             }
         except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Rate limit" in err_str:
+                import re
+                import time
+                match = re.search(r"try again in ([\d\.]+)s", err_str)
+                wait_sec = float(match.group(1)) if match else 15.0
+                _llm_cooldown_until = time.time() + wait_sec + 2.0
+                logger.warning(f"LLM Rate limit hit. Circuit breaker active for {wait_sec + 2.0:.1f}s.")
+                break # Break out of retry loop immediately
+                
             logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
             
     return {"skills": [], "min_yoe": 0}
