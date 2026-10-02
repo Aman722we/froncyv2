@@ -332,6 +332,7 @@ async def check_resume_parseable(resume_text: str) -> bool:
             ],
             temperature=0.0,
             max_tokens=50,
+            extra_body={"reasoning_effort": "low"},
         )
         answer = response.choices[0].message.content.strip().upper()
         logger.info(f"Resume parseability check: {answer}")
@@ -434,6 +435,7 @@ Return the JSON now:"""
                 ],
                 temperature=0.0,
                 max_tokens=5000,
+                extra_body={"reasoning_effort": "low"},
                 top_p=1,
             )
             import re
@@ -767,6 +769,7 @@ Do not include markdown formatting or backticks, just the raw JSON.
                 ],
                 temperature=0.0,
                 max_tokens=200,
+                extra_body={"reasoning_effort": "low"},
             )
             result = response.choices[0].message.content.strip()
             
