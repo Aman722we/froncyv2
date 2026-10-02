@@ -699,3 +699,68 @@ Generate the outreach messages now:"""
                 return {}
 
     return {}
+
+
+async def extract_job_metadata(job_description: str) -> dict:
+    """
+    Extract skills and minimum years of experience from a raw job description using AI.
+    Returns: {"skills": ["skill1", "skill2"], "min_yoe": 2}
+    """
+    import json
+    
+    client, model = _get_client(LLMMode.FAST, timeout=30.0)
+
+    system_prompt = """You are an expert technical recruiter. Your task is to extract structured data from a raw job description.
+Read the job description and extract two things:
+1. "skills": A list of technical skills, tools, and languages mentioned (e.g., ["Python", "React", "AWS"]). If none are found, return an empty list.
+2. "min_yoe": The absolute minimum years of experience required for this role as an integer. For example, if it says "3-5 years", return 3. If it says "5+ years", return 5. If it says "Entry level" or no explicit minimum years are mentioned, return 0.
+
+Output EXACTLY and ONLY valid JSON matching this schema:
+{"skills": ["skill1", "skill2"], "min_yoe": 2}
+Do not include markdown formatting or backticks, just the raw JSON.
+"""
+
+    user_message = f"Job Description:\n{job_description[:6000]}\n\nReturn JSON now:"
+
+    for attempt in range(2):
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.0,
+                max_tokens=200,
+            )
+            result = response.choices[0].message.content.strip()
+            
+            if result.startswith("```json"):
+                result = result[7:]
+            if result.startswith("```"):
+                result = result[3:]
+            if result.endswith("```"):
+                result = result[:-3]
+                
+            data = json.loads(result.strip())
+            
+            # Normalize skills to list of strings, min_yoe to int
+            skills = data.get("skills", [])
+            if not isinstance(skills, list):
+                skills = []
+            skills = [str(s) for s in skills]
+            
+            try:
+                min_yoe = int(data.get("min_yoe", 0))
+            except (ValueError, TypeError):
+                min_yoe = 0
+                
+            return {
+                "skills": skills,
+                "min_yoe": min_yoe
+            }
+        except Exception as e:
+            logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
+            
+    return {"skills": [], "min_yoe": 0}
+

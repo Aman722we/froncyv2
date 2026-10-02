@@ -23,6 +23,13 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     if await job_already_exists(provider, external_id):
         return None
 
+    # Call LLM to extract skills and min_yoe
+    from services.llm_service import extract_job_metadata
+    description = normalized_job.get("description") or ""
+    metadata = await extract_job_metadata(description)
+    extracted_skills = metadata.get("skills", [])
+    extracted_min_yoe = metadata.get("min_yoe", 0)
+
     pool = get_pool()
     async with pool.acquire() as conn:
         now = datetime.now(timezone.utc)
@@ -36,7 +43,7 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
                 first_seen_at, description
             ) VALUES (
                 $1, $2, $3, $4,
-                'fulltime', '{}', 0, '{}',
+                'fulltime', $10, $11, '{}',
                 $5, TRUE, NULL,
                 'CAREER_PAGE', $6, $7,
                 $8, $9
@@ -53,12 +60,12 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             external_id,
             now,  # first_seen_at is always NOW()
             normalized_job.get("description"),
+            extracted_skills,
+            extracted_min_yoe
         )
         if row:
             return row["id"]
         return None
-
-
 async def sync_one_source(source: dict) -> dict:
     """
     Sync a single career source.
