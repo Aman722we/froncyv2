@@ -12,6 +12,50 @@ from services.career_fetcher import fetch_jobs_for_source
 from db.connection import get_pool
 
 
+def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
+    """
+    Gatekeeper function to filter out non-tech roles and non-India/non-Global jobs.
+    Saves LLM tokens and DB space.
+    """
+    title = (title or "").lower()
+    dept = (department or "").lower()
+    loc = (location or "").lower()
+
+    # 1. Location Filter (Must be India or Global Remote, drop explicitly foreign)
+    if loc:
+        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", "noida", "chennai", "kolkata", "remote - ind"]
+        is_india = any(c in loc for c in india_cities)
+        
+        if not is_india:
+            import re
+            foreign_terms = ["us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", "france", "singapore", "poland", "romania", "netherlands", "brazil", "mexico", "colombia", "argentina", "new york", "san francisco", "seattle"]
+            for term in foreign_terms:
+                if re.search(r'\b' + re.escape(term) + r'\b', loc):
+                    return False  # Drop explicitly foreign jobs
+
+    # 2. Department / Title Hard Veto (Non-Tech)
+    junk_keywords = [
+        "sales", "marketing", "account executive", "hr ", "human resources", "recruiter", 
+        "finance", "accounting", "legal", "counsel", "customer success", "advocacy", 
+        "content", "copywriter", "business development", "payroll", "tax",
+        "workplace", "facilities", "executive assistant", "vp ", "chief "
+    ]
+    for junk in junk_keywords:
+        if junk in title or junk in dept:
+            return False
+
+    # 3. Tech Whitelist (Must have at least one)
+    tech_keywords = [
+        "engineer", "developer", "sde", "programmer", "software", "coder", "architect",
+        "data", "ml", "ai", "machine learning", "product", "designer", "ui", "ux",
+        "security", "cloud", "sre", "devops", "platform", "backend", "frontend",
+        "fullstack", "ios", "android", "mobile", "qa", "test", "systems", "research", "mle"
+    ]
+    is_tech = any(tech in title for tech in tech_keywords) or any(tech in dept for tech in tech_keywords)
+    
+    return is_tech
+
+
 async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     """
     Save a new career-page job into the manual_jobs table.
@@ -19,6 +63,15 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     """
     provider = normalized_job["source_provider"]
     external_id = normalized_job["external_id"]
+
+    # --- GATEKEEPER: Drop useless jobs instantly ---
+    if not is_relevant_tech_job(
+        normalized_job.get("title"), 
+        normalized_job.get("department"), 
+        normalized_job.get("location")
+    ):
+        return None
+    # -----------------------------------------------
     
     if await job_already_exists(provider, external_id):
         return None
@@ -226,3 +279,4 @@ async def run_career_sync() -> list[dict]:
     total_new = sum(s["new"] for s in summaries)
     logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
     return summaries
+
