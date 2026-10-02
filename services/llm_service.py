@@ -743,14 +743,15 @@ Do not include markdown formatting or backticks, just the raw JSON.
             )
             result = response.choices[0].message.content.strip()
             
-            if result.startswith("```json"):
-                result = result[7:]
-            if result.startswith("```"):
-                result = result[3:]
-            if result.endswith("```"):
-                result = result[:-3]
-                
-            data = json.loads(result.strip())
+            import re
+            match = re.search(r'\{.*\}', result, re.DOTALL)
+            if not match:
+                raise ValueError(f"No JSON braces found in LLM response: {repr(result)}")
+            
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError as e:
+                raise ValueError(f"JSON decode error: {e}. Raw extracted: {repr(match.group())}")
             
             # Normalize skills to list of strings, min_yoe to int
             skills = data.get("skills", [])
