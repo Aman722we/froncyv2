@@ -23,7 +23,7 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
     # 1. Location Filter (Must be India or Global Remote, drop explicitly foreign)
     if loc:
-        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", "noida", "chennai", "kolkata", "remote - ind"]
+        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", "noida", "chennai", "kolkata", "remote - ind", "apac", "asia", "global", "anywhere"]
         is_india = any(c in loc for c in india_cities)
         
         if not is_india:
