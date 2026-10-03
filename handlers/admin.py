@@ -582,6 +582,28 @@ async def setcreator_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Failed to link. Check that bot_id={bot_id} exists.")
 
 
+
+async def delsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/delsource <id> - Delete a career source."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+        
+    args = context.args
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("Usage: /delsource <id>")
+        return
+        
+    source_id = int(args[0])
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute("DELETE FROM career_sources WHERE id = $1", source_id)
+        if res == "DELETE 1":
+            await update.message.reply_text(f"\u2705 Deleted source {source_id}")
+        else:
+            await update.message.reply_text(f"\u274C Source {source_id} not found.")
+
 async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/addsource <provider> <board_token> <Company Name> — Add a career source to monitor."""
     user_id = update.effective_user.id
