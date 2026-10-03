@@ -657,7 +657,7 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     skipped_count = 0
     errors = []
     
-    msg = await update.message.reply_text("dY 0 Processing bulk add...")
+    msg = await update.message.reply_text("⏳ Processing bulk add...")
     
     for i, line in enumerate(lines):
         parts = line.strip().split()
@@ -687,10 +687,10 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             errors.append(f"Line {i+1}: DB Error -> {str(e)[:30]}")
             
     summary = (
-        f"<b>dY"- Bulk Add Complete</b>\n\n"
-        f"dYY Added: {success_count}\n"
-        f"dY"- Skipped (already exist): {skipped_count}\n"
-        f"dY"' Failed: {len(errors)}\n"
+        f"<b>⚡ Bulk Add Complete</b>\n\n"
+        f"✅ Added: {success_count}\n"
+        f"⏩ Skipped (already exist): {skipped_count}\n"
+        f"❌ Failed: {len(errors)}\n"
     )
     if errors:
         summary += "\n<b>Errors:</b>\n" + "\n".join(f"- {e}" for e in errors[:15])
