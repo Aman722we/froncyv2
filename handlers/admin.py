@@ -736,7 +736,15 @@ async def listsources_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             + (f" | ⚠️ {err[:60]}" if err else "")
         )
     
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 3800:
+            await update.message.reply_text(chunk, parse_mode="HTML")
+            chunk = line + "\n"
+        else:
+            chunk += line + "\n"
+    if chunk:
+        await update.message.reply_text(chunk, parse_mode="HTML")
 
 
 async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -769,14 +777,40 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await msg.edit_text("No active sources to sync. Add some with /addsource.")
         return
     
-    lines = ["<b>⚡ Sync Complete</b>\n"]
-    total_new = 0
+    total_new = sum(s.get("new", 0) for s in summaries)
+    total_errors = sum(1 for s in summaries if s.get("errors", 0) > 0)
+    
+    lines = [f"<b>⚡ Sync Complete ({len(summaries)} sources)</b>\n"]
+    
+    # Only show detailed logs for sources that actually had new jobs or errors if there are many sources
     for s in summaries:
-        total_new += s.get("new", 0)
+        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0:
+            continue
+            
         lines.append(
             f"<b>{s['company']}</b>\n"
             f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']} | Errors: {s['errors']}"
         )
     
     lines.append(f"\n🎉 <b>Total new jobs discovered: {total_new}</b>")
-    await msg.edit_text("\n".join(lines), parse_mode="HTML")
+    if len(summaries) > 10 and total_new == 0 and total_errors == 0:
+        lines.append("<i>(All other sources fetched 0 new jobs without errors.)</i>")
+        
+    chunk = ""
+    first_msg = True
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 3800:
+            if first_msg:
+                await msg.edit_text(chunk, parse_mode="HTML")
+                first_msg = False
+            else:
+                await update.message.reply_text(chunk, parse_mode="HTML")
+            chunk = line + "\n"
+        else:
+            chunk += line + "\n"
+            
+    if chunk:
+        if first_msg:
+            await msg.edit_text(chunk, parse_mode="HTML")
+        else:
+            await update.message.reply_text(chunk, parse_mode="HTML")
