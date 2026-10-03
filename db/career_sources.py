@@ -84,3 +84,13 @@ async def job_already_exists(provider: str, external_id: str) -> bool:
             provider.upper(), str(external_id)
         )
         return val is not None
+
+async def source_already_exists(provider: str, board_token: str) -> bool:
+    """Check if a source is already in the database."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        val = await conn.fetchval(
+            "SELECT 1 FROM career_sources WHERE provider = $1 AND board_token = $2",
+            provider.upper(), board_token.lower()
+        )
+        return val is not None

@@ -623,6 +623,83 @@ async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     logger.info(f"Admin added career source: {company_name} ({provider}/{board_token})")
 
 
+
+async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/bulkadd <list of sources> - Bulk add up to 50 sources at once.
+    Format per line: PROVIDER board_token Company Name
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+        
+    text = update.message.text
+    # Remove the command itself
+    lines = text.split("\n")[1:]
+    
+    if not lines or len(lines) == 0:
+        await update.message.reply_text(
+            "<b>Usage:</b> /bulkadd\n"
+            "GREENHOUSE doordash DoorDash\n"
+            "LEVER notion Notion\n"
+            "ASHBY linear Linear\n\n"
+            "<i>(Paste up to 50 lines at once)</i>",
+            parse_mode="HTML"
+        )
+        return
+        
+    if len(lines) > 50:
+        await update.message.reply_text("?O Please submit a maximum of 50 companies at a time to avoid rate limits.")
+        return
+
+    from db.career_sources import add_career_source, source_already_exists
+    
+    success_count = 0
+    skipped_count = 0
+    errors = []
+    
+    msg = await update.message.reply_text("dY 0 Processing bulk add...")
+    
+    for i, line in enumerate(lines):
+        parts = line.strip().split()
+        if not parts:
+            continue
+            
+        if len(parts) < 3:
+            errors.append(f"Line {i+1}: Invalid format -> {line[:20]}")
+            continue
+            
+        provider = parts[0].upper()
+        if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
+            errors.append(f"Line {i+1}: Unknown provider {provider}")
+            continue
+            
+        board_token = parts[1].lower()
+        company_name = " ".join(parts[2:])
+        
+        try:
+            if await source_already_exists(provider, board_token):
+                skipped_count += 1
+                continue
+                
+            await add_career_source(company_name, provider, board_token)
+            success_count += 1
+        except Exception as e:
+            errors.append(f"Line {i+1}: DB Error -> {str(e)[:30]}")
+            
+    summary = (
+        f"<b>dY"- Bulk Add Complete</b>\n\n"
+        f"dYY Added: {success_count}\n"
+        f"dY"- Skipped (already exist): {skipped_count}\n"
+        f"dY"' Failed: {len(errors)}\n"
+    )
+    if errors:
+        summary += "\n<b>Errors:</b>\n" + "\n".join(f"- {e}" for e in errors[:15])
+        if len(errors) > 15:
+            summary += f"\n...and {len(errors)-15} more."
+            
+    await msg.edit_text(summary, parse_mode="HTML")
+    logger.info(f"Admin bulk added {success_count} sources ({skipped_count} skipped, {len(errors)} errors)")
+
 async def listsources_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/listsources — List all configured career sources."""
     user_id = update.effective_user.id
