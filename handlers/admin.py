@@ -681,6 +681,12 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 skipped_count += 1
                 continue
                 
+            from services.career_fetcher import verify_board_token
+            is_valid = await verify_board_token(provider, board_token)
+            if not is_valid:
+                errors.append(f"Line {i+1}: 404 Not Found (Invalid token)")
+                continue
+                
             await add_career_source(company_name, provider, board_token)
             success_count += 1
         except Exception as e:

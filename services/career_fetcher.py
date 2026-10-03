@@ -207,3 +207,25 @@ async def fetch_jobs_for_source(source: dict) -> list[dict]:
         return await fetch_ashby_jobs(token)
     else:
         raise ValueError(f"Unknown provider: {provider}")
+
+
+async def verify_board_token(provider: str, token: str) -> bool:
+    """Quickly verify if a board token returns 200 OK before saving to DB."""
+    import httpx
+    provider = provider.upper()
+    
+    if provider == "GREENHOUSE":
+        url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs"
+    elif provider == "LEVER":
+        url = f"https://api.lever.co/v0/postings/{token}?mode=json"
+    elif provider == "ASHBY":
+        url = f"https://api.ashbyhq.com/posting-api/job-board/{token}"
+    else:
+        return False
+        
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "FroncyBot/2.0"})
+            return resp.status_code == 200
+    except Exception:
+        return False
