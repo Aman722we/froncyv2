@@ -23,12 +23,24 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
     # 1. Location Filter (Must be India or Global Remote, drop explicitly foreign)
     if loc:
-        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", "noida", "chennai", "kolkata", "remote - ind", "apac", "asia", "global", "anywhere"]
+        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", 
+"noida", "chennai", "kolkata", "remote - ind", "apac", "asia", "global", "anywhere"]
         is_india = any(c in loc for c in india_cities)
         
+        # If it doesn't explicitly mention India/Global AND doesn't mention Remote, it's a local foreign job
+        if not is_india and "remote" not in loc:
+            return False
+
+        # Even if it says "Remote", drop it if it specifically locks to a foreign region and NOT India
         if not is_india:
             import re
-            foreign_terms = ["us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", "france", "singapore", "poland", "romania", "netherlands", "brazil", "mexico", "colombia", "argentina", "new york", "san francisco", "seattle"]
+            foreign_terms = [
+                "us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", 
+                "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", 
+                "france", "singapore", "poland", "romania", "netherlands", "brazil", "mexico", 
+                "colombia", "argentina", "new york", "san francisco", "seattle", "portugal", 
+                "lisbon", "japan", "tokyo", "israel", "tel aviv", "dubai", "uae"
+            ]
             for term in foreign_terms:
                 if re.search(r'\b' + re.escape(term) + r'\b', loc):
                     return False  # Drop explicitly foreign jobs
@@ -38,7 +50,8 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
         "sales", "marketing", "account executive", "hr ", "human resources", "recruiter", 
         "finance", "accounting", "legal", "counsel", "customer success", "advocacy", 
         "content", "copywriter", "business development", "payroll", "tax",
-        "workplace", "facilities", "executive assistant", "vp ", "chief "
+        "workplace", "facilities", "executive assistant", "vp ", "chief ",
+        "solutions", "solution", "sales engineer", "support", "technical support", "manager", "director"
     ]
     for junk in junk_keywords:
         if junk in title or junk in dept:
@@ -188,7 +201,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 # Get all onboarded, non-deleted users
                 users = await conn.fetch(
                     """
-                    SELECT telegram_id, skills, location_pref, plan,
+                    SELECT telegram_id, bot_id, skills, location_pref, plan,
                            experience_level, batch_year, role_pref, is_trial, trial_expires_at
                     FROM users
                     WHERE is_onboarded = TRUE
@@ -239,7 +252,11 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         f"🔗 [Apply Now]({job_url})"
                     )
 
-                    await _bot_app.bot.send_message(
+                    from bot_registry import get_app_for_bot_id
+                    bot_id = user.get("bot_id", 1)
+                    target_app = get_app_for_bot_id(bot_id) or _bot_app
+                    
+                    await target_app.bot.send_message(
                         chat_id=user["telegram_id"],
                         text=msg,
                         parse_mode="MarkdownV2",

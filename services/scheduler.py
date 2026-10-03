@@ -5,6 +5,7 @@ Scraping has been removed. All jobs are manually curated via the admin panel.
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
+from bot_registry import get_app_for_bot_id
 from utils.error_alert import send_error_alert
 from db.connection import get_pool
 
@@ -44,7 +45,7 @@ async def _send_daily_alerts():
             # Get all users who should receive alerts at this specific hour
             users = await conn.fetch(
                 """
-                SELECT telegram_id, skills, location_pref, plan,
+                SELECT telegram_id, bot_id, skills, location_pref, plan,
                        experience_level, batch_year, role_pref, is_trial, trial_expires_at
                 FROM users
                 WHERE is_onboarded = TRUE AND alert_time = $1
@@ -97,8 +98,8 @@ async def _send_daily_alerts():
                 msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs)
                 kb = keyboards.daily_feed_keyboard(jobs, plan)
 
-                await _bot_app.bot.send_message(
-                    chat_id=user["telegram_id"],
+                await (get_app_for_bot_id(user.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=user["telegram_id"],
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
@@ -166,7 +167,7 @@ async def _process_reminders():
                     [InlineKeyboardButton("📋 View Application", callback_data=f"job_view_{r['job_id']}")]
                 ])
                 try:
-                    await _bot_app.bot.send_message(
+                    await (get_app_for_bot_id(r.get("bot_id", 1)) or _bot_app).bot.send_message(
                         chat_id=r["telegram_id"],
                         text=msg,
                         parse_mode="MarkdownV2",
@@ -202,7 +203,7 @@ async def _send_weekly_digest():
 
         async with pool.acquire() as conn:
             users = await conn.fetch(
-                """SELECT telegram_id, skills, first_name
+                """SELECT telegram_id, bot_id, skills, first_name
                    FROM users
                    WHERE is_onboarded = TRUE
                    AND (is_deleted IS NULL OR is_deleted = FALSE)"""
@@ -278,8 +279,8 @@ async def _send_weekly_digest():
                     [InlineKeyboardButton("📋 Open Tracker",     callback_data="tracker")],
                 ])
 
-                await _bot_app.bot.send_message(
-                    chat_id=telegram_id,
+                await (get_app_for_bot_id(u.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=telegram_id,
                     text=msg,
                     parse_mode="MarkdownV2",
                     reply_markup=kb
@@ -354,7 +355,7 @@ async def _send_evening_digest():
         async with pool.acquire() as conn:
             candidate_rows = await conn.fetch(
                 """
-                SELECT DISTINCT u.telegram_id
+                SELECT DISTINCT u.telegram_id, u.bot_id
                 FROM users u
                 WHERE u.is_onboarded = TRUE
                   AND (u.is_deleted IS NULL OR u.is_deleted = FALSE)
@@ -402,8 +403,8 @@ async def _send_evening_digest():
                     [InlineKeyboardButton("📋 Open Tracker", callback_data="tracker")]
                 ])
 
-                await _bot_app.bot.send_message(
-                    chat_id=telegram_id,
+                await (get_app_for_bot_id(u.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=telegram_id,
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",

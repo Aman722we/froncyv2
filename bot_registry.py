@@ -30,6 +30,14 @@ def get_primary_app() -> Application | None:
     return _registry.get(_primary_token, (None,))[0]
 
 
+
+def get_app_for_bot_id(bot_id: int) -> Application | None:
+    """Return the PTB Application for a given internal bot_id."""
+    for token, (app, bid) in _registry.items():
+        if bid == bot_id:
+            return app
+    return None
+
 def get_app_for_token(token: str) -> Application | None:
     """Return the PTB Application for a given bot token."""
     entry = _registry.get(token)
