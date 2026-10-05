@@ -401,6 +401,16 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     if role_pct == 20 and skill_pct <= 50:
         total_score = int(total_score * 0.5)
 
+    # HARD CAP FOR UNREALISTIC EXPERIENCE GAPS:
+    # If the job requires 2 or more years of experience than the user has,
+    # cap the max score at 45% so it NEVER triggers a 50% instant alert,
+    # regardless of how perfect the skills match. (+1 gap is allowed).
+    try:
+        if float(min_yoe) - float(u_exp_years) >= 2:
+            total_score = min(total_score, 45)
+    except:
+        pass
+
     total_score = max(0, min(100, total_score))
     return {
         "score": total_score,
