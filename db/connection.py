@@ -292,6 +292,53 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply multi-tenant migrations: {e}")
 
+        # Career Page Sources (Froncy V2)
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS career_sources (
+                    id                      SERIAL PRIMARY KEY,
+                    company_name            TEXT NOT NULL,
+                    provider                TEXT NOT NULL,  -- GREENHOUSE / LEVER / ASHBY
+                    board_token             TEXT NOT NULL,
+                    careers_url             TEXT,
+                    is_active               BOOLEAN DEFAULT TRUE,
+                    last_checked_at         TIMESTAMPTZ,
+                    last_successful_check_at TIMESTAMPTZ,
+                    last_error              TEXT,
+                    created_at              TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_career_sources_provider_token ON career_sources (provider, board_token);")
+            
+            # Pre-seed the 6 companies the admin specified
+            companies = [
+                ("Sourcegraph",              "GREENHOUSE", "sourcegraph91"),
+                ("G-P (Globalization Partners)", "GREENHOUSE", "globalizationpartners"),
+                ("SingleStore",              "GREENHOUSE", "singlestore"),
+                ("Gather AI",                "GREENHOUSE", "gatherai"),
+                ("AlphaSense",               "GREENHOUSE", "alphasense"),
+                ("Fingerprint",              "GREENHOUSE", "fingerprint"),
+            ]
+            for cname, provider, token in companies:
+                await conn.execute(
+                    """
+                    INSERT INTO career_sources (company_name, provider, board_token)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    cname, provider, token
+                )
+            
+            # Add freshness tracking columns to manual_jobs
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'manual';")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS source_provider TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS source_external_id TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS description TEXT;")
+            await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_jobs_source ON manual_jobs (source_provider, source_external_id) WHERE source_external_id IS NOT NULL;")
+        except Exception as e:
+            logger.warning(f"Failed to apply career_sources migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

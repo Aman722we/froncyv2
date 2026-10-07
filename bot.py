@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command
+from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
@@ -171,6 +171,11 @@ def build_bot(token: str | None = None) -> Application:
 
     # Admin Handlers
     app.add_handler(get_addjob_handler())
+    app.add_handler(CommandHandler("addsource", addsource_command))
+    app.add_handler(CommandHandler("delsource", delsource_command))
+    app.add_handler(CommandHandler("bulkadd", bulkadd_command))
+    app.add_handler(CommandHandler("listsources", listsources_command))
+    app.add_handler(CommandHandler("syncnow", syncnow_command))
     app.add_handler(CommandHandler("analytics", analytics_command))
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))

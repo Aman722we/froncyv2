@@ -23,25 +23,55 @@ def get_mode_for_plan(plan: str) -> LLMMode:
     return LLMMode.FAST
 
 
-def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]:
-    """Get the appropriate OpenAI client and model name for the mode."""
-    if mode == LLMMode.QUALITY:
-        client = AsyncOpenAI(
-            base_url=settings.NVIDIA_BASE_URL,
-            api_key=settings.NVIDIA_API_KEY_70B,
-            timeout=timeout,
-            max_retries=0,
-        )
-        model = settings.NVIDIA_MODEL_70B
-    else:
-        client = AsyncOpenAI(
-            base_url=settings.NVIDIA_BASE_URL,
-            api_key=settings.NVIDIA_API_KEY_8B,
-            timeout=timeout,
-            max_retries=0,
-        )
-        model = settings.NVIDIA_MODEL_8B
+import time
 
+_key_cooldowns = {}
+_rr_index_8b = 0
+_rr_index_70b = 0
+
+def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]:
+    """Get the appropriate OpenAI client and model name for the mode. Supports round-robin multi-key."""
+    global _rr_index_8b, _rr_index_70b
+    
+    if mode == LLMMode.QUALITY:
+        keys_str = settings.NVIDIA_API_KEY_70B
+        model = settings.NVIDIA_MODEL_70B
+        is_8b = False
+    else:
+        keys_str = settings.NVIDIA_API_KEY_8B
+        model = settings.NVIDIA_MODEL_8B
+        is_8b = True
+
+    keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+    if not keys:
+        raise ValueError("No API keys configured.")
+
+    now = time.time()
+    start_idx = _rr_index_8b if is_8b else _rr_index_70b
+    
+    selected_key = None
+    for i in range(len(keys)):
+        idx = (start_idx + i) % len(keys)
+        candidate = keys[idx]
+        if _key_cooldowns.get(candidate, 0.0) < now:
+            selected_key = candidate
+            if is_8b:
+                _rr_index_8b = (idx + 1) % len(keys)
+            else:
+                _rr_index_70b = (idx + 1) % len(keys)
+            break
+            
+    if not selected_key:
+        # All keys on cooldown, pick the one freeing up earliest to avoid crashing
+        selected_key = min(keys, key=lambda k: _key_cooldowns.get(k, 0.0))
+
+    client = AsyncOpenAI(
+        base_url=settings.NVIDIA_BASE_URL,
+        api_key=selected_key,
+        timeout=timeout,
+        max_retries=0,
+    )
+    client._used_api_key = selected_key
     return client, model
 
 
@@ -302,6 +332,7 @@ async def check_resume_parseable(resume_text: str) -> bool:
             ],
             temperature=0.0,
             max_tokens=50,
+            extra_body={"reasoning_effort": "low"},
         )
         answer = response.choices[0].message.content.strip().upper()
         logger.info(f"Resume parseability check: {answer}")
@@ -404,6 +435,7 @@ Return the JSON now:"""
                 ],
                 temperature=0.0,
                 max_tokens=5000,
+                extra_body={"reasoning_effort": "low"},
                 top_p=1,
             )
             import re
@@ -699,3 +731,87 @@ Generate the outreach messages now:"""
                 return {}
 
     return {}
+
+
+_llm_cooldown_until = 0.0
+
+async def extract_job_metadata(job_description: str) -> dict:
+    """
+    Extract skills and minimum years of experience from a raw job description using AI.
+    Returns: {"skills": ["skill1", "skill2"], "min_yoe": 2}
+    """
+    import json
+    import time
+    global _key_cooldowns
+    
+
+    system_prompt = """You are an expert technical recruiter. Your task is to extract structured data from a raw job description.
+Read the job description and extract two things:
+1. "skills": A list of technical skills, tools, and languages mentioned (e.g., ["Python", "React", "AWS"]). If none are found, return an empty list.
+2. "min_yoe": The absolute minimum years of experience required for this role as an integer. For example, if it says "3-5 years", return 3. If it says "5+ years", return 5. If it says "Entry level" or no explicit minimum years are mentioned, return 0.
+
+Output EXACTLY and ONLY valid JSON matching this schema:
+{"skills": ["skill1", "skill2"], "min_yoe": 2}
+Do not include markdown formatting or backticks, just the raw JSON.
+"""
+
+    user_message = f"Job Description:\n{job_description[:6000]}\n\nReturn JSON now:"
+
+
+    for attempt in range(5):  # Try up to 5 times to rotate through keys
+        client, model = _get_client(LLMMode.FAST, timeout=30.0)
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.0,
+                max_tokens=1000,
+                extra_body={"reasoning_effort": "low"},
+            )
+            result = response.choices[0].message.content.strip()
+            
+            import re
+            match = re.search(r'\{.*\}', result, re.DOTALL)
+            if not match:
+                raise ValueError(f"No JSON braces found in LLM response: {repr(result)}")
+            
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError as e:
+                raise ValueError(f"JSON decode error: {e}. Raw extracted: {repr(match.group())}")
+            
+            # Normalize skills to list of strings, min_yoe to int
+            skills = data.get("skills", [])
+            if not isinstance(skills, list):
+                skills = []
+            skills = [str(s) for s in skills]
+            
+            try:
+                min_yoe = int(data.get("min_yoe", 0))
+            except (ValueError, TypeError):
+                min_yoe = 0
+                
+            return {
+                "skills": skills,
+                "min_yoe": min_yoe
+            }
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Rate limit" in err_str:
+                import re
+                import time
+                match = re.search(r"try again in ([\d\.]+)s", err_str)
+                wait_sec = float(match.group(1)) if match else 15.0
+                used_key = getattr(client, '_used_api_key', None)
+                if used_key:
+                    _key_cooldowns[used_key] = time.time() + wait_sec + 1.0
+                logger.warning(f"LLM Rate limit hit. Circuit breaker active for {wait_sec + 2.0:.1f}s.")
+                continue # Try the next key immediately
+                
+            logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
+            
+    return {"skills": [], "min_yoe": 0}
+

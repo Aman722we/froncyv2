@@ -46,25 +46,27 @@ def skills_prompt(first_name: str = None) -> str:
 
 
 def trial_activated_message(trial_expires_at) -> str:
-    """Shown after onboarding completes — announces the 3-day Pro trial."""
+    """Shown after onboarding completes."""
     if trial_expires_at:
         from datetime import timezone
-        expires_str = escape_md(
-            trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC")
-        )
+        expires_str = escape_md(trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC"))
     else:
         expires_str = "72 hours from now"
     return (
-        "🎉 *3\\-Day Pro Trial — Activated\\!*\n\n"
-        "For the next 72 hours you have full Pro access:\n"
-        "✅ Unlimited jobs\n"
-        "✅ 10 cover letters/day\n"
-        "✅ Full match scores on every job\n"
-        "✅ 5 ATS checks/day\n"
-        "✅ Unlimited application tracking\n"
-        "✅ 7\\-day follow\\-up reminders\n\n"
-        "*No card needed\\. No auto\\-charge\\. Ever\\.* \n\n"
-        "After 3 days you choose — upgrade or stay free\\.\n"
+        "\U0001F680 *3\\-Day Pro Trial — Activated\\!*\n\n"
+        "For the next 72 hours, you have full Pro access:\n\n"
+        "\u26A1 *Instant job alerts*\n"
+        "Get notified when a relevant job appears directly on company career pages\\.\n\n"
+        "\U0001F3AF *Full Job Match Scores*\n"
+        "See how well each opportunity matches your profile\\.\n\n"
+        "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
+        "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
+        "\U0001F464 *HR Contact Requests*\n"
+        "Found a job worth applying to? Request the relevant hiring/HR contact from Froncy\\.\n\n"
+        "\U0001F4C4 *Resume Review*\n"
+        "You can request a human review of your resume when you need help understanding why you're not getting interview calls\\.\n\n"
+        "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
+        "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
         f"Your trial expires: {expires_str}\n\n"
         "*What would you like to do first?*"
@@ -233,37 +235,46 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     from datetime import datetime, timezone
     import re
 
-    # ── Skills (40%) ──
+    # ?? Skills (40%) ??
     user_skills = user.get("skills", [])
     job_skills = job.get("skills", [])
+    job_desc = (job.get("description") or "").lower()
 
-    if not job_skills:
+    matched_disp, missing_disp = [], []
+    skill_pct = 50
+
+    if not job_skills and not job_desc:
         skill_pct = 50
-        matched_disp, missing_disp = [], []
     else:
         user_set = set(s.lower() for s in user_skills)
-        matched_disp, missing_disp = [], []
         matched_count = 0
         
-        for raw_jskill in job_skills:
-            jskill_lower = raw_jskill.lower()
-            if "/" in jskill_lower:
-                # Treat as an "OR" condition
-                sub_skills = [s.strip() for s in jskill_lower.split("/")]
-                if any(sub in user_set for sub in sub_skills):
-                    matched_count += 1
-                    matched_disp.append(raw_jskill)
+        if job_skills:
+            for raw_jskill in job_skills:
+                jskill_lower = raw_jskill.lower()
+                if "/" in jskill_lower:
+                    sub_skills = [s.strip() for s in jskill_lower.split("/")]
+                    if any(sub in user_set for sub in sub_skills):
+                        matched_count += 1
+                        matched_disp.append(raw_jskill)
+                    else:
+                        missing_disp.append(raw_jskill)
                 else:
-                    missing_disp.append(raw_jskill)
-            else:
-                if jskill_lower in user_set:
+                    if jskill_lower in user_set:
+                        matched_count += 1
+                        matched_disp.append(raw_jskill)
+                    else:
+                        missing_disp.append(raw_jskill)
+            skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
+        elif job_desc and user_set:
+            for s in user_set:
+                if re.search(r"\b" + re.escape(s) + r"\b", job_desc):
                     matched_count += 1
-                    matched_disp.append(raw_jskill)
+                    matched_disp.append(s)
                 else:
-                    missing_disp.append(raw_jskill)
-
-        skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
-
+                    missing_disp.append(s)
+            denominator = min(3, max(1, len(user_set)))
+            skill_pct = min(100, int((matched_count / denominator) * 100))
     # ── Experience (25%) ──
     user_exp = str(user.get("experience_level", "0")).strip()
     u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
@@ -283,20 +294,21 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ── Role Preference (10%) ──
+    # ?? Role Preference (10%) ??
     role_pref = (user.get("role_pref") or "fullstack").lower()
     job_title = (job.get("title") or "").lower()
     job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
 
+    TECH_GENERIC = ["engineer", "developer", "sde", "programmer", "software", "coder", "architect"]
+    
     ROLE_KEYWORDS = {
-        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"],
-        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"],
-        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"],
+        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"] + TECH_GENERIC,
+        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"] + TECH_GENERIC,
+        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"] + TECH_GENERIC,
     }
     role_words = ROLE_KEYWORDS.get(role_pref, [])
     if role_pref == "fullstack":
-        role_words = ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]
-
+        role_words = list(set(ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]))
     title_match = any(kw in job_title for kw in role_words)
     skills_match = any(kw in s for kw in role_words for s in job_skills_lower)
 
@@ -375,7 +387,7 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         batch_str = "/".join(str(b) for b in eligible_batches)
         batch_note = f"⚠️ Batch mismatch: Job requires {batch_str}, your batch is {user_batch or 'unknown'}"
 
-    # ── Final weighted score ──
+    # ?? Final weighted score ??
     total_score = int(
         (skill_pct * 0.40) +
         (exp_pct   * 0.25) +
@@ -383,8 +395,25 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         (role_pct  * 0.10) +
         (salary_pct * 0.10)
     )
-    total_score = max(0, min(100, total_score))
 
+    NON_TECH = ["marketing", "sales", "account executive", "hr ", "human resources", "recruiter", "finance", "legal", "customer", "advocacy", "content", "copywriter", "business", "operations", "vp ", "chief ", "director ", "counsel"]
+    if any(kw in job_title for kw in NON_TECH) and not any(kw in job_title for kw in ["engineer", "developer"]):
+        total_score = 0
+        
+    if role_pct == 20 and skill_pct <= 50:
+        total_score = int(total_score * 0.5)
+
+    # HARD CAP FOR UNREALISTIC EXPERIENCE GAPS:
+    # If the job requires 2 or more years of experience than the user has,
+    # cap the max score at 45% so it NEVER triggers a 50% instant alert,
+    # regardless of how perfect the skills match. (+1 gap is allowed).
+    try:
+        if float(min_yoe) - float(u_exp_years) >= 2:
+            total_score = min(total_score, 45)
+    except:
+        pass
+
+    total_score = max(0, min(100, total_score))
     return {
         "score": total_score,
         "skill_pct": skill_pct,
@@ -913,28 +942,32 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
     slots_left = pricing.get('slots_remaining', 200)
 
     return (
-        f"🔥 *Early Adopter Offer*\n\n"
-        f"*₹{ea_price}/month* \\(regular price ~₹{reg_price}~\\)\n"
-        f"Lock this price in forever, it won't increase for you\\.\n\n"
-        f"⏳ _Only {pricing.get('slots_remaining', 200)} of 200 early adopter slots remaining_\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "*🎯 Why upgrade?*\n\n"
-        "🚀 One\\-click Apply Smart Kit \\(ATS Resume \\+ Cover Letter \\+ Outreach\\)\n"
-        "🧠 AI\\-tailored ATS Resume PDFs for every job\n"
-        "📨 Personalised cold emails \\& LinkedIn DMs to the hiring manager\n"
-        "⏰ Never miss a follow\\-up with smart reminders\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "*🔓 What you unlock*\n\n"
-        "✅ 10 Apply Smart kits/day \\(ATS Resume \\+ full outreach\\)\n"
-        "✅ Unlimited job alerts daily\n"
-        "✅ Full job match scores\n"
-        "✅ AI cover letters \\(10/day\\)\n"
-        "✅ Resume ATS checks \\(5/day\\)\n"
-        "✅ Application tracker \\+ reminders\n"
-        "✅ Faster AI \\(Llama 3 70B\\)\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "_Built for devs who are serious about getting interviews faster\\._ 💡\n\n"
-        "*Cancel anytime\\. No hidden charges\\.*"
+        "\U0001F680 *Froncy Pro — Early Adopter Offer*\n\n"
+        f"*₹{ea_price}/month*\n"
+        f"Regular price: ~₹{reg_price}/month~\n\n"
+        f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
+        f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
+        "*Why upgrade?*\n\n"
+        "\u26A1 *Get relevant jobs instantly*\n"
+        "Froncy continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
+        "\U0001F3AF *Know which jobs fit you*\n"
+        "Get full match scores based on your skills, experience and profile\\.\n\n"
+        "\U0001F3E2 *Direct\\-source opportunities*\n"
+        "Get fresh jobs directly from company career pages — before they become widely circulated\\.\n\n"
+        "\U0001F464 *Get hiring contacts*\n"
+        "Request relevant HR/recruiter contacts for jobs you actually want to pursue\\.\n\n"
+        "\U0001F4C4 *Human Resume Review*\n"
+        "Get your resume reviewed and understand what may be stopping you from getting interview calls\\.\n\n"
+        "*What you unlock*\n\n"
+        "\u2705 Instant matched job alerts\n"
+        "\u2705 Full job match scores\n"
+        "\u2705 Unlimited job alerts\n"
+        "\u2705 HR contact requests \\(15/month\\)\n"
+        "\u2705 Human resume review \\(One time\\)\n"
+        "\u2705 Application tracking & follow\\-up reminders\n\n"
+        "No unnecessary AI features\\.\n"
+        "Just the things that help you find and pursue better opportunities faster\\.\n\n"
+        "Cancel anytime\\. No hidden charges\\."
     )
 
 

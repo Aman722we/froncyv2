@@ -5,6 +5,7 @@ Scraping has been removed. All jobs are manually curated via the admin panel.
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
+from bot_registry import get_app_for_bot_id
 from utils.error_alert import send_error_alert
 from db.connection import get_pool
 
@@ -44,7 +45,7 @@ async def _send_daily_alerts():
             # Get all users who should receive alerts at this specific hour
             users = await conn.fetch(
                 """
-                SELECT telegram_id, skills, location_pref, plan,
+                SELECT telegram_id, bot_id, skills, location_pref, plan,
                        experience_level, batch_year, role_pref, is_trial, trial_expires_at
                 FROM users
                 WHERE is_onboarded = TRUE AND alert_time = $1
@@ -97,8 +98,8 @@ async def _send_daily_alerts():
                 msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs)
                 kb = keyboards.daily_feed_keyboard(jobs, plan)
 
-                await _bot_app.bot.send_message(
-                    chat_id=user["telegram_id"],
+                await (get_app_for_bot_id(user.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=user["telegram_id"],
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
@@ -166,7 +167,7 @@ async def _process_reminders():
                     [InlineKeyboardButton("📋 View Application", callback_data=f"job_view_{r['job_id']}")]
                 ])
                 try:
-                    await _bot_app.bot.send_message(
+                    await (get_app_for_bot_id(r.get("bot_id", 1)) or _bot_app).bot.send_message(
                         chat_id=r["telegram_id"],
                         text=msg,
                         parse_mode="MarkdownV2",
@@ -202,7 +203,7 @@ async def _send_weekly_digest():
 
         async with pool.acquire() as conn:
             users = await conn.fetch(
-                """SELECT telegram_id, skills, first_name
+                """SELECT telegram_id, bot_id, skills, first_name
                    FROM users
                    WHERE is_onboarded = TRUE
                    AND (is_deleted IS NULL OR is_deleted = FALSE)"""
@@ -278,8 +279,8 @@ async def _send_weekly_digest():
                     [InlineKeyboardButton("📋 Open Tracker",     callback_data="tracker")],
                 ])
 
-                await _bot_app.bot.send_message(
-                    chat_id=telegram_id,
+                await (get_app_for_bot_id(u.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=telegram_id,
                     text=msg,
                     parse_mode="MarkdownV2",
                     reply_markup=kb
@@ -354,7 +355,7 @@ async def _send_evening_digest():
         async with pool.acquire() as conn:
             candidate_rows = await conn.fetch(
                 """
-                SELECT DISTINCT u.telegram_id
+                SELECT DISTINCT u.telegram_id, u.bot_id
                 FROM users u
                 WHERE u.is_onboarded = TRUE
                   AND (u.is_deleted IS NULL OR u.is_deleted = FALSE)
@@ -402,8 +403,8 @@ async def _send_evening_digest():
                     [InlineKeyboardButton("📋 Open Tracker", callback_data="tracker")]
                 ])
 
-                await _bot_app.bot.send_message(
-                    chat_id=telegram_id,
+                await (get_app_for_bot_id(u.get("bot_id", 1)) or _bot_app).bot.send_message(
+                        chat_id=telegram_id,
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
@@ -424,6 +425,20 @@ async def _send_evening_digest():
         if _bot_app:
             try:
                 await send_error_alert(_bot_app.bot, "Scheduler — _send_evening_digest", e)
+            except Exception:
+                pass
+
+
+async def _run_career_sync_job():
+    """Background scheduled job: sync all active career page sources."""
+    try:
+        from services.career_sync import run_career_sync
+        await run_career_sync()
+    except Exception as e:
+        logger.error(f"❌ Career sync job failed: {e}")
+        if _bot_app:
+            try:
+                await send_error_alert(_bot_app.bot, "Scheduler — _run_career_sync_job", e)
             except Exception:
                 pass
 
@@ -474,6 +489,15 @@ def start_scheduler():
         CronTrigger(hour=0, minute=5),
         id="downgrade_expired_trials",
         name="Downgrade expired trials to free plan",
+        replace_existing=True,
+    )
+
+    # Career Page Sync (Froncy V2) — every 15 minutes
+    scheduler.add_job(
+        _run_career_sync_job,
+        CronTrigger(minute="0"),
+        id="career_page_sync",
+        name="Sync career pages every 60 min",
         replace_existing=True,
     )
 

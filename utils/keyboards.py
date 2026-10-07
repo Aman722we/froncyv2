@@ -154,10 +154,7 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
             InlineKeyboardButton("📋 My Applications", callback_data="tracker"),
         ],
         [
-            InlineKeyboardButton("✍️ Cover Letter", callback_data="menu_coverletter"),
             InlineKeyboardButton("🔗 Submit Job Link", callback_data="submit_job_link_info"),
-        ],
-        [
             InlineKeyboardButton("📂 My Submitted Links", callback_data="my_links"),
         ],
     ]
@@ -327,11 +324,10 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
 def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False, is_applied: bool = False) -> InlineKeyboardMarkup:
     """Actions for a single job detail view.
     Layout:
-        Row 1: [🚀 Apply Smart (Complete Kit)]        ← Full Width
-        Row 2: [📄 ATS Resume]  [✍️ Cover Letter]
-        Row 3: [✅ Mark as Applied]  [⏳ Remind Me]
-        Row 4: [🔗 Open Link]  [⬅️ Back]
-    """
+        Row 1: [Cover Letter]
+        Row 2: [Mark as Applied]  [Remind Me]
+        Row 3: [Open Link]  [Back]
+        (Apply Smart and ATS Resume temporarily hidden for MVP)"""
     is_manual = job.get("is_manual", False)
     prefix = "manual" if is_manual else "job"
     cl_prefix = "manual_cl" if is_manual else "cl"
@@ -354,30 +350,11 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 
     buttons = []
 
-    # Row 1: Apply Smart — Full Width (only for manual jobs that have HM data)
-    # Show for all manual jobs; the handler will check quota and HM availability
-    if is_manual:
-        if apply_smart_locked:
-            buttons.append([
-                InlineKeyboardButton("🔒 Apply Smart — Limit Reached (Upgrade)", callback_data="apply_smart_locked"),
-            ])
-        else:
-            buttons.append([
-                InlineKeyboardButton("🚀 Apply Smart (Complete Kit)", callback_data=f"apply_smart_{job['id']}"),
-            ])
+    # Row 1: Cover Letter Only (Apply Smart & ATS temporarily hidden)
+    buttons.append([
+        InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
+    ])
     
-    # Row 2: ATS + Cover Letter
-    if plan in ("pro", "trial"):
-        buttons.append([
-            InlineKeyboardButton("📄 ATS Resume [BETA]", callback_data=f"{ats_prefix}_job_{job['id']}"),
-            InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-        ])
-    else:
-        buttons.append([
-            InlineKeyboardButton("🔒 ATS Resume (Pro)", callback_data="menu_upgrade"),
-            InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-        ])
-
     # Row 3: Mark as Applied (or "✅ Applied" if already applied) + Remind Me
     applied_label = "✅ Applied" if is_applied else "✅ Mark as Applied"
     buttons.append([

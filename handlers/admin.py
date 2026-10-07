@@ -580,3 +580,265 @@ async def setcreator_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.info(f"Admin linked creator_telegram_id={creator_tg_id} to bot_id={bot_id}")
     else:
         await update.message.reply_text(f"❌ Failed to link. Check that bot_id={bot_id} exists.")
+
+
+
+async def delsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/delsource <id> - Delete a career source."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+        
+    args = context.args
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("Usage: /delsource <id>")
+        return
+        
+    source_id = int(args[0])
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute("DELETE FROM career_sources WHERE id = $1", source_id)
+        if res == "DELETE 1":
+            await update.message.reply_text(f"\u2705 Deleted source {source_id}")
+        else:
+            await update.message.reply_text(f"\u274C Source {source_id} not found.")
+
+async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/addsource <provider> <board_token> <Company Name> — Add a career source to monitor."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    args = context.args
+    if not args or len(args) < 3:
+        await update.message.reply_text(
+            "<b>Usage:</b> /addsource <provider> <board_token> <Company Name>\n\n"
+            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/addsource GREENHOUSE gatherai Gather AI</code>\n"
+            "<code>/addsource LEVER notion Notion</code>\n"
+            "<code>/addsource ASHBY linear Linear</code>",
+            parse_mode="HTML"
+        )
+        return
+    
+    provider = args[0].upper()
+    if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
+        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, or ASHBY.", parse_mode="HTML")
+        return
+    
+    board_token = args[1].lower()
+    company_name = " ".join(args[2:])
+    
+    from db.career_sources import add_career_source
+    new_id = await add_career_source(company_name, provider, board_token)
+    await update.message.reply_text(
+        f"✅ <b>Source added!</b>\n\n"
+        f"<b>ID:</b> {new_id}\n"
+        f"<b>Company:</b> {company_name}\n"
+        f"<b>Provider:</b> {provider}\n"
+        f"<b>Token:</b> <code>{board_token}</code>\n\n"
+        f"Use /listsources to verify, or /syncnow to test immediately.",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin added career source: {company_name} ({provider}/{board_token})")
+
+
+
+async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/bulkadd <list of sources> - Bulk add up to 50 sources at once.
+    Format per line: PROVIDER board_token Company Name
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+        
+    text = update.message.text
+    # Remove the command itself
+    lines = text.split("\n")[1:]
+    
+    if not lines or len(lines) == 0:
+        await update.message.reply_text(
+            "<b>Usage:</b> /bulkadd\n"
+            "GREENHOUSE doordash DoorDash\n"
+            "LEVER notion Notion\n"
+            "ASHBY linear Linear\n\n"
+            "<i>(Paste up to 50 lines at once)</i>",
+            parse_mode="HTML"
+        )
+        return
+        
+    if len(lines) > 50:
+        await update.message.reply_text("?O Please submit a maximum of 50 companies at a time to avoid rate limits.")
+        return
+
+    from db.career_sources import add_career_source, source_already_exists
+    
+    success_count = 0
+    skipped_count = 0
+    errors = []
+    
+    msg = await update.message.reply_text("⏳ Processing bulk add...")
+    
+    for i, line in enumerate(lines):
+        parts = line.strip().split()
+        if not parts:
+            continue
+            
+        if len(parts) < 3:
+            errors.append(f"Line {i+1}: Invalid format -> {line[:20]}")
+            continue
+            
+        provider = parts[0].upper()
+        if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
+            errors.append(f"Line {i+1}: Unknown provider {provider}")
+            continue
+            
+        board_token = parts[1].lower()
+        company_name = " ".join(parts[2:])
+        
+        try:
+            if await source_already_exists(provider, board_token):
+                skipped_count += 1
+                continue
+                
+            from services.career_fetcher import verify_board_token
+            is_valid = await verify_board_token(provider, board_token)
+            if not is_valid:
+                errors.append(f"Line {i+1}: 404 Not Found (Invalid token)")
+                continue
+                
+            await add_career_source(company_name, provider, board_token)
+            success_count += 1
+        except Exception as e:
+            errors.append(f"Line {i+1}: DB Error -> {str(e)[:30]}")
+            
+    summary = (
+        f"<b>⚡ Bulk Add Complete</b>\n\n"
+        f"✅ Added: {success_count}\n"
+        f"⏩ Skipped (already exist): {skipped_count}\n"
+        f"❌ Failed: {len(errors)}\n"
+    )
+    if errors:
+        summary += "\n<b>Errors:</b>\n" + "\n".join(f"- {e}" for e in errors[:15])
+        if len(errors) > 15:
+            summary += f"\n...and {len(errors)-15} more."
+            
+    await msg.edit_text(summary, parse_mode="HTML")
+    logger.info(f"Admin bulk added {success_count} sources ({skipped_count} skipped, {len(errors)} errors)")
+
+async def listsources_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/listsources — List all configured career sources."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    from db.career_sources import get_all_career_sources
+    sources = await get_all_career_sources()
+    
+    if not sources:
+        await update.message.reply_text("No career sources configured yet. Use /addsource to add one.")
+        return
+    
+    from datetime import timezone, datetime
+    now = datetime.now(timezone.utc)
+    
+    lines = [f"<b>📡 Career Sources ({len(sources)} total)</b>\n"]
+    for s in sources:
+        status = "🟢" if s["is_active"] else "🔴"
+        last_check = s["last_checked_at"]
+        last_ok = s["last_successful_check_at"]
+        err = s["last_error"]
+        
+        if last_check:
+            mins = int((now - last_check.replace(tzinfo=timezone.utc) if last_check.tzinfo is None else (now - last_check)).total_seconds() / 60)
+            check_str = f"{mins}m ago"
+        else:
+            check_str = "never"
+        
+        lines.append(
+            f"{status} <b>{s['company_name']}</b> [{s['provider']}]\n"
+            f"   Token: <code>{s['board_token']}</code> | ID: {s['id']}\n"
+            f"   Last checked: {check_str}"
+            + (f" | ⚠️ {err[:60]}" if err else "")
+        )
+    
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 3800:
+            await update.message.reply_text(chunk, parse_mode="HTML")
+            chunk = line + "\n"
+        else:
+            chunk += line + "\n"
+    if chunk:
+        await update.message.reply_text(chunk, parse_mode="HTML")
+
+
+async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/syncnow [source_id] — Manually trigger a career page sync."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+    
+    from datetime import timezone
+    
+    args = context.args
+    specific_id = int(args[0]) if args and args[0].isdigit() else None
+    
+    msg = await update.message.reply_text("⚡ Running career sync...")
+    
+    if specific_id:
+        from db.career_sources import get_all_career_sources
+        from services.career_sync import sync_one_source
+        sources = await get_all_career_sources()
+        source = next((s for s in sources if s["id"] == specific_id), None)
+        if not source:
+            await msg.edit_text(f"❌ No source found with ID {specific_id}")
+            return
+        summaries = [await sync_one_source(source)]
+    else:
+        from services.career_sync import run_career_sync
+        summaries = await run_career_sync()
+    
+    if not summaries:
+        await msg.edit_text("No active sources to sync. Add some with /addsource.")
+        return
+    
+    total_new = sum(s.get("new", 0) for s in summaries)
+    total_errors = sum(1 for s in summaries if s.get("errors", 0) > 0)
+    
+    lines = [f"<b>⚡ Sync Complete ({len(summaries)} sources)</b>\n"]
+    
+    # Only show detailed logs for sources that actually had new jobs or errors if there are many sources
+    for s in summaries:
+        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0:
+            continue
+            
+        lines.append(
+            f"<b>{s['company']}</b>\n"
+            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']} | Errors: {s['errors']}"
+        )
+    
+    lines.append(f"\n🎉 <b>Total new jobs discovered: {total_new}</b>")
+    if len(summaries) > 10 and total_new == 0 and total_errors == 0:
+        lines.append("<i>(All other sources fetched 0 new jobs without errors.)</i>")
+        
+    chunk = ""
+    first_msg = True
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 3800:
+            if first_msg:
+                await msg.edit_text(chunk, parse_mode="HTML")
+                first_msg = False
+            else:
+                await update.message.reply_text(chunk, parse_mode="HTML")
+            chunk = line + "\n"
+        else:
+            chunk += line + "\n"
+            
+    if chunk:
+        if first_msg:
+            await msg.edit_text(chunk, parse_mode="HTML")
+        else:
+            await update.message.reply_text(chunk, parse_mode="HTML")
