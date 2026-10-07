@@ -46,25 +46,27 @@ def skills_prompt(first_name: str = None) -> str:
 
 
 def trial_activated_message(trial_expires_at) -> str:
-    """Shown after onboarding completes — announces the 3-day Pro trial."""
+    """Shown after onboarding completes."""
     if trial_expires_at:
         from datetime import timezone
-        expires_str = escape_md(
-            trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC")
-        )
+        expires_str = escape_md(trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC"))
     else:
         expires_str = "72 hours from now"
     return (
-        "🎉 *3\\-Day Pro Trial — Activated\\!*\n\n"
-        "For the next 72 hours you have full Pro access:\n"
-        "✅ Unlimited jobs\n"
-        "✅ 10 cover letters/day\n"
-        "✅ Full match scores on every job\n"
-        "✅ 5 ATS checks/day\n"
-        "✅ Unlimited application tracking\n"
-        "✅ 7\\-day follow\\-up reminders\n\n"
-        "*No card needed\\. No auto\\-charge\\. Ever\\.* \n\n"
-        "After 3 days you choose — upgrade or stay free\\.\n"
+        "\U0001F680 *3\\-Day Pro Trial — Activated\\!*\n\n"
+        "For the next 72 hours, you have full Pro access:\n\n"
+        "\u26A1 *Instant job alerts*\n"
+        "Get notified when a relevant job appears directly on company career pages\\.\n\n"
+        "\U0001F3AF *Full Job Match Scores*\n"
+        "See how well each opportunity matches your profile\\.\n\n"
+        "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
+        "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
+        "\U0001F464 *HR Contact Requests*\n"
+        "Found a job worth applying to? Request the relevant hiring/HR contact from Froncy\\.\n\n"
+        "\U0001F4C4 *Resume Review*\n"
+        "You can request a human review of your resume when you need help understanding why you're not getting interview calls\\.\n\n"
+        "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
+        "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
         f"Your trial expires: {expires_str}\n\n"
         "*What would you like to do first?*"
@@ -940,28 +942,32 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
     slots_left = pricing.get('slots_remaining', 200)
 
     return (
-        f"🔥 *Early Adopter Offer*\n\n"
-        f"*₹{ea_price}/month* \\(regular price ~₹{reg_price}~\\)\n"
-        f"Lock this price in forever, it won't increase for you\\.\n\n"
-        f"⏳ _Only {pricing.get('slots_remaining', 200)} of 200 early adopter slots remaining_\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "*🎯 Why upgrade?*\n\n"
-        "🚀 One\\-click Apply Smart Kit \\(ATS Resume \\+ Cover Letter \\+ Outreach\\)\n"
-        "🧠 AI\\-tailored ATS Resume PDFs for every job\n"
-        "📨 Personalised cold emails \\& LinkedIn DMs to the hiring manager\n"
-        "⏰ Never miss a follow\\-up with smart reminders\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "*🔓 What you unlock*\n\n"
-        "✅ 10 Apply Smart kits/day \\(ATS Resume \\+ full outreach\\)\n"
-        "✅ Unlimited job alerts daily\n"
-        "✅ Full job match scores\n"
-        "✅ AI cover letters \\(10/day\\)\n"
-        "✅ Resume ATS checks \\(5/day\\)\n"
-        "✅ Application tracker \\+ reminders\n"
-        "✅ Faster AI \\(Llama 3 70B\\)\n\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "_Built for devs who are serious about getting interviews faster\\._ 💡\n\n"
-        "*Cancel anytime\\. No hidden charges\\.*"
+        "\U0001F680 *Froncy Pro — Early Adopter Offer*\n\n"
+        f"*₹{ea_price}/month*\n"
+        f"Regular price: ~₹{reg_price}/month~\n\n"
+        f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
+        f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
+        "*Why upgrade?*\n\n"
+        "\u26A1 *Get relevant jobs instantly*\n"
+        "Froncy continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
+        "\U0001F3AF *Know which jobs fit you*\n"
+        "Get full match scores based on your skills, experience and profile\\.\n\n"
+        "\U0001F3E2 *Direct\\-source opportunities*\n"
+        "Get fresh jobs directly from company career pages — before they become widely circulated\\.\n\n"
+        "\U0001F464 *Get hiring contacts*\n"
+        "Request relevant HR/recruiter contacts for jobs you actually want to pursue\\.\n\n"
+        "\U0001F4C4 *Human Resume Review*\n"
+        "Get your resume reviewed and understand what may be stopping you from getting interview calls\\.\n\n"
+        "*What you unlock*\n\n"
+        "\u2705 Instant matched job alerts\n"
+        "\u2705 Full job match scores\n"
+        "\u2705 Unlimited job alerts\n"
+        "\u2705 HR contact requests \\(15/month\\)\n"
+        "\u2705 Human resume review \\(One time\\)\n"
+        "\u2705 Application tracking & follow\\-up reminders\n\n"
+        "No unnecessary AI features\\.\n"
+        "Just the things that help you find and pursue better opportunities faster\\.\n\n"
+        "Cancel anytime\\. No hidden charges\\."
     )
 
 
