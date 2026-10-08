@@ -842,3 +842,81 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.edit_text(chunk, parse_mode="HTML")
         else:
             await update.message.reply_text(chunk, parse_mode="HTML")
+
+
+async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin command to test instant job alert. Usage: /pingjob <user_id> <job_id>"""
+    from config import settings
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    if len(args) != 2:
+        await update.message.reply_text("Usage: /pingjob <user_id> <job_id>")
+        return
+
+    target_id, job_id = args
+    try: target_id, job_id = int(target_id), int(job_id)
+    except: return await update.message.reply_text("IDs must be integers")
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        job_row = await conn.fetchrow("SELECT * FROM manual_jobs WHERE id = $1", job_id)
+    
+    if not job_row:
+        await update.message.reply_text("Job not found")
+        return
+        
+    job = dict(job_row)
+    job["is_manual"] = True
+    
+    from utils.messages import escape_md
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    title = escape_md(job.get("title", "New Job"))
+    company = escape_md(job.get("company", "Unknown"))
+    location = escape_md(job.get("location") or "Remote")
+    job_url = job.get("url", "")
+    
+    salary_line = ""
+    salary = job.get("salary")
+    if salary and salary.lower() not in ("not disclosed", ""):
+        salary_line = f"\n💰 {escape_md(salary)}"
+
+    yoe = job.get("min_yoe")
+    yoe_line = ""
+    if yoe is not None and yoe > 0:
+        yoe_line = f"\n🎓 {yoe}\+ YOE"
+
+    msg = (
+        f"🚨 *NEW JOB ALERT*\n\n"
+        f"*{title}*\n"
+        f"🏢 {company}\n"
+        f"📍 {location}"
+        f"{salary_line}"
+        f"{yoe_line}\n"
+        f"🎯 *95% match*\n\n"
+        f"⚡️ Direct from company careers\n"
+        f"🕐 Detected 0 min ago"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔗 Apply Now", url=job_url),
+            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job_id}"),
+        ],
+    ])
+    
+    try:
+        await context.bot.send_message(
+            chat_id=target_id,
+            text=msg,
+            parse_mode="MarkdownV2",
+            reply_markup=kb,
+            disable_web_page_preview=True
+        )
+        await update.message.reply_text("Pinged successfully!")
+    except Exception as e:
+        await update.message.reply_text(f"Error pinging: {e}")
