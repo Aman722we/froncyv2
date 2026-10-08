@@ -79,9 +79,11 @@ async def handle_url_submission(update: Update, context: ContextTypes.DEFAULT_TY
         if duplicate_state.get("status") == "live":
             job_id = duplicate_state.get("job_id")
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
-                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-            ])
+            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
+            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
+            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
+        ])
             await update.message.reply_text(
                 "🎯 <b>Great find!</b>\n\n"
                 "This exact role is already live on our board.\n"
@@ -450,11 +452,13 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
         report += (
             "\n\n✅ <b>This job passed our Legitimacy Check and has been added to the board!</b>\n\n"
             f"🎯 <b>{title} @ {company}</b> is now live.\n"
-            "Tap the button below to get your Apply Smart Kit ready in one click! 🚀"
+            """
         )
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
+            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
+            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
         ])
         try:
             await context.bot.send_message(
@@ -546,6 +550,10 @@ async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT
     from db.manual_jobs import get_manual_job_by_id
     job = await get_manual_job_by_id(job_id)
     if not job:
+        await update.message.reply_text("Job not found.")
+        return ConversationHandler.END
+    url = job.get("url", "https://getfroncy.com")
+    if not job:
         await update.message.reply_text("⚠️ No live job found with that ID. Try again or /cancelsubmission.")
         return WAITING_FOR_DUPLICATE_JOB_ID
 
@@ -554,9 +562,11 @@ async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT
 
     # Send the user the Apply Smart link for the duplicate
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚡ Apply Smart", callback_data=f"apply_smart_{job_id}")],
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-    ])
+            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
+            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
+            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
+        ])
     msg = (
         "🎯 <b>Great find!</b>\n\n"
         "This exact role was already added to our board from another platform.\n"
@@ -748,9 +758,13 @@ async def _render_my_links(update: Update, context: ContextTypes.DEFAULT_TYPE, p
             lines.append(f"{icon} <b>{sub['job_title']}</b> @ {sub.get('job_company', '?')} <i>({date_str})</i>")
             buttons.append([
                 InlineKeyboardButton(
-                    f"⚡ Apply Smart — {sub['job_title'][:30]}",
-                    callback_data=f"apply_smart_{sub['manual_job_id']}"
+                    f"🔗 Apply Now — {sub['job_title'][:15]}",
+                    url=sub['url'] or "https://getfroncy.com"
                 )
+            ])
+            buttons.append([
+                InlineKeyboardButton("✍️ Cover Letter", callback_data=f"gen_coverletter_{sub['manual_job_id']}"),
+                InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{sub['manual_job_id']}")
             ])
         else:
             lines.append(f"{icon} {domain} <i>({date_str}) — {sub['status'].capitalize()}</i>")

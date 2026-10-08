@@ -57,7 +57,7 @@ async def submit_job_link_info_callback(update: Update, context: ContextTypes.DE
         "🔗 *Bring Your Own Job*\n\n"
         "Found a job on LinkedIn, Indeed, or another board?\n\n"
         "Just paste the URL directly into this chat\\! "
-        "We'll instantly verify it and generate a complete *Apply Smart Kit* for you\\. 🚀"
+        "We'll verify if it's legit or fake, and you can generate a cover letter or request HR details\."
     )
     
     # Back button to return to menu
