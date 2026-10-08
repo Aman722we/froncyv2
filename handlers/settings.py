@@ -40,20 +40,20 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # ──────────────────────────────────────────────
 
 async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show skills selection grid (reuses onboarding keyboard)."""
+    """Prompt user for comma-separated skills."""
     query = update.callback_query
     await query.answer()
-
-    user_id = update.effective_user.id
-    bot_id = context.bot_data.get('bot_id', 1)
-    user = await get_user(user_id, bot_id=bot_id)
-    current_skills = user.get("skills", []) if user else []
-    context.user_data["edit_skills"] = list(current_skills)
-
+    
+    context.user_data["awaiting_settings_custom_skill"] = True
+    
     await query.edit_message_text(
-        "🏷 *Edit Skills*\n\nSelect your skills, then tap Done\\.",
-        reply_markup=keyboards.skills_keyboard(current_skills),
-        parse_mode="MarkdownV2",
+        "📝 <b>Edit Skills</b>
+
+"
+        "Please type your core skills, separated by commas.
+"
+        "<i>Example: Python, React, PostgreSQL, Docker</i>",
+        parse_mode="HTML"
     )
 
 
@@ -102,27 +102,33 @@ async def settings_add_custom_skill_prompt(update: Update, context: ContextTypes
     )
 
 async def settings_custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Receive text input for custom skills in settings."""
+    """Receive text input for skills and save to DB."""
     text = update.message.text
     raw_skills = [s.strip() for s in text.split(',') if s.strip()]
     
     from utils.helpers import normalize_skills
     normalized = normalize_skills(raw_skills)
     
-    selected = context.user_data.get("edit_skills", [])
-    for s in normalized:
-        if s.lower() not in [x.lower() for x in selected]:
-            selected.append(s)
-            
-    context.user_data["edit_skills"] = selected
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    
+    # Save directly to DB
+    from db.users import update_user_profile, get_user
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized])
     
     # Clear the flag
     context.user_data.pop("awaiting_settings_custom_skill", None)
     
+    # Show settings menu again
+    user = await get_user(user_id, bot_id=bot_id)
+    plan = user.get("plan", "free") if user else "free"
+    
     await update.message.reply_text(
-        "🏷 *Edit Skills*\n\nSelect your skills, then tap Done\\.",
-        reply_markup=keyboards.skills_keyboard(selected),
-        parse_mode="MarkdownV2",
+        "✅ <b>Skills updated successfully!</b>
+
+Here are your current settings:",
+        reply_markup=keyboards.settings_keyboard(user, plan),
+        parse_mode="HTML",
     )
 
 

@@ -651,7 +651,7 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
     is_parseable = False
     try:
         if resume_text.strip():
-            is_parseable = await check_resume_parseable(resume_text)
+            is_parseable = True
         else:
             is_parseable = False  # Empty text → definitely not parseable
     except Exception as e:
