@@ -263,35 +263,125 @@ async def razorpay_webhook(request: Request):
     customer_id = payment_info.get("customer_id")
 
     if event in ("subscription.charged", "payment.captured", "payment_link.paid"):
-        # Calculate expiration (1 month from now)
-        expires_at = datetime.now(timezone.utc) + relativedelta(months=1)
-        await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active')
-        logger.info(f"Subscription charged/activated for user {telegram_id}")
-
-        # Notify user via bot
+        # Check if this is a one-time purchase (HR contact or resume review)
+        purchase_type = None
+        job_id = None
         try:
-            from utils.helpers import escape_md
-            amount = data.get("payload", {}).get("payment", {}).get("entity", {}).get("amount", 0) / 100
-            if amount == 0:
-                amount = data.get("payload", {}).get("subscription", {}).get("entity", {}).get("total_count", 0) # Just fallback if we don't have it
-            
-            primary = get_primary_app()
-            if primary:
-                await primary.bot.send_message(
-                chat_id=telegram_id,
-                text=(
-                    f"🎉 *You're now on Pro\\!*\n\n"
-                    f"Valid until: {escape_md(expires_at.strftime('%B %d, %Y'))}\n\n"
-                    "✅ Unlimited jobs\n"
-                    "✅ 10 cover letters/day\n"
-                    "✅ Full match scores\n"
-                    "✅ 5 ATS checks/day\n\n"
-                    "Type /menu to explore your new features\\."
-                ),
-                parse_mode="MarkdownV2"
-            )
-        except Exception as e:
-            logger.error(f"Failed to notify user {telegram_id} of upgrade: {e}")
+            # One-time payment links store purchase_type in notes
+            payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
+            link_entity = data.get("payload", {}).get("payment_link", {}).get("entity", {})
+            notes = payment_entity.get("notes", {}) or link_entity.get("notes", {}) or {}
+            purchase_type = notes.get("purchase_type")
+            job_id_str = notes.get("job_id", "")
+            job_id = int(job_id_str) if job_id_str and job_id_str.isdigit() else None
+            # telegram_id may be in notes directly for one-time purchases
+            if not payment_info and notes.get("telegram_id"):
+                telegram_id = int(notes["telegram_id"])
+        except Exception:
+            pass
+
+        if purchase_type == "hr_contact":
+            # Grant 1 HR contact credit and queue the request
+            from db.connection import get_pool
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1",
+                    telegram_id,
+                )
+            from db.manual_requests import create_request
+            req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
+            logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
+            try:
+                primary = get_primary_app()
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            "✅ <b>Payment received — HR Contact Request queued!</b>\n\n"
+                            "We'll find the relevant hiring contact and send it to you shortly."
+                        ),
+                        parse_mode="HTML",
+                    )
+                    await primary.bot.send_message(
+                        chat_id=settings.ADMIN_TELEGRAM_ID,
+                        text=(
+                            f"💰 <b>Paid HR Contact Request</b> [₹49] [#{req_id}]\n"
+                            f"User: <code>{telegram_id}</code>\n"
+                            f"Job ID: {job_id or 'N/A'}\n"
+                            f"Use /completerequest {req_id} when done."
+                        ),
+                        parse_mode="HTML",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify on HR purchase: {e}")
+
+        elif purchase_type == "resume_review":
+            # Grant 1 resume review credit and queue the request
+            from db.connection import get_pool
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1",
+                    telegram_id,
+                )
+            from db.manual_requests import create_request
+            req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
+            logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
+            try:
+                primary = get_primary_app()
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            "✅ <b>Payment received — Resume Review queued!</b>\n\n"
+                            "A human reviewer will go through your resume and send you detailed feedback shortly.\n\n"
+                            "💡 Make sure your resume is uploaded under <b>My Resume</b>."
+                        ),
+                        parse_mode="HTML",
+                    )
+                    await primary.bot.send_message(
+                        chat_id=settings.ADMIN_TELEGRAM_ID,
+                        text=(
+                            f"💰 <b>Paid Resume Review</b> [₹99] [#{req_id}]\n"
+                            f"User: <code>{telegram_id}</code>\n"
+                            f"Use /getresume {telegram_id} to fetch resume.\n"
+                            f"Mark done: /completerequest {req_id}"
+                        ),
+                        parse_mode="HTML",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify on resume review purchase: {e}")
+
+        elif payment_info:
+            # Standard Pro subscription charge
+            plan = payment_info["plan"]
+            sub_id = payment_info.get("sub_id")
+            customer_id = payment_info.get("customer_id")
+            expires_at = datetime.now(timezone.utc) + relativedelta(months=1)
+            await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active')
+            logger.info(f"Subscription charged/activated for user {telegram_id}")
+            try:
+                primary = get_primary_app()
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            f"🎉 *You're now on Froncy Pro\\!*\n\n"
+                            f"Valid until: {escape_md(expires_at.strftime('%B %d, %Y'))}\n\n"
+                            "✅ Instant job alerts \\(direct from company career pages\\)\n"
+                            "✅ Full job match scores\n"
+                            "✅ 5 HR contact requests/month\n"
+                            "✅ 1 human resume review included\n\n"
+                            "Type /menu to explore your new features\\."
+                        ),
+                        parse_mode="MarkdownV2",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify user {telegram_id} of upgrade: {e}")
+        else:
+            logger.warning(f"payment event with no recognizable payload: {data.get('event')}")
+
 
     elif event in ("subscription.cancelled", "subscription.halted"):
         # The user's subscription won't auto-renew. We keep the current plan_expires_at.

@@ -47,6 +47,10 @@ from handlers.analytics import (
     deleted_users_command, deleted_users_page_callback
 )
 from handlers.refer import refer_command, refer_callback
+from handlers.requests import (
+    request_hr_callback, buy_hr_callback,
+    request_resume_review_callback, buy_resume_review_callback,
+)
 from db.tracker import log_daily_active
 
 from utils.messages import help_message
@@ -298,6 +302,12 @@ def build_bot(token: str | None = None) -> Application:
 
     # Upgrade/Payments Callbacks
     app.add_handler(CallbackQueryHandler(checkout_handler, pattern="^upgrade_(pro|proplus|premium)$"))
+
+    # HR Contact & Resume Review Requests (Monetization V2)
+    app.add_handler(CallbackQueryHandler(request_hr_callback, pattern=r"^req_hr_\d+$"))
+    app.add_handler(CallbackQueryHandler(buy_hr_callback, pattern=r"^buy_hr_\d+$"))
+    app.add_handler(CallbackQueryHandler(request_resume_review_callback, pattern="^req_resume_review$"))
+    app.add_handler(CallbackQueryHandler(buy_resume_review_callback, pattern="^buy_resume_review$"))
 
     # Global error handler — alerts admin on any unhandled exception
     app.add_error_handler(global_error_handler)

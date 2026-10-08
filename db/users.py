@@ -235,24 +235,48 @@ async def update_user_subscription(
     telegram_id: int, plan: str, expires_at: datetime | None,
     customer_id: str = None, subscription_id: str = None, status: str = 'active'
 ) -> dict:
-    """Update user subscription and razorpay details."""
+    """Update user subscription and razorpay details.
+    
+    On each successful charge (status='active'), Pro credits are refreshed:
+    - hr_requests_left = 5  (5 HR contact lookups per month)
+    - resume_reviews_left = 1  (1 human resume review per billing cycle)
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            UPDATE users
-            SET plan = $2, 
-                plan_expires_at = COALESCE($3, plan_expires_at), 
-                razorpay_customer_id = COALESCE($4, razorpay_customer_id),
-                razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
-                subscription_status = $6,
-                is_trial = FALSE,
-                updated_at = NOW()
-            WHERE telegram_id = $1
-            RETURNING *
-            """,
-            telegram_id, plan, expires_at, customer_id, subscription_id, status
-        )
+        if status == 'active' and plan in ('pro', 'proplus', 'premium'):
+            row = await conn.fetchrow(
+                """
+                UPDATE users
+                SET plan = $2,
+                    plan_expires_at = COALESCE($3, plan_expires_at),
+                    razorpay_customer_id = COALESCE($4, razorpay_customer_id),
+                    razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
+                    subscription_status = $6,
+                    is_trial = FALSE,
+                    hr_requests_left = 5,
+                    resume_reviews_left = 1,
+                    updated_at = NOW()
+                WHERE telegram_id = $1
+                RETURNING *
+                """,
+                telegram_id, plan, expires_at, customer_id, subscription_id, status
+            )
+        else:
+            row = await conn.fetchrow(
+                """
+                UPDATE users
+                SET plan = $2,
+                    plan_expires_at = COALESCE($3, plan_expires_at),
+                    razorpay_customer_id = COALESCE($4, razorpay_customer_id),
+                    razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
+                    subscription_status = $6,
+                    is_trial = FALSE,
+                    updated_at = NOW()
+                WHERE telegram_id = $1
+                RETURNING *
+                """,
+                telegram_id, plan, expires_at, customer_id, subscription_id, status
+            )
         logger.info(f"User {telegram_id} subscription updated to {status} (Plan: {plan})")
         return dict(row) if row else None
 

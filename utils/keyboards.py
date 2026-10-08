@@ -437,6 +437,9 @@ def resume_keyboard(has_resume: bool, plan: str = "free") -> InlineKeyboardMarku
                 InlineKeyboardButton("📊 ATS Analysis", callback_data="ats_analyze"),
             ],
             [
+                InlineKeyboardButton("📄 Request Human Review", callback_data="req_resume_review"),
+            ],
+            [
                 InlineKeyboardButton("🔙 Back", callback_data="back_menu")
             ]
         ]

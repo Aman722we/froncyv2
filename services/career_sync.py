@@ -175,8 +175,10 @@ async def sync_one_source(source: dict) -> dict:
 
 async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
     """
-    For each newly discovered career-page job, find matching users
-    and send them a Telegram notification using the existing pipeline.
+    For each newly discovered career-page job, find matching PRO users
+    and send them an instant Telegram notification with the new V2 format.
+    
+    Free users are skipped here — they receive jobs in their daily digest.
     """
     from services.scheduler import _bot_app
     if not _bot_app:
@@ -184,7 +186,8 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
         return
 
     pool = get_pool()
-    
+    PRO_PLANS = ("pro", "trial", "proplus", "premium")
+
     for job_id in job_ids:
         try:
             async with pool.acquire() as conn:
@@ -194,11 +197,11 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 )
                 if not job_row:
                     continue
-                
+
                 job = dict(job_row)
                 job["is_manual"] = True
 
-                # Get all onboarded, non-deleted users
+                # Only fetch Pro users — Free users get jobs in daily digest
                 users = await conn.fetch(
                     """
                     SELECT telegram_id, bot_id, skills, location_pref, plan,
@@ -206,12 +209,13 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     FROM users
                     WHERE is_onboarded = TRUE
                     AND (is_deleted IS NULL OR is_deleted = FALSE)
+                    AND plan IN ('pro', 'trial', 'proplus', 'premium')
                     """
                 )
 
             from utils.messages import compute_manual_job_match, escape_md
             from utils.helpers import get_effective_plan
-            from datetime import timedelta
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
             for user_row in users:
                 try:
@@ -219,9 +223,13 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     plan = get_effective_plan(user)
                     user["plan"] = plan
 
+                    # Skip if downgraded (trial expired, etc.)
+                    if plan not in PRO_PLANS:
+                        continue
+
                     match = compute_manual_job_match(user, job)
                     score = match.get("score", 0)
-                    
+
                     # Only notify if score >= 50 (meaningful match)
                     if score < 50:
                         continue
@@ -234,32 +242,54 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         mins_ago = int((datetime.now(timezone.utc) - first_seen).total_seconds() / 60)
                         freshness = f"{mins_ago} min ago" if mins_ago < 60 else f"{mins_ago // 60}h ago"
                     else:
-                        freshness = "just now"
+                        freshness = "0 min ago"
 
-                    title = escape_md(job.get("title", "New Job"))
-                    company = escape_md(job.get("company", "Unknown"))
-                    location = escape_md(job.get("location") or "Remote / Global")
-                    job_url = job.get("url", "")
+                    # Build message fields
+                    title    = escape_md(job.get("title", "New Job"))
+                    company  = escape_md(job.get("company", "Unknown"))
+                    location = escape_md(job.get("location") or "Remote")
+                    job_url  = job.get("url", "")
+
+                    # Optional: salary and YOE lines
+                    salary_line = ""
+                    salary = job.get("salary")
+                    if salary and salary.lower() not in ("not disclosed", ""):
+                        salary_line = f"\n\U0001F4B0 {escape_md(salary)}"
+
+                    yoe = job.get("min_yoe")
+                    yoe_line = ""
+                    if yoe is not None and yoe > 0:
+                        yoe_line = f"\n\U0001F393 {yoe}\\+ YOE"
 
                     msg = (
-                        f"🚨 *NEW JOB ALERT*\n\n"
+                        f"\U0001F6A8 *NEW JOB ALERT*\n\n"
                         f"*{title}*\n"
-                        f"🏢 {company}\n"
-                        f"📍 {location}\n\n"
-                        f"🎯 *{score}% match*\n\n"
-                        f"⚡ Direct from company careers\n"
-                        f"🕐 Detected {escape_md(freshness)}\n"
-                        f"🔗 [Apply Now]({job_url})"
+                        f"\U0001F3E2 {company}\n"
+                        f"\U0001F4CD {location}"
+                        f"{salary_line}"
+                        f"{yoe_line}\n"
+                        f"\U0001F3AF *{score}% match*\n\n"
+                        f"\u26A1\uFE0F Direct from company careers\n"
+                        f"\U0001F550 Detected {escape_md(freshness)}"
                     )
+
+                    # Inline buttons — HR Details is free for Pro, ₹49 for Free
+                    kb = InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("\U0001F517 Apply Now", url=job_url),
+                            InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}"),
+                        ],
+                    ])
 
                     from bot_registry import get_app_for_bot_id
                     bot_id = user.get("bot_id", 1)
                     target_app = get_app_for_bot_id(bot_id) or _bot_app
-                    
+
                     await target_app.bot.send_message(
                         chat_id=user["telegram_id"],
                         text=msg,
                         parse_mode="MarkdownV2",
+                        reply_markup=kb,
                         disable_web_page_preview=True,
                     )
 
