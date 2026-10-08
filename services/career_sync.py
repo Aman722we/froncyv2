@@ -201,6 +201,22 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     continue
 
                 job = dict(job_row)
+                
+                # IMPORTANT: Trust & Quality Filter
+                # If the job was posted more than 24 hours ago, DO NOT send an instant alert.
+                # It will still be in the database for daily digests and browsing.
+                # This prevents spamming users with old jobs when we first add a new company.
+                posted = job.get("posted_at")
+                if posted:
+                    from datetime import datetime, timezone
+                    if posted.tzinfo is None:
+                        posted = posted.replace(tzinfo=timezone.utc)
+                    hours_ago = (datetime.now(timezone.utc) - posted).total_seconds() / 3600
+                    if hours_ago > 24:
+                        from loguru import logger
+                        logger.info(f"Skipping instant alert for job {job_id} ({job.get('title')}) because it is {hours_ago:.1f} hours old.")
+                        continue
+                
                 job["is_manual"] = True
 
                 # Only fetch Pro users — Free users get jobs in daily digest
