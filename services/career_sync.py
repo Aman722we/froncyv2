@@ -236,15 +236,16 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     if score < 50:
                         continue
 
-                    # Calculate freshness
-                    first_seen = job.get("first_seen_at")
-                    if first_seen:
-                        if first_seen.tzinfo is None:
-                            first_seen = first_seen.replace(tzinfo=timezone.utc)
-                        mins_ago = int((datetime.now(timezone.utc) - first_seen).total_seconds() / 60)
+                    # Calculate freshness from posted_at (not first_seen_at)
+                    posted = job.get("posted_at")
+                    if posted:
+                        if posted.tzinfo is None:
+                            posted = posted.replace(tzinfo=timezone.utc)
+                        mins_ago = int((datetime.now(timezone.utc) - posted).total_seconds() / 60)
+                        if mins_ago < 0: mins_ago = 0
                         freshness = f"{mins_ago} min ago" if mins_ago < 60 else f"{mins_ago // 60}h ago"
                     else:
-                        freshness = "0 min ago"
+                        freshness = "just now"
 
                     # Build message fields
                     title    = escape_md(job.get("title", "New Job"))
@@ -272,7 +273,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         f"{yoe_line}\n"
                         f"\U0001F3AF *{score}% match*\n\n"
                         f"\u26A1\uFE0F Direct from company careers\n"
-                        f"\U0001F550 Detected {escape_md(freshness)}"
+                        f"\U0001F550 Posted {escape_md(freshness)}"
                     )
 
                     # Inline buttons — HR Details is free for Pro, ₹49 for Free

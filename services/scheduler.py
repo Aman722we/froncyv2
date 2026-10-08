@@ -495,9 +495,9 @@ def start_scheduler():
     # Career Page Sync (Froncy V2) — every 15 minutes
     scheduler.add_job(
         _run_career_sync_job,
-        CronTrigger(minute="*/15"),
+        CronTrigger(minute="0"),
         id="career_page_sync",
-        name="Sync career pages every 15 min",
+        name="Sync career pages every 60 min",
         replace_existing=True,
     )
 
