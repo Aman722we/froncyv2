@@ -99,7 +99,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Get HR Contact — ₹49", callback_data=f"buy_hr_{job_id}")],
             [InlineKeyboardButton("💎 Go Pro (₹199/mo) — includes 5/month", callback_data="menu_upgrade")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
+            [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")],
         ])
         await query.edit_message_text(
             text=(
@@ -168,7 +168,7 @@ async def buy_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Pay ₹49 — Tap Here", url=pay_url)],
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
+        [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")],
     ])
     await query.edit_message_text(
         text=(
