@@ -47,11 +47,8 @@ async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["awaiting_settings_custom_skill"] = True
     
     await query.edit_message_text(
-        "📝 <b>Edit Skills</b>
-
-"
-        "Please type your core skills, separated by commas.
-"
+        "📝 <b>Edit Skills</b>\n\n"
+        "Please type your core skills, separated by commas.\n"
         "<i>Example: Python, React, PostgreSQL, Docker</i>",
         parse_mode="HTML"
     )
@@ -124,9 +121,7 @@ async def settings_custom_skill_receive(update: Update, context: ContextTypes.DE
     plan = user.get("plan", "free") if user else "free"
     
     await update.message.reply_text(
-        "✅ <b>Skills updated successfully!</b>
-
-Here are your current settings:",
+        "✅ <b>Skills updated successfully!</b>\n\nHere are your current settings:",
         reply_markup=keyboards.settings_keyboard(user, plan),
         parse_mode="HTML",
     )
