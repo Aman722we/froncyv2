@@ -962,7 +962,7 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
         "\u2705 Instant matched job alerts\n"
         "\u2705 Full job match scores\n"
         "\u2705 Unlimited job alerts\n"
-        "\u2705 HR contact requests \\(15/month\\)\n"
+        "\u2705 HR contact requests \\(5/month\\)\n"
         "\u2705 Human resume review \\(One time\\)\n"
         "\u2705 Application tracking & follow\\-up reminders\n\n"
         "No unnecessary AI features\\.\n"

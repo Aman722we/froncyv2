@@ -95,6 +95,7 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     metadata = await extract_job_metadata(description)
     extracted_skills = metadata.get("skills", [])
     extracted_min_yoe = metadata.get("min_yoe", 0)
+    extracted_salary = metadata.get("salary") or "Not disclosed"
 
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -106,13 +107,13 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
                 job_type, skills, min_yoe, eligible_batches,
                 posted_at, is_active, added_by,
                 source_type, source_provider, source_external_id,
-                first_seen_at, description
+                first_seen_at, description, salary
             ) VALUES (
                 $1, $2, $3, $4,
                 'fulltime', $10, $11, '{}',
                 $5, TRUE, NULL,
                 'CAREER_PAGE', $6, $7,
-                $8, $9
+                $8, $9, $12
             )
             ON CONFLICT (source_provider, source_external_id) WHERE source_external_id IS NOT NULL DO NOTHING
             RETURNING id
@@ -127,7 +128,8 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             now,  # first_seen_at is always NOW()
             normalized_job.get("description"),
             extracted_skills,
-            extracted_min_yoe
+            extracted_min_yoe,
+            extracted_salary
         )
         if row:
             return row["id"]
