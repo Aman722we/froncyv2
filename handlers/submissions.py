@@ -451,8 +451,7 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
         report = _build_report_text(checks, approved=True)
         report += (
             "\n\n✅ <b>This job passed our Legitimacy Check and has been added to the board!</b>\n\n"
-            f"🎯 <b>{title} @ {company}</b> is now live.\n"
-            """
+            f"🎯 <b>{title} @ {company}</b> is now live."
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
