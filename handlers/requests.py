@@ -8,7 +8,7 @@ from loguru import logger
 
 from config import settings
 from db.users import get_user
-from db.manual_requests import create_request
+from db.manual_requests import create_request, has_existing_request
 
 
 async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -42,6 +42,10 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     hr_left = user.get("hr_requests_left", 0) or 0
 
     if (is_pro or is_active_trial) and hr_left > 0:
+        # Check for spam/duplicates
+        if await has_existing_request(user_id, "HR_CONTACT", job_id):
+            await query.answer("You have already requested HR details for this job!", show_alert=True)
+            return
         # Deduct credit and queue request
         from db.connection import get_pool
         pool = get_pool()
@@ -81,7 +85,6 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             logger.warning(f"Could not notify admin of HR request: {e}")
 
         new_left = hr_left - 1
-        await query.edit_message_reply_markup(reply_markup=None)
         await context.bot.send_message(
             chat_id=user_id,
             text=(
@@ -234,7 +237,6 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
         except Exception as e:
             logger.warning(f"Could not notify admin of resume review request: {e}")
 
-        await query.edit_message_reply_markup(reply_markup=None)
         await context.bot.send_message(
             chat_id=user_id,
             text=(

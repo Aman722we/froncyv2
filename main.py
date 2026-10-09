@@ -208,8 +208,26 @@ async def multi_tenant_webhook(token: str, request: Request):
     
     app_instance = get_app_for_token(token)
     if not app_instance:
-        logger.warning(f"Webhook received for unknown token: {token[:20]}...")
-        raise HTTPException(status_code=404, detail="Bot not found")
+        logger.warning(f"Webhook received for unknown token: {token[:20]}... Attempting to load from DB.")
+        from db.bots import get_bot_by_token
+        bot_cfg = await get_bot_by_token(token)
+        if not bot_cfg:
+            # Fallback for primary bot
+            from config import settings
+            if token == settings.TELEGRAM_BOT_TOKEN:
+                bot_cfg = {"id": 1, "bot_token": token}
+                
+        if bot_cfg:
+            try:
+                from bot_registry import add_bot
+                from bot import build_bot
+                app_instance = await add_bot(token, bot_cfg.get("id", 1), build_bot)
+                logger.info(f"Successfully hot-loaded bot {token[:20]}...")
+            except Exception as e:
+                logger.error(f"Failed to hot-load bot {token[:20]}...: {e}")
+                
+        if not app_instance:
+            raise HTTPException(status_code=404, detail="Bot not found")
     
     return await _process_telegram_update(request, app_instance, log_prefix=f" [token={token[:10]}...]")
 
@@ -408,3 +426,13 @@ if __name__ == "__main__":
     import uvicorn
     # Make sure python-dateutil is added to requirements for relativedelta
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+@app.get("/health_bots")
+async def health_bots():
+    from bot_registry import _registry, _primary_token
+    return {
+        "primary_token_prefix": _primary_token[:10] if _primary_token else None,
+        "registry_keys": [k[:10] + "..." for k in _registry.keys()],
+        "status": "ok"
+    }

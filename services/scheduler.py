@@ -54,6 +54,10 @@ async def _send_daily_alerts():
                 current_time_str
             )
 
+        global _bot_app
+        if not _bot_app:
+            from bot_registry import get_primary_app
+            _bot_app = get_primary_app()
         if not _bot_app:
             logger.warning("Bot app not set — cannot send alerts")
             return
@@ -148,6 +152,10 @@ async def _process_reminders():
                 """
             )
 
+        global _bot_app
+        if not _bot_app:
+            from bot_registry import get_primary_app
+            _bot_app = get_primary_app()
         if not _bot_app:
             return
 
@@ -209,6 +217,10 @@ async def _send_weekly_digest():
                    AND (is_deleted IS NULL OR is_deleted = FALSE)"""
             )
 
+        global _bot_app
+        if not _bot_app:
+            from bot_registry import get_primary_app
+            _bot_app = get_primary_app()
         if not _bot_app:
             return
 
@@ -345,6 +357,10 @@ async def _send_evening_digest():
 
         logger.info("🌆 Running 6:30 PM evening digest...")
 
+        global _bot_app
+        if not _bot_app:
+            from bot_registry import get_primary_app
+            _bot_app = get_primary_app()
         if not _bot_app:
             logger.warning("Bot app not set — cannot send evening digest")
             return

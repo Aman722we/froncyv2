@@ -63,3 +63,20 @@ async def complete_request(request_id: int) -> bool:
             request_id,
         )
         return result == "UPDATE 1"
+
+
+async def has_existing_request(user_id: int, request_type: str, job_id: int | None = None) -> bool:
+    """Check if the user already requested this so they don't spam clicks."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if job_id:
+            val = await conn.fetchval(
+                "SELECT 1 FROM manual_requests WHERE user_id = $1 AND request_type = $2 AND job_id = $3",
+                user_id, request_type.upper(), job_id
+            )
+        else:
+            val = await conn.fetchval(
+                "SELECT 1 FROM manual_requests WHERE user_id = $1 AND request_type = $2 AND status = 'PENDING'",
+                user_id, request_type.upper()
+            )
+        return val is not None
