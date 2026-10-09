@@ -397,7 +397,8 @@ async def resume_received(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         resume_text = extract_text_from_pdf(saved_path)
 
         # Update DB 
-        await update_resume(user_id, resume_text, document.file_name)
+        bot_id = context.bot_data.get('bot_id', 1)
+        await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=bytes(file_bytes))
 
         from telegram import InlineKeyboardMarkup as IKM, InlineKeyboardButton as IKB
         await update.message.reply_text(

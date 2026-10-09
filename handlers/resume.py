@@ -668,7 +668,7 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         # ✅ Resume is clean — save to DB and confirm
         try:
             bot_id = context.bot_data.get('bot_id', 1)
-            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id)
+            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes)
         except Exception as e:
             logger.error(f"update_resume DB write failed for user {user_id}: {e}")
             await update.message.reply_text(
@@ -827,7 +827,7 @@ async def _admin_fixresume_receive(
 
         # Save the clean resume and clear the flag
         bot_id = context.bot_data.get('bot_id', 1)
-        await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id)
+        await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=file_bytes)
         await set_manual_resume_flag(target_user_id, False, bot_id=bot_id)
 
         # Notify the user their resume is ready
