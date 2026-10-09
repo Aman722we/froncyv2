@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command, admin_pingjob
+from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command, completerequest_command, admin_pingjob
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
