@@ -37,7 +37,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         pass
 
     plan = user.get("plan", "free")
-    is_pro = plan in ("pro", "trial", "proplus", "premium")
+    is_pro = plan in ("pro", "proplus", "premium")
     hr_left = user.get("hr_requests_left", 0) or 0
 
     if is_pro and hr_left > 0:
@@ -200,7 +200,7 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
         return
 
     plan = user.get("plan", "free")
-    is_pro = plan in ("pro", "trial", "proplus", "premium")
+    is_pro = plan in ("pro", "proplus", "premium")
     reviews_left = user.get("resume_reviews_left", 0) or 0
 
     if is_pro and reviews_left > 0:
