@@ -94,15 +94,20 @@ def onboarding_complete(skills: list[str], location: str, has_resume: bool) -> s
 
 def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
     plan = user.get("plan", "free")
+    
+    hr_left = user.get("hr_requests_left", 0) or 0
+    rr_left = user.get("resume_reviews_left", 0) or 0
+    
+    # We will format it exactly as requested:
+    # Plan: ⭐ Pro (Unlimited jobs • HR Requests: X left • Resume Reviews: Y left • Renews: Z)
 
     if plan == "pro":
         expires_at = user.get("plan_expires_at")
         date_str = expires_at.strftime("%b %d") if expires_at else "soon"
-        early_tag = " \\(Early Adopter 🔒\\)" if user.get("is_early_adopter") else ""
+        early_tag = " \(Early Adopter 🚀\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            f"Plan: ⭐ Pro{early_tag} \\(Unlimited jobs · 10 cover letters · 5 ATS checks/day\\)\n"
-            f"Renews: {escape_md(date_str)}\n"
+            f"Plan: ⭐ Pro{early_tag} \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • Renews: {escape_md(date_str)}\)"
         )
 
     is_trial = user.get("is_trial", False)
@@ -117,25 +122,20 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    f"⚡ Pro Trial — {escape_md(time_str)}\n"
+                    f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                f"⚡ Pro Trial — active\n"
+                f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • active\)"
             )
 
-    # Free plan — no upgrade text in message body (keyboard has the button)
+    # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        "Plan: Free \\(5 jobs · 1 cover letter · 1 ATS check/day\\)"
+        f"Plan: Free \(5 jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left\)"
     )
-
-
-# ──────────────────────────────────────────────
-# Jobs
-# ──────────────────────────────────────────────
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
     """Compute a weighted match score: 70% skills + 30% experience."""

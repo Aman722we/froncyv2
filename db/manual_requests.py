@@ -90,3 +90,14 @@ async def get_completed_request_reply(user_id: int, request_type: str, job_id: i
             "SELECT admin_reply FROM manual_requests WHERE user_id = $1 AND request_type = $2 AND job_id = $3 AND status = 'COMPLETED'",
             user_id, request_type.upper(), job_id
         )
+
+
+async def is_request_completed(user_id: int, request_type: str, job_id: int) -> bool:
+    """Check if a request is already marked as COMPLETED (even if admin_reply is None)."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        val = await conn.fetchval(
+            "SELECT 1 FROM manual_requests WHERE user_id = $1 AND request_type = $2 AND job_id = $3 AND status = 'COMPLETED'",
+            user_id, request_type.upper(), job_id
+        )
+        return val is not None

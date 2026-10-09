@@ -339,8 +339,12 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         details = compute_match_details(user_skills, job.get("skills", []), str(user_exp), job.get("experience_required"))
     score = details["score"]
     
-    from db.manual_requests import get_completed_request_reply
-    hr_reply = await get_completed_request_reply(user_id, "HR_CONTACT", job_id) if is_manual else None
+    from db.manual_requests import get_completed_request_reply, is_request_completed
+    hr_reply = None
+    hr_completed = False
+    if is_manual:
+        hr_reply = await get_completed_request_reply(user_id, "HR_CONTACT", job_id)
+        hr_completed = await is_request_completed(user_id, "HR_CONTACT", job_id)
 
     msg = messages.job_detail_message(job, plan=plan, user=user, hr_reply=hr_reply)
 
@@ -363,7 +367,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception:
         pass
 
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked, is_applied=_is_applied, hr_granted=bool(hr_reply))
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked, is_applied=_is_applied, hr_granted=hr_completed)
 
     is_revisit = query.data.startswith("revisit_")
 
