@@ -943,31 +943,80 @@ async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Request ID must be a number.")
         return
 
-    reply_text = " ".join(args[1:])
+    # Extract message preserving newlines
+    # e.g. "/completerequest 123 \nHello\nWorld" -> "\nHello\nWorld"
+    import re
+    match_text = re.search(r'^/completerequest\s+\d+\s+(.*)$', update.message.text, re.DOTALL | re.IGNORECASE)
+    reply_text = match_text.group(1).strip() if match_text else " ".join(args[1:])
     
     from db.connection import get_pool
     pool = get_pool()
     async with pool.acquire() as conn:
-        req = await conn.fetchrow("SELECT user_id, request_type FROM manual_requests WHERE id = $1", req_id)
+        req = await conn.fetchrow("SELECT user_id, request_type, job_id FROM manual_requests WHERE id = $1", req_id)
         if not req:
             await update.message.reply_text(f"❌ Could not find request #{req_id}.")
             return
 
         target_user_id = req["user_id"]
         req_type = req["request_type"]
+        job_id = req["job_id"]
         
         from db.manual_requests import complete_request
         success = await complete_request(req_id)
         if not success:
             await update.message.reply_text("❌ Failed to update request status in DB. Still sending message.")
+            
+        # Fetch user and job if applicable
+        target_user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", target_user_id)
+        job = None
+        if req_type == "HR_CONTACT" and job_id:
+            job = await conn.fetchrow("SELECT * FROM manual_jobs WHERE id = $1", job_id)
 
     try:
-        title = "👔 <b>HR Contact Details</b>" if req_type == "HR_CONTACT" else "📄 <b>Resume Review Feedback</b>"
-        await context.bot.send_message(
-            chat_id=target_user_id,
-            text=f"{title}\n\n{reply_text}",
-            parse_mode="HTML"
-        )
+        from bot_registry import get_app_for_bot_id, get_primary_app
+        bot_id_to_use = target_user["bot_id"] if target_user and "bot_id" in target_user else 1
+        target_app = get_app_for_bot_id(bot_id_to_use) or get_primary_app()
+        bot_name = target_app.bot.first_name if target_app else "Froncy"
+        
+        target_user_dict = dict(target_user) if target_user else {}
+        from utils.helpers import get_effective_plan
+        plan = get_effective_plan(target_user_dict)
+        
+        if req_type == "HR_CONTACT" and job:
+            job_dict = dict(job)
+            job_dict["is_manual"] = True
+            from utils.messages import compute_manual_job_match, job_detail_message
+            # We add match to job_dict so job_detail_message uses it
+            match = compute_manual_job_match(target_user_dict, job_dict)
+            job_dict["match"] = match
+            base_msg = job_detail_message(job_dict, plan, target_user_dict)
+            
+            # Append HR details
+            from utils.messages import escape_md
+            safe_reply_text = escape_md(reply_text)
+            final_msg = f"{base_msg}\n\n👔 *HR Contact Details*\n{safe_reply_text}"
+            
+            from utils.keyboards import job_detail_keyboard
+            kb = job_detail_keyboard(
+                job_dict, plan=plan, score=match.get("score", 0), 
+                user_id=target_user_id, hr_granted=True
+            )
+            
+            await target_app.bot.send_message(
+                chat_id=target_user_id,
+                text=final_msg,
+                parse_mode="MarkdownV2",
+                reply_markup=kb,
+                disable_web_page_preview=True
+            )
+        else:
+            title = "👔 *HR Contact Details*" if req_type == "HR_CONTACT" else "📄 *Resume Review Feedback*"
+            await target_app.bot.send_message(
+                chat_id=target_user_id,
+                text=f"{title}\n\n{escape_md(reply_text)}",
+                parse_mode="MarkdownV2"
+            )
+            
         await update.message.reply_text(f"✅ Request #{req_id} marked as complete! Message sent to user <code>{target_user_id}</code>.", parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text(f"❌ Failed to send message to user: {e}")

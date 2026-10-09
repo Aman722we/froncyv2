@@ -321,7 +321,7 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False, is_applied: bool = False) -> InlineKeyboardMarkup:
+def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool = False, from_daily: bool = False, user_id: int | None = None, apply_smart_locked: bool = False, is_applied: bool = False, hr_granted: bool = False) -> InlineKeyboardMarkup:
     """Actions for a single job detail view.
     Layout:
         Row 1: [Cover Letter]
@@ -353,7 +353,7 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     # Row 1: Cover Letter & HR Details
     buttons.append([
         InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-        InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job['id']}"),
+        InlineKeyboardButton("✅ HR Details Granted", callback_data="ignore") if hr_granted else InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job['id']}")
     ])
     
     # Row 3: Mark as Applied (or "✅ Applied" if already applied) + Remind Me
