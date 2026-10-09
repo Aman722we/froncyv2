@@ -213,7 +213,6 @@ async def multi_tenant_webhook(token: str, request: Request):
         bot_cfg = await get_bot_by_token(token)
         if not bot_cfg:
             # Fallback for primary bot
-            from config import settings
             if token == settings.TELEGRAM_BOT_TOKEN:
                 bot_cfg = {"id": 1, "bot_token": token}
                 
