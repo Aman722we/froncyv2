@@ -61,6 +61,8 @@ def trial_activated_message(trial_expires_at) -> str:
         "See how well each opportunity matches your profile\\.\n\n"
         "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
         "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
+        "\U0001F464 *HR Contact Request \\(1 Free\\)*\n"
+        "Found a job worth applying to? Request the relevant hiring/HR contact from Froncy \\(1 free request included in trial\\)\\.\n\n"
         "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
         "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"

@@ -37,7 +37,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         pass
 
     plan = user.get("plan", "free")
-    is_pro = plan in ("pro", "proplus", "premium")
+    is_pro = plan in ("pro", "trial", "proplus", "premium")
     hr_left = user.get("hr_requests_left", 0) or 0
 
     if is_pro and hr_left > 0:
@@ -82,7 +82,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=(
                 f"✅ <b>HR Contact Request received!</b>\n\n"
                 f"We'll research and send you the best hiring contact for this role shortly.\n\n"
-                f"📊 Credits remaining this month: <b>{new_left}/5</b>"
+                f"🎯 Credits remaining: <b>{new_left}/" + ("1" if plan == "trial" else "5") + "</b>"
             ),
             parse_mode="HTML",
         )
@@ -90,7 +90,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif is_pro and hr_left <= 0:
         # Pro but exhausted monthly credits
         await query.answer(
-            "You've used all 5 HR contact requests this month. Resets on your next billing date.",
+            "You've used your included HR contact requests. Upgrade to Pro for 5/month!" if plan == "trial" else "You've used all 5 HR contact requests this month. Resets on your next billing date.",
             show_alert=True,
         )
 
