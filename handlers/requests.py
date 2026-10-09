@@ -50,10 +50,13 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         from db.connection import get_pool
         pool = get_pool()
         async with pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE users SET hr_requests_left = hr_requests_left - 1 WHERE telegram_id = $1",
+            result = await conn.execute(
+                "UPDATE users SET hr_requests_left = hr_requests_left - 1 WHERE telegram_id = $1 AND hr_requests_left > 0",
                 user_id,
             )
+            if result != "UPDATE 1":
+                await query.answer("No HR requests left!", show_alert=True)
+                return
         req_id = await create_request(user_id, "HR_CONTACT", job_id=job_id)
 
         # Notify admin
@@ -215,10 +218,13 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
         from db.connection import get_pool
         pool = get_pool()
         async with pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE users SET resume_reviews_left = resume_reviews_left - 1 WHERE telegram_id = $1",
+            result = await conn.execute(
+                "UPDATE users SET resume_reviews_left = resume_reviews_left - 1 WHERE telegram_id = $1 AND resume_reviews_left > 0",
                 user_id,
             )
+            if result != "UPDATE 1":
+                await query.answer("No resume reviews left!", show_alert=True)
+                return
         req_id = await create_request(user_id, "RESUME_REVIEW")
 
         name = update.effective_user.first_name or "User"
