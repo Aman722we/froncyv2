@@ -340,23 +340,23 @@ async def init_db() -> asyncpg.Pool:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 
     # ── Monetization V2 — HR Contacts, Resume Reviews, Request Queue ──
-    try:
-        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS hr_requests_left INT DEFAULT 0;")
-        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_reviews_left INT DEFAULT 0;")
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS manual_requests (
-                id              SERIAL PRIMARY KEY,
-                user_id         BIGINT NOT NULL,
-                request_type    TEXT NOT NULL,
-                job_id          INT,
-                notes           TEXT,
-                status          TEXT DEFAULT 'PENDING',
-                completed_at    TIMESTAMPTZ,
-                created_at      TIMESTAMPTZ DEFAULT NOW()
-            );
-        """)
-    except Exception as e:
-        logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS hr_requests_left INT DEFAULT 0;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_reviews_left INT DEFAULT 0;")
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS manual_requests (
+                    id              SERIAL PRIMARY KEY,
+                    user_id         BIGINT NOT NULL,
+                    request_type    TEXT NOT NULL,
+                    job_id          INT,
+                    notes           TEXT,
+                    status          TEXT DEFAULT 'PENDING',
+                    completed_at    TIMESTAMPTZ,
+                    created_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
 
     logger.info("Database initialized successfully.")
     return _pool
