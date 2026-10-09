@@ -37,10 +37,11 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         pass
 
     plan = user.get("plan", "free")
-    is_pro = plan in ("pro", "trial", "proplus", "premium")
+    is_pro = plan in ("pro", "proplus", "premium")
+    is_active_trial = plan == "trial"
     hr_left = user.get("hr_requests_left", 0) or 0
 
-    if is_pro and hr_left > 0:
+    if (is_pro or is_active_trial) and hr_left > 0:
         # Deduct credit and queue request
         from db.connection import get_pool
         pool = get_pool()
@@ -90,7 +91,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif is_pro and hr_left <= 0:
         # Pro but exhausted monthly credits
         await query.answer(
-            "You've used your included HR contact requests. Upgrade to Pro for 5/month!" if plan == "trial" else "You've used all 5 HR contact requests this month. Resets on your next billing date.",
+            "You've used all 5 HR contact requests this month. Resets on your next billing date.",
             show_alert=True,
         )
 
