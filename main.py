@@ -291,9 +291,14 @@ async def razorpay_webhook(request: Request):
             purchase_type = notes.get("purchase_type")
             job_id_str = notes.get("job_id", "")
             job_id = int(job_id_str) if job_id_str and job_id_str.isdigit() else None
-            # telegram_id may be in notes directly for one-time purchases
-            if not payment_info and notes.get("telegram_id"):
+            # ID and bot_id may be in notes directly for one-time purchases
+            bot_id = 1
+            if payment_info:
+                bot_id = int(payment_info.get("bot_id", 1))
+            elif notes.get("telegram_id"):
                 telegram_id = int(notes["telegram_id"])
+                bot_id_str = notes.get("bot_id", "1")
+                bot_id = int(bot_id_str) if str(bot_id_str).isdigit() else 1
         except Exception:
             pass
 
@@ -303,8 +308,8 @@ async def razorpay_webhook(request: Request):
             pool = get_pool()
             async with pool.acquire() as conn:
                 await conn.execute(
-                    "UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1",
-                    telegram_id,
+                    "UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1 AND bot_id = $2",
+                    telegram_id, bot_id,
                 )
             from db.manual_requests import create_request
             req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
@@ -341,8 +346,8 @@ async def razorpay_webhook(request: Request):
             pool = get_pool()
             async with pool.acquire() as conn:
                 await conn.execute(
-                    "UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1",
-                    telegram_id,
+                    "UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1 AND bot_id = $2",
+                    telegram_id, bot_id,
                 )
             from db.manual_requests import create_request
             req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
@@ -380,7 +385,7 @@ async def razorpay_webhook(request: Request):
             sub_id = payment_info.get("sub_id")
             customer_id = payment_info.get("customer_id")
             expires_at = datetime.now(timezone.utc) + relativedelta(months=1)
-            await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active')
+            await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active', bot_id)
             logger.info(f"Subscription charged/activated for user {telegram_id}")
             try:
                 from bot_registry import get_primary_app, _bots
@@ -410,7 +415,8 @@ async def razorpay_webhook(request: Request):
     elif event in ("subscription.cancelled", "subscription.halted"):
         # The user's subscription won't auto-renew. We keep the current plan_expires_at.
         # But we update the status so the UI knows it's cancelled.
-        await update_user_subscription(telegram_id, plan, None, customer_id, sub_id, 'cancelled')
+        bot_id = payment_info.get("bot_id", 1) if payment_info else 1
+        await update_user_subscription(telegram_id, plan, None, customer_id, sub_id, 'cancelled', bot_id)
         logger.info(f"Subscription {event} for user {telegram_id}")
 
     return {"status": "ok"}

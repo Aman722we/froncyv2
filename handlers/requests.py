@@ -50,8 +50,9 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         pool = get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE users SET hr_requests_left = hr_requests_left - 1 WHERE telegram_id = $1 AND hr_requests_left > 0",
+                "UPDATE users SET hr_requests_left = hr_requests_left - 1 WHERE telegram_id = $1 AND bot_id = $2 AND hr_requests_left > 0",
                 user_id,
+                bot_id,
             )
             if result != "UPDATE 1":
                 await query.answer("No HR requests left!", show_alert=True)
@@ -229,8 +230,9 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
         pool = get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE users SET resume_reviews_left = resume_reviews_left - 1 WHERE telegram_id = $1 AND resume_reviews_left > 0",
+                "UPDATE users SET resume_reviews_left = resume_reviews_left - 1 WHERE telegram_id = $1 AND bot_id = $2 AND resume_reviews_left > 0",
                 user_id,
+                bot_id,
             )
             if result != "UPDATE 1":
                 await query.answer("No resume reviews left!", show_alert=True)

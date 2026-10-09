@@ -974,7 +974,8 @@ async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_
             await update.message.reply_text("❌ Failed to update request status in DB. Still sending message.")
             
         # Fetch user and job if applicable
-        target_user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", target_user_id)
+        bot_id = context.bot_data.get("bot_id", 1)
+        target_user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1 AND bot_id = $2", target_user_id, bot_id)
         job = None
         if req_type == "HR_CONTACT" and job_id:
             job = await conn.fetchrow("SELECT * FROM manual_jobs WHERE id = $1", job_id)

@@ -233,7 +233,7 @@ async def update_user_plan(
 
 async def update_user_subscription(
     telegram_id: int, plan: str, expires_at: datetime | None,
-    customer_id: str = None, subscription_id: str = None, status: str = 'active'
+    customer_id: str = None, subscription_id: str = None, status: str = 'active', bot_id: int = 1
 ) -> dict:
     """Update user subscription and razorpay details.
     
@@ -256,10 +256,10 @@ async def update_user_subscription(
                     hr_requests_left = 5,
                     resume_reviews_left = 1,
                     updated_at = NOW()
-                WHERE telegram_id = $1
+                WHERE telegram_id = $1 AND bot_id = $7
                 RETURNING *
                 """,
-                telegram_id, plan, expires_at, customer_id, subscription_id, status
+                telegram_id, plan, expires_at, customer_id, subscription_id, status, bot_id
             )
         else:
             row = await conn.fetchrow(
@@ -272,10 +272,10 @@ async def update_user_subscription(
                     subscription_status = $6,
                     is_trial = FALSE,
                     updated_at = NOW()
-                WHERE telegram_id = $1
+                WHERE telegram_id = $1 AND bot_id = $7
                 RETURNING *
                 """,
-                telegram_id, plan, expires_at, customer_id, subscription_id, status
+                telegram_id, plan, expires_at, customer_id, subscription_id, status, bot_id
             )
         logger.info(f"User {telegram_id} subscription updated to {status} (Plan: {plan})")
         return dict(row) if row else None
