@@ -157,7 +157,7 @@ async def buy_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 "job_id": str(job_id or ""),
                 "bot_id": str(bot_id),
             },
-            "callback_url": f"https://t.me/{settings.BOT_USERNAME or 'FroncyJobsBot'}",
+            "callback_url": f"https://t.me/{context.bot.username}",
             "callback_method": "get",
         })
         pay_url = payment_link.get("short_url", pay_url)
@@ -282,7 +282,7 @@ async def buy_resume_review_callback(update: Update, context: ContextTypes.DEFAU
                 "purchase_type": "resume_review",
                 "bot_id": str(bot_id),
             },
-            "callback_url": f"https://t.me/{settings.BOT_USERNAME or 'FroncyJobsBot'}",
+            "callback_url": f"https://t.me/{context.bot.username}",
             "callback_method": "get",
         })
         pay_url = payment_link.get("short_url", "https://getfroncy.com")
