@@ -991,10 +991,29 @@ async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_
             job_dict["match"] = match
             base_msg = job_detail_message(job_dict, plan, target_user_dict)
             
-            # Append HR details
+            # Parse comma-separated HR details intelligently
+            parts = [p.strip() for p in reply_text.split(",")]
+            formatted_lines = []
+            for p in parts:
+                if not p: continue
+                if "linkedin.com" in p.lower():
+                    formatted_lines.append(f"Linkedin: {p}")
+                elif "@" in p:
+                    formatted_lines.append(f"Email: {p}")
+                else:
+                    formatted_lines.append(f"Contact: {p}")
+            
+            parsed_hr_text = "\n".join(formatted_lines) if formatted_lines else reply_text
+            
             from utils.messages import escape_md
-            safe_reply_text = escape_md(reply_text)
-            final_msg = f"{base_msg}\n\n👔 *HR Contact Details*\n{safe_reply_text}"
+            safe_reply_text = escape_md(parsed_hr_text)
+            hr_block = f"👔 *HR Contact Details*\n{safe_reply_text}\n\n"
+            
+            divider = "─" * 18 + "\nWhat would you like to do?"
+            if divider in base_msg:
+                final_msg = base_msg.replace(divider, hr_block + divider)
+            else:
+                final_msg = f"{base_msg}\n\n{hr_block.strip()}" 
             
             from utils.keyboards import job_detail_keyboard
             kb = job_detail_keyboard(
@@ -1011,9 +1030,26 @@ async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_
             )
         else:
             title = "👔 *HR Contact Details*" if req_type == "HR_CONTACT" else "📄 *Resume Review Feedback*"
+            
+            # Apply same formatting here if it's an HR request
+            display_text = reply_text
+            if req_type == "HR_CONTACT":
+                parts = [p.strip() for p in reply_text.split(",")]
+                formatted_lines = []
+                for p in parts:
+                    if not p: continue
+                    if "linkedin.com" in p.lower():
+                        formatted_lines.append(f"Linkedin: {p}")
+                    elif "@" in p:
+                        formatted_lines.append(f"Email: {p}")
+                    else:
+                        formatted_lines.append(f"Contact: {p}")
+                if formatted_lines:
+                    display_text = "\n".join(formatted_lines)
+                    
             await target_app.bot.send_message(
                 chat_id=target_user_id,
-                text=f"{title}\n\n{escape_md(reply_text)}",
+                text=f"{title}\n\n{escape_md(display_text)}",
                 parse_mode="MarkdownV2"
             )
             
