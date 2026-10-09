@@ -270,14 +270,29 @@ async def razorpay_webhook(request: Request):
         return {"status": "ignored", "event": event}
 
     payment_info = extract_payment_info(data)
-    if not payment_info:
-        logger.error(f"Could not extract telegram_id from event: {data}")
-        return {"status": "error", "message": "Missing reference data"}
-
-    telegram_id = payment_info["telegram_id"]
-    plan = payment_info["plan"]
-    sub_id = payment_info.get("sub_id")
-    customer_id = payment_info.get("customer_id")
+    telegram_id = None
+    plan = None
+    sub_id = None
+    customer_id = None
+    
+    if payment_info:
+        telegram_id = payment_info["telegram_id"]
+        plan = payment_info["plan"]
+        sub_id = payment_info.get("sub_id")
+        customer_id = payment_info.get("customer_id")
+    else:
+        # Check if it's a one-time purchase which doesn't have a plan
+        payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
+        link_entity = data.get("payload", {}).get("payment_link", {}).get("entity", {})
+        notes = payment_entity.get("notes", {}) or link_entity.get("notes", {}) or {}
+        if notes.get("purchase_type"):
+            telegram_id = int(notes.get("telegram_id", 0))
+            if not telegram_id:
+                logger.error(f"Could not extract telegram_id from one-time purchase: {data}")
+                return {"status": "error", "message": "Missing reference data"}
+        else:
+            logger.error(f"Could not extract telegram_id from event: {data}")
+            return {"status": "error", "message": "Missing reference data"}
 
     if event in ("subscription.charged", "payment.captured", "payment_link.paid"):
         # Check if this is a one-time purchase (HR contact or resume review)
@@ -316,7 +331,6 @@ async def razorpay_webhook(request: Request):
             logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
             try:
                 from bot_registry import get_primary_app, _bots
-                bot_id = int(payment_info.get("bot_id", 1))
                 primary = _bots.get(bot_id, get_primary_app())
                 if primary:
                     await primary.bot.send_message(
@@ -354,7 +368,6 @@ async def razorpay_webhook(request: Request):
             logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
             try:
                 from bot_registry import get_primary_app, _bots
-                bot_id = int(payment_info.get("bot_id", 1))
                 primary = _bots.get(bot_id, get_primary_app())
                 if primary:
                     await primary.bot.send_message(
@@ -389,7 +402,6 @@ async def razorpay_webhook(request: Request):
             logger.info(f"Subscription charged/activated for user {telegram_id}")
             try:
                 from bot_registry import get_primary_app, _bots
-                bot_id = int(payment_info.get("bot_id", 1))
                 primary = _bots.get(bot_id, get_primary_app())
                 guru_name = primary.bot.first_name if primary else "Froncy"
                 if primary:

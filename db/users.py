@@ -111,7 +111,7 @@ async def update_user_profile(
 
 
 async def update_resume(
-    telegram_id: int, resume_text: str, filename: str, bot_id: int = 1
+    telegram_id: int, resume_text: str, filename: str, bot_id: int = 1, raw_bytes: bytes = None
 ) -> dict:
     """Store extracted resume text and filename."""
     pool = get_pool()
