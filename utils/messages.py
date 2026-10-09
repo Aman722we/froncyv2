@@ -651,7 +651,7 @@ def format_daily_feed_message(
 
 
 
-def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
+def job_detail_message(job: dict, plan: str = "free", user: dict = None, hr_reply: str = None) -> str:
     """Format single job detail view."""
     title = escape_md(job.get("title", "Untitled"))
     company = escape_md(job.get("company", "Unknown"))

@@ -54,13 +54,13 @@ async def get_pending_requests(request_type: str | None = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def complete_request(request_id: int) -> bool:
-    """Mark a request as COMPLETED."""
+async def complete_request(request_id: int, admin_reply: str | None = None) -> bool:
+    """Mark a request as COMPLETED and optionally store the reply."""
     pool = get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
-            "UPDATE manual_requests SET status = 'COMPLETED', completed_at = NOW() WHERE id = $1",
-            request_id,
+            "UPDATE manual_requests SET status = 'COMPLETED', completed_at = NOW(), admin_reply = $2 WHERE id = $1",
+            request_id, admin_reply
         )
         return result == "UPDATE 1"
 
@@ -80,3 +80,13 @@ async def has_existing_request(user_id: int, request_type: str, job_id: int | No
                 user_id, request_type.upper()
             )
         return val is not None
+
+
+async def get_completed_request_reply(user_id: int, request_type: str, job_id: int) -> str | None:
+    """Get the admin reply for a completed request."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT admin_reply FROM manual_requests WHERE user_id = $1 AND request_type = $2 AND job_id = $3 AND status = 'COMPLETED'",
+            user_id, request_type.upper(), job_id
+        )

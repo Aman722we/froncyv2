@@ -355,6 +355,7 @@ async def init_db() -> asyncpg.Pool:
                     created_at      TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
+            await conn.execute("ALTER TABLE manual_requests ADD COLUMN IF NOT EXISTS admin_reply TEXT;")
         except Exception as e:
             logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
 
