@@ -785,8 +785,7 @@ def no_jobs_found() -> str:
     return (
         "😔 *No matching jobs found right now*\n\n"
         "Try updating your skills or location in ⚙️ Settings\\.\n\n"
-        "✨ *Didn't find what you're looking for?*\n"
-        "Don't worry — you can paste *ANY* job link \\(LinkedIn, Indeed, etc\\.\\) directly into this chat to get an Apply Smart Kit for it\\!"
+        "Check back later, we scan new roles daily\\!"
     )
 
 

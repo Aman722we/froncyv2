@@ -402,12 +402,19 @@ async def getresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("❌ Invalid user ID. It must be a number.")
         return
 
-    from db.users import get_raw_resume_bytes
+    from db.users import get_raw_resume_bytes, get_user
     bot_id = context.bot_data.get('bot_id', 1)
     raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
     
     if not raw_bytes:
-        await update.message.reply_text("❌ No raw resume found for this user in the database.")
+        # Fallback to resume_text
+        user = await get_user(target_id, bot_id=bot_id)
+        if user and user.get("resume_text"):
+            text = user["resume_text"]
+            safe_text = text[:4000] # Telegram limit
+            await update.message.reply_text(f"⚠️ No raw PDF found, but here is the parsed text:\n\n{safe_text}")
+        else:
+            await update.message.reply_text("❌ No raw resume or parsed text found for this user in the database.")
         return
 
     await update.message.reply_document(

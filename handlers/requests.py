@@ -19,8 +19,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     - Free users → show ₹49 purchase option.
     """
     query = update.callback_query
-    await query.answer()
-
+    
     bot_id = context.bot_data.get("bot_id", 1)
     user_id = update.effective_user.id
     user = await get_user(user_id, bot_id=bot_id)
@@ -87,6 +86,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as e:
             logger.warning(f"Could not notify admin of HR request: {e}")
 
+        await query.answer()
         new_left = hr_left - 1
         await context.bot.send_message(
             chat_id=user_id,
@@ -200,8 +200,7 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
     - Free users → show ₹99 purchase option.
     """
     query = update.callback_query
-    await query.answer()
-
+    
     bot_id = context.bot_data.get("bot_id", 1)
     user_id = update.effective_user.id
     user = await get_user(user_id, bot_id=bot_id)
