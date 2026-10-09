@@ -58,7 +58,11 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             from db.manual_jobs import get_manual_job_by_id
             job = await get_manual_job_by_id(job_id) if job_id else None
-            job_info = f"{job['title']} @ {job['company']}" if job else f"Job ID #{job_id}"
+            if job:
+                job_url = job.get('url', '')
+                job_info = f"{job['title']} @ {job['company']}\n👔 <a href='{job_url}'>Job Link</a>"
+            else:
+                job_info = f"Job ID #{job_id}"
         except Exception:
             job_info = f"Job ID #{job_id}"
 
@@ -151,7 +155,7 @@ async def buy_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         payment_link = client.payment_link.create({
             "amount": 4900,
             "currency": "INR",
-            "description": "Froncy — HR Contact Request",
+            "description": f"{context.bot.first_name} — HR Contact Request",
             "notes": {
                 "telegram_id": str(user_id),
                 "purchase_type": "hr_contact",
@@ -277,7 +281,7 @@ async def buy_resume_review_callback(update: Update, context: ContextTypes.DEFAU
         payment_link = client.payment_link.create({
             "amount": 9900,  # ₹99 in paise
             "currency": "INR",
-            "description": "Froncy — Human Resume Review",
+            "description": f"{context.bot.first_name} — Human Resume Review",
             "notes": {
                 "telegram_id": str(user_id),
                 "purchase_type": "resume_review",

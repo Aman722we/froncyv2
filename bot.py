@@ -90,7 +90,7 @@ async def global_error_handler(update, context) -> None:
 
 async def help_command(update, context):
     """Handle /help."""
-    await update.message.reply_text(help_message(), parse_mode="MarkdownV2")
+    await update.message.reply_text(help_message(bot_name=context.bot.first_name), parse_mode="MarkdownV2")
 
 
 
@@ -180,6 +180,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("bulkadd", bulkadd_command))
     app.add_handler(CommandHandler("listsources", listsources_command))
     app.add_handler(CommandHandler("syncnow", syncnow_command))
+    app.add_handler(CommandHandler("completerequest", completerequest_command))
     app.add_handler(CommandHandler("pingjob", admin_pingjob))
     app.add_handler(CommandHandler("analytics", analytics_command))
     app.add_handler(CommandHandler("users",     users_command))

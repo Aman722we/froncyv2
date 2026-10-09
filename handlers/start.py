@@ -62,7 +62,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             except Exception:
                 pass
         await update.message.reply_text(
-            messages.main_menu(db_user),
+            messages.main_menu(db_user, bot_name=context.bot.first_name),
             reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
             parse_mode="MarkdownV2",
         )
@@ -439,7 +439,7 @@ async def _complete_onboarding(
     db_pool = get_pool()
     trial_expires_at = await start_trial(user_id, db_pool)
 
-    msg = messages.trial_activated_message(trial_expires_at)
+    msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
     kb = keyboards.onboarding_complete_keyboard()
 
     if query:
@@ -512,7 +512,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             pass
 
     await update.message.reply_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )

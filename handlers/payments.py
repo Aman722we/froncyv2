@@ -42,10 +42,10 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     pricing = await get_current_pricing(db_pool)
 
     if pricing["is_early_adopter_active"]:
-        msg = messages.upgrade_early_adopter_message(pricing)
+        msg = messages.upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
         btn_label = f"💳 Lock in ₹{pricing['current_price']}/mo Now"
     else:
-        msg = messages.upgrade_regular_message(pricing)
+        msg = messages.upgrade_regular_message(pricing, bot_name=context.bot.first_name)
         btn_label = f"💳 Upgrade to Pro — ₹{pricing['current_price']}/mo"
 
     kb = InlineKeyboardMarkup([

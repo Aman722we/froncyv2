@@ -556,9 +556,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
         pricing = await get_current_pricing(_get_pool_pricing())
         if pricing.get("is_early_adopter_active"):
-            upgrade_msg = upgrade_early_adopter_message(pricing)
+            upgrade_msg = upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
         else:
-            upgrade_msg = upgrade_regular_message(pricing)
+            upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
         if plan == "pro":
             limit_text = (
@@ -909,9 +909,9 @@ async def apply_smart_locked_callback(update: Update, context: ContextTypes.DEFA
 
     pricing = await get_current_pricing(_get_pool_pricing())
     if pricing.get("is_early_adopter_active"):
-        upgrade_msg = upgrade_early_adopter_message(pricing)
+        upgrade_msg = upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
     else:
-        upgrade_msg = upgrade_regular_message(pricing)
+        upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Upgrade Now", callback_data="upgrade_pro")],

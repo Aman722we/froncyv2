@@ -26,7 +26,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 
     await update.message.reply_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )
@@ -42,7 +42,7 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 
     await query.edit_message_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )
