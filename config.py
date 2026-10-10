@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # Development Overrides
     DEV_TELEGRAM_BOT_TOKEN: str = ""
     DEV_DATABASE_URL: str = ""
+    DEV_SUPABASE_URL: str = ""
+    DEV_SUPABASE_KEY: str = ""
 
     class Config:
         env_file = ".env"
@@ -48,6 +50,12 @@ class Settings(BaseSettings):
                 self.TELEGRAM_BOT_TOKEN = self.DEV_TELEGRAM_BOT_TOKEN
             if self.DEV_DATABASE_URL:
                 self.DATABASE_URL = self.DEV_DATABASE_URL
+        
+        # Override with DEV tokens if provided (regardless of ENVIRONMENT so test bots can run anywhere)
+        if self.DEV_SUPABASE_URL:
+            self.SUPABASE_URL = self.DEV_SUPABASE_URL
+        if self.DEV_SUPABASE_KEY:
+            self.SUPABASE_KEY = self.DEV_SUPABASE_KEY
 
 
 # Singleton settings instance
