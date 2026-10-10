@@ -338,8 +338,15 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         from utils.messages import compute_match_details
         details = compute_match_details(user_skills, job.get("skills", []), str(user_exp), job.get("experience_required"))
     score = details["score"]
+    
+    from db.manual_requests import get_completed_request_reply, is_request_completed
+    hr_reply = None
+    hr_completed = False
+    if is_manual:
+        hr_reply = await get_completed_request_reply(user_id, "HR_CONTACT", job_id)
+        hr_completed = await is_request_completed(user_id, "HR_CONTACT", job_id)
 
-    msg = messages.job_detail_message(job, plan=plan, user=user)
+    msg = messages.job_detail_message(job, plan=plan, user=user, hr_reply=hr_reply)
 
     # Check Apply Smart usage to decide whether to show lock icon on the button
     from db.users import get_apply_smart_usage
@@ -360,7 +367,7 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception:
         pass
 
-    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked, is_applied=_is_applied)
+    kb = keyboards.job_detail_keyboard(job, plan=plan, score=score, from_saved=from_saved, from_daily=from_daily, user_id=user_id, apply_smart_locked=_as_locked, is_applied=_is_applied, hr_granted=hr_completed)
 
     is_revisit = query.data.startswith("revisit_")
 
@@ -556,9 +563,9 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
         pricing = await get_current_pricing(_get_pool_pricing())
         if pricing.get("is_early_adopter_active"):
-            upgrade_msg = upgrade_early_adopter_message(pricing)
+            upgrade_msg = upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
         else:
-            upgrade_msg = upgrade_regular_message(pricing)
+            upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
         if plan == "pro":
             limit_text = (
@@ -909,9 +916,9 @@ async def apply_smart_locked_callback(update: Update, context: ContextTypes.DEFA
 
     pricing = await get_current_pricing(_get_pool_pricing())
     if pricing.get("is_early_adopter_active"):
-        upgrade_msg = upgrade_early_adopter_message(pricing)
+        upgrade_msg = upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
     else:
-        upgrade_msg = upgrade_regular_message(pricing)
+        upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Upgrade Now", callback_data="upgrade_pro")],

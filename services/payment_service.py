@@ -156,12 +156,16 @@ def extract_payment_info(webhook_data: dict) -> dict | None:
         sub_id = entity.get("id", "")
         customer_id = entity.get("customer_id", "")
 
+        bot_id_str = notes.get("bot_id", "1")
+        bot_id = int(bot_id_str) if str(bot_id_str).isdigit() else 1
+
         if telegram_id and plan in PLAN_PRICES:
             return {
                 "telegram_id": telegram_id, 
                 "plan": plan, 
                 "sub_id": sub_id, 
-                "customer_id": customer_id
+                "customer_id": customer_id,
+                "bot_id": bot_id
             }
 
         # Alternate path if payment event is used
@@ -170,8 +174,11 @@ def extract_payment_info(webhook_data: dict) -> dict | None:
         telegram_id = int(notes.get("telegram_id", 0))
         plan = notes.get("plan", "")
         
+        bot_id_str = notes.get("bot_id", "1")
+        bot_id = int(bot_id_str) if str(bot_id_str).isdigit() else 1
+        
         if telegram_id and plan in PLAN_PRICES:
-            return {"telegram_id": telegram_id, "plan": plan}
+            return {"telegram_id": telegram_id, "plan": plan, "bot_id": bot_id}
 
     except Exception as e:
         logger.error(f"Failed to extract payment info: {e}")

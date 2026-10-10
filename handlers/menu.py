@@ -26,7 +26,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 
     await update.message.reply_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )
@@ -42,7 +42,7 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
 
     await query.edit_message_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )
@@ -57,7 +57,7 @@ async def submit_job_link_info_callback(update: Update, context: ContextTypes.DE
         "🔗 *Bring Your Own Job*\n\n"
         "Found a job on LinkedIn, Indeed, or another board?\n\n"
         "Just paste the URL directly into this chat\\! "
-        "We'll instantly verify it and generate a complete *Apply Smart Kit* for you\\. 🚀"
+        "We'll verify if it's legit or fake, and you can generate a cover letter or request HR details\\."
     )
     
     # Back button to return to menu

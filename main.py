@@ -208,8 +208,25 @@ async def multi_tenant_webhook(token: str, request: Request):
     
     app_instance = get_app_for_token(token)
     if not app_instance:
-        logger.warning(f"Webhook received for unknown token: {token[:20]}...")
-        raise HTTPException(status_code=404, detail="Bot not found")
+        logger.warning(f"Webhook received for unknown token: {token[:20]}... Attempting to load from DB.")
+        from db.bots import get_bot_by_token
+        bot_cfg = await get_bot_by_token(token)
+        if not bot_cfg:
+            # Fallback for primary bot
+            if token == settings.TELEGRAM_BOT_TOKEN:
+                bot_cfg = {"id": 1, "bot_token": token}
+                
+        if bot_cfg:
+            try:
+                from bot_registry import add_bot
+                from bot import build_bot
+                app_instance = await add_bot(token, bot_cfg.get("id", 1), build_bot)
+                logger.info(f"Successfully hot-loaded bot {token[:20]}...")
+            except Exception as e:
+                logger.error(f"Failed to hot-load bot {token[:20]}...: {e}")
+                
+        if not app_instance:
+            raise HTTPException(status_code=404, detail="Bot not found")
     
     return await _process_telegram_update(request, app_instance, log_prefix=f" [token={token[:10]}...]")
 
@@ -249,54 +266,157 @@ async def razorpay_webhook(request: Request):
     event = data.get("event")
     
     # We care about subscription events
-    if event not in ("subscription.charged", "subscription.cancelled", "subscription.halted", "payment.captured", "payment_link.paid"):
+    if event not in ("subscription.charged", "subscription.cancelled", "subscription.halted", "payment_link.paid"):
         return {"status": "ignored", "event": event}
 
     payment_info = extract_payment_info(data)
-    if not payment_info:
-        logger.error(f"Could not extract telegram_id from event: {data}")
-        return {"status": "error", "message": "Missing reference data"}
+    telegram_id = None
+    plan = None
+    sub_id = None
+    customer_id = None
+    
+    if payment_info:
+        telegram_id = payment_info["telegram_id"]
+        plan = payment_info["plan"]
+        sub_id = payment_info.get("sub_id")
+        customer_id = payment_info.get("customer_id")
+    else:
+        # Check if it's a one-time purchase which doesn't have a plan
+        payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
+        link_entity = data.get("payload", {}).get("payment_link", {}).get("entity", {})
+        notes = payment_entity.get("notes", {}) or link_entity.get("notes", {}) or {}
+        if notes.get("purchase_type"):
+            telegram_id = int(notes.get("telegram_id", 0))
+            if not telegram_id:
+                logger.error(f"Could not extract telegram_id from one-time purchase: {data}")
+                return {"status": "error", "message": "Missing reference data"}
+        else:
+            logger.error(f"Could not extract telegram_id from event: {data}")
+            return {"status": "error", "message": "Missing reference data"}
 
-    telegram_id = payment_info["telegram_id"]
-    plan = payment_info["plan"]
-    sub_id = payment_info.get("sub_id")
-    customer_id = payment_info.get("customer_id")
-
-    if event in ("subscription.charged", "payment.captured", "payment_link.paid"):
-        # Calculate expiration (1 month from now)
-        expires_at = datetime.now(timezone.utc) + relativedelta(months=1)
-        await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active')
-        logger.info(f"Subscription charged/activated for user {telegram_id}")
-
-        # Notify user via bot
+    if event in ("subscription.charged", "payment_link.paid"):
+        # Check if this is a one-time purchase (HR contact or resume review)
+        purchase_type = None
+        job_id = None
         try:
-            from utils.helpers import escape_md
-            amount = data.get("payload", {}).get("payment", {}).get("entity", {}).get("amount", 0) / 100
-            if amount == 0:
-                amount = data.get("payload", {}).get("subscription", {}).get("entity", {}).get("total_count", 0) # Just fallback if we don't have it
-            
-            primary = get_primary_app()
-            if primary:
-                await primary.bot.send_message(
-                chat_id=telegram_id,
-                text=(
-                    f"🎉 *You're now on Pro\\!*\n\n"
-                    f"Valid until: {escape_md(expires_at.strftime('%B %d, %Y'))}\n\n"
-                    "✅ Unlimited jobs\n"
-                    "✅ 10 cover letters/day\n"
-                    "✅ Full match scores\n"
-                    "✅ 5 ATS checks/day\n\n"
-                    "Type /menu to explore your new features\\."
-                ),
-                parse_mode="MarkdownV2"
-            )
-        except Exception as e:
-            logger.error(f"Failed to notify user {telegram_id} of upgrade: {e}")
+            # One-time payment links store purchase_type in notes
+            payment_entity = data.get("payload", {}).get("payment", {}).get("entity", {})
+            link_entity = data.get("payload", {}).get("payment_link", {}).get("entity", {})
+            notes = payment_entity.get("notes", {}) or link_entity.get("notes", {}) or {}
+            purchase_type = notes.get("purchase_type")
+            job_id_str = notes.get("job_id", "")
+            job_id = int(job_id_str) if job_id_str and job_id_str.isdigit() else None
+            # ID and bot_id may be in notes directly for one-time purchases
+            bot_id = 1
+            if payment_info:
+                bot_id = int(payment_info.get("bot_id", 1))
+            elif notes.get("telegram_id"):
+                telegram_id = int(notes["telegram_id"])
+                bot_id_str = notes.get("bot_id", "1")
+                bot_id = int(bot_id_str) if str(bot_id_str).isdigit() else 1
+        except Exception:
+            pass
+
+        if purchase_type == "hr_contact":
+            # Grant 1 HR contact credit and queue the request
+            # Removed +1 credit to prevent double dipping since we queue the request immediately
+            from db.manual_requests import create_request
+            req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
+            logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
+            try:
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            "✅ <b>Payment received — HR Contact Request queued!</b>\n\n"
+                            "We'll find the relevant hiring contact and send it to you shortly."
+                        ),
+                        parse_mode="HTML",
+                    )
+                    await primary.bot.send_message(
+                        chat_id=settings.ADMIN_TELEGRAM_ID,
+                        text=(
+                            f"💰 <b>Paid HR Contact Request</b> [₹49] [#{req_id}]\n"
+                            f"User: <code>{telegram_id}</code>\n"
+                            f"Job ID: {job_id or 'N/A'}\n"
+                            f"Use /completerequest {req_id} when done."
+                        ),
+                        parse_mode="HTML",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify on HR purchase: {e}")
+
+        elif purchase_type == "resume_review":
+            # Grant 1 resume review credit and queue the request
+            # Removed +1 credit to prevent double dipping since we queue the request immediately
+            from db.manual_requests import create_request
+            req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
+            logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
+            try:
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            "✅ <b>Payment received — Resume Review queued!</b>\n\n"
+                            "A human reviewer will go through your resume and send you detailed feedback shortly.\n\n"
+                            "💡 Make sure your resume is uploaded under <b>My Resume</b>."
+                        ),
+                        parse_mode="HTML",
+                    )
+                    await primary.bot.send_message(
+                        chat_id=settings.ADMIN_TELEGRAM_ID,
+                        text=(
+                            f"💰 <b>Paid Resume Review</b> [₹99] [#{req_id}]\n"
+                            f"User: <code>{telegram_id}</code>\n"
+                            f"Use /getresume {telegram_id} to fetch resume.\n"
+                            f"Mark done: /completerequest {req_id}"
+                        ),
+                        parse_mode="HTML",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify on resume review purchase: {e}")
+
+        elif payment_info:
+            # Standard Pro subscription charge
+            plan = payment_info["plan"]
+            sub_id = payment_info.get("sub_id")
+            customer_id = payment_info.get("customer_id")
+            expires_at = datetime.now(timezone.utc) + relativedelta(months=1)
+            await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active', bot_id)
+            logger.info(f"Subscription charged/activated for user {telegram_id}")
+            try:
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
+                guru_name = primary.bot.first_name if primary else "Froncy"
+                if primary:
+                    await primary.bot.send_message(
+                        chat_id=telegram_id,
+                        text=(
+                            f"🎉 *You're now on {escape_md(guru_name)} Pro\\!*\n\n"
+                            f"Valid until: {escape_md(expires_at.strftime('%B %d, %Y'))}\n\n"
+                            "✅ Instant job alerts \\(direct from company career pages\\)\n"
+                            "✅ Full job match scores\n"
+                            "✅ 5 HR contact requests/month\n"
+                            "✅ 1 human resume review included\n\n"
+                            "Type /menu to explore your new features\\."
+                        ),
+                        parse_mode="MarkdownV2",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify user {telegram_id} of upgrade: {e}")
+        else:
+            logger.warning(f"payment event with no recognizable payload: {data.get('event')}")
+
 
     elif event in ("subscription.cancelled", "subscription.halted"):
         # The user's subscription won't auto-renew. We keep the current plan_expires_at.
         # But we update the status so the UI knows it's cancelled.
-        await update_user_subscription(telegram_id, plan, None, customer_id, sub_id, 'cancelled')
+        bot_id = payment_info.get("bot_id", 1) if payment_info else 1
+        await update_user_subscription(telegram_id, plan, None, customer_id, sub_id, 'cancelled', bot_id)
         logger.info(f"Subscription {event} for user {telegram_id}")
 
     return {"status": "ok"}
@@ -311,3 +431,13 @@ if __name__ == "__main__":
     import uvicorn
     # Make sure python-dateutil is added to requirements for relativedelta
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+@app.get("/health_bots")
+async def health_bots():
+    from bot_registry import _registry, _primary_token
+    return {
+        "primary_token_prefix": _primary_token[:10] if _primary_token else None,
+        "registry_keys": [k[:10] + "..." for k in _registry.keys()],
+        "status": "ok"
+    }

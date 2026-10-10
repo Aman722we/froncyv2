@@ -14,7 +14,7 @@ from services.referral_service import get_referral_stats, REFERRAL_BONUS_DAYS, R
 BOT_USERNAME = "FroncyJobsBot"
 
 
-async def _build_refer_message(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
+async def _build_refer_message(user_id: int, bot_username: str) -> tuple[str, InlineKeyboardMarkup]:
     """Build the referral message and keyboard for a user."""
     pool = get_pool()
     stats = await get_referral_stats(user_id, pool)
@@ -24,7 +24,7 @@ async def _build_refer_message(user_id: int) -> tuple[str, InlineKeyboardMarkup]
     days_left_cap  = stats["days_until_cap"]
     at_cap         = stats["at_cap"]
 
-    link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
+    link = f"https://t.me/{bot_username}?start=ref_{user_id}"
 
     if at_cap:
         cap_note = (
@@ -62,7 +62,7 @@ async def _build_refer_message(user_id: int) -> tuple[str, InlineKeyboardMarkup]
 async def refer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /refer command."""
     user_id = update.effective_user.id
-    msg, kb = await _build_refer_message(user_id)
+    msg, kb = await _build_refer_message(user_id, context.bot.username)
     await update.message.reply_text(
         msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
     )
@@ -73,7 +73,7 @@ async def refer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
-    msg, kb = await _build_refer_message(user_id)
+    msg, kb = await _build_refer_message(user_id, context.bot.username)
     await query.edit_message_text(
         msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
     )

@@ -62,7 +62,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             except Exception:
                 pass
         await update.message.reply_text(
-            messages.main_menu(db_user),
+            messages.main_menu(db_user, bot_name=context.bot.first_name),
             reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
             parse_mode="MarkdownV2",
         )
@@ -396,8 +396,21 @@ async def resume_received(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Extract text from the saved file
         resume_text = extract_text_from_pdf(saved_path)
 
+        # Upload to Supabase Storage
+        from services.storage import upload_resume, delete_resume
+        from db.users import get_user
+        
+        bot_id = context.bot_data.get('bot_id', 1)
+        old_user = await get_user(user_id, bot_id=bot_id)
+        if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != document.file_name:
+            await delete_resume(user_id, old_user["resume_filename"])
+            
+        raw_bytes = bytes(file_bytes)
+        resume_url = await upload_resume(user_id, document.file_name, raw_bytes)
+
         # Update DB 
-        await update_resume(user_id, resume_text, document.file_name)
+        bot_id = context.bot_data.get('bot_id', 1)
+        await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
 
         from telegram import InlineKeyboardMarkup as IKM, InlineKeyboardButton as IKB
         await update.message.reply_text(
@@ -439,7 +452,7 @@ async def _complete_onboarding(
     db_pool = get_pool()
     trial_expires_at = await start_trial(user_id, db_pool)
 
-    msg = messages.trial_activated_message(trial_expires_at)
+    msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
     kb = keyboards.onboarding_complete_keyboard()
 
     if query:
@@ -512,7 +525,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             pass
 
     await update.message.reply_text(
-        messages.main_menu(user),
+        messages.main_menu(user, bot_name=context.bot.first_name),
         reply_markup=keyboards.main_menu_keyboard(plan, upgrade_price=upgrade_price),
         parse_mode="MarkdownV2",
     )

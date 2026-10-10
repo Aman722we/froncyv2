@@ -111,7 +111,7 @@ async def update_user_profile(
 
 
 async def update_resume(
-    telegram_id: int, resume_text: str, filename: str, bot_id: int = 1
+    telegram_id: int, resume_text: str, filename: str, bot_id: int = 1, raw_bytes: bytes = None, resume_url: str = None
 ) -> dict:
     """Store extracted resume text and filename."""
     pool = get_pool()
@@ -119,7 +119,7 @@ async def update_resume(
         row = await conn.fetchrow(
             """
             UPDATE users
-            SET resume_text = $2, resume_filename = $3, updated_at = NOW()
+            SET resume_text = $2, resume_filename = $3, resume_url = COALESCE($5, resume_url), updated_at = NOW()
             WHERE telegram_id = $1 AND bot_id = $4
             RETURNING *
             """,
@@ -127,6 +127,7 @@ async def update_resume(
             resume_text,
             filename,
             bot_id,
+            resume_url,
         )
         return dict(row) if row else None
 
@@ -233,26 +234,50 @@ async def update_user_plan(
 
 async def update_user_subscription(
     telegram_id: int, plan: str, expires_at: datetime | None,
-    customer_id: str = None, subscription_id: str = None, status: str = 'active'
+    customer_id: str = None, subscription_id: str = None, status: str = 'active', bot_id: int = 1
 ) -> dict:
-    """Update user subscription and razorpay details."""
+    """Update user subscription and razorpay details.
+    
+    On each successful charge (status='active'), Pro credits are refreshed:
+    - hr_requests_left = 5  (5 HR contact lookups per month)
+    - resume_reviews_left = 1  (1 human resume review per billing cycle)
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            UPDATE users
-            SET plan = $2, 
-                plan_expires_at = COALESCE($3, plan_expires_at), 
-                razorpay_customer_id = COALESCE($4, razorpay_customer_id),
-                razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
-                subscription_status = $6,
-                is_trial = FALSE,
-                updated_at = NOW()
-            WHERE telegram_id = $1
-            RETURNING *
-            """,
-            telegram_id, plan, expires_at, customer_id, subscription_id, status
-        )
+        if status == 'active' and plan in ('pro', 'proplus', 'premium'):
+            row = await conn.fetchrow(
+                """
+                UPDATE users
+                SET plan = $2,
+                    plan_expires_at = COALESCE($3, plan_expires_at),
+                    razorpay_customer_id = COALESCE($4, razorpay_customer_id),
+                    razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
+                    subscription_status = $6,
+                    is_trial = FALSE,
+                    hr_requests_left = 5,
+                    resume_reviews_left = 1,
+                    updated_at = NOW()
+                WHERE telegram_id = $1 AND bot_id = $7
+                RETURNING *
+                """,
+                telegram_id, plan, expires_at, customer_id, subscription_id, status, bot_id
+            )
+        else:
+            row = await conn.fetchrow(
+                """
+                UPDATE users
+                SET plan = $2,
+                    plan_expires_at = COALESCE($3, plan_expires_at),
+                    razorpay_customer_id = COALESCE($4, razorpay_customer_id),
+                    razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
+                    subscription_status = $6,
+                    is_trial = FALSE,
+                    updated_at = NOW()
+                WHERE telegram_id = $1 AND bot_id = $7
+                RETURNING *
+                """,
+                telegram_id, plan, expires_at, customer_id, subscription_id, status, bot_id
+            )
         logger.info(f"User {telegram_id} subscription updated to {status} (Plan: {plan})")
         return dict(row) if row else None
 
@@ -444,20 +469,33 @@ async def set_manual_resume_flag(telegram_id: int, flag: bool, bot_id: int = 1) 
         )
 
 
-async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str, bot_id: int = 1) -> None:
+async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str, bot_id: int = 1, resume_url: str = None) -> None:
     """Save the raw PDF bytes for admin manual processing, without replacing resume_text."""
     pool = get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             """
             UPDATE users
-            SET raw_resume_bytes = $2, resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW()
+            SET resume_filename = $2, needs_manual_resume = TRUE, updated_at = NOW(), resume_url = COALESCE($4, resume_url)
+            WHERE telegram_id = $1 AND bot_id = $3
+            """,
+            telegram_id,
+            filename,
+            bot_id,
+            resume_url,
+        )
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW(), resume_url = COALESCE($5, resume_url)
             WHERE telegram_id = $1 AND bot_id = $4
             """,
             telegram_id,
             raw_bytes,
             filename,
             bot_id,
+            resume_url,
         )
 
 

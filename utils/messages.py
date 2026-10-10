@@ -23,7 +23,7 @@ def welcome_message(first_name: str = "there") -> str:
     return (
         f"👋 Hey {safe_name}\\!\n\n"
         "Struggling to land your first frontend job?\n\n"
-        "Froncy curates the best frontend jobs & internships for freshers, "
+        f"{escape_md(bot_name)} curates the best frontend jobs & internships for freshers, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
         "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
@@ -45,7 +45,7 @@ def skills_prompt(first_name: str = None) -> str:
     )
 
 
-def trial_activated_message(trial_expires_at) -> str:
+def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
     """Shown after onboarding completes."""
     if trial_expires_at:
         from datetime import timezone
@@ -61,10 +61,8 @@ def trial_activated_message(trial_expires_at) -> str:
         "See how well each opportunity matches your profile\\.\n\n"
         "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
         "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
-        "\U0001F464 *HR Contact Requests*\n"
-        "Found a job worth applying to? Request the relevant hiring/HR contact from Froncy\\.\n\n"
-        "\U0001F4C4 *Resume Review*\n"
-        "You can request a human review of your resume when you need help understanding why you're not getting interview calls\\.\n\n"
+        "\U0001F464 *HR Contact Request \\(1 Free\\)*\n"
+        f"Found a job worth applying to? Request the relevant hiring/HR contact from {escape_md(bot_name)} \\(1 free request included in trial\\)\\.\n\n"
         "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
         "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
@@ -94,17 +92,24 @@ def onboarding_complete(skills: list[str], location: str, has_resume: bool) -> s
 # Main Menu
 # ──────────────────────────────────────────────
 
-def main_menu(user: dict, pricing: dict | None = None) -> str:
+def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
     plan = user.get("plan", "free")
+    
+    hr_left = user.get("hr_requests_left", 0) or 0
+    rr_left = user.get("resume_reviews_left", 0) or 0
+    if plan not in ("pro", "proplus", "premium"):
+        rr_left = 0
+    
+    # We will format it exactly as requested:
+    # Plan: ⭐ Pro (Unlimited jobs • HR Requests: X left • Resume Reviews: Y left • Renews: Z)
 
     if plan == "pro":
         expires_at = user.get("plan_expires_at")
         date_str = expires_at.strftime("%b %d") if expires_at else "soon"
-        early_tag = " \\(Early Adopter 🔒\\)" if user.get("is_early_adopter") else ""
+        early_tag = " \(Early Adopter 🚀\)" if user.get("is_early_adopter") else ""
         return (
-            "🏠 *Froncy*\n"
-            f"Plan: ⭐ Pro{early_tag} \\(Unlimited jobs · 10 cover letters · 5 ATS checks/day\\)\n"
-            f"Renews: {escape_md(date_str)}\n"
+            f"🏠 *{escape_md(bot_name)}*\n"
+            f"Plan: ⭐ Pro{early_tag} \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • Renews: {escape_md(date_str)}\)"
         )
 
     is_trial = user.get("is_trial", False)
@@ -118,26 +123,21 @@ def main_menu(user: dict, pricing: dict | None = None) -> str:
             if hours_left > 0:
                 time_str = f"{hours_left}h remaining"
                 return (
-                    "🏠 *Froncy*\n"
-                    f"⚡ Pro Trial — {escape_md(time_str)}\n"
+                    f"🏠 *{escape_md(bot_name)}*\n"
+                    f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
-                "🏠 *Froncy*\n"
-                f"⚡ Pro Trial — active\n"
+                f"🏠 *{escape_md(bot_name)}*\n"
+                f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • active\)"
             )
 
-    # Free plan — no upgrade text in message body (keyboard has the button)
+    # Free plan
     return (
-        "🏠 *Froncy*\n"
-        "Plan: Free \\(5 jobs · 1 cover letter · 1 ATS check/day\\)"
+        f"🏠 *{escape_md(bot_name)}*\n"
+        f"Plan: Free \(5 jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left\)"
     )
-
-
-# ──────────────────────────────────────────────
-# Jobs
-# ──────────────────────────────────────────────
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
     """Compute a weighted match score: 70% skills + 30% experience."""
@@ -653,7 +653,7 @@ def format_daily_feed_message(
 
 
 
-def job_detail_message(job: dict, plan: str = "free", user: dict = None) -> str:
+def job_detail_message(job: dict, plan: str = "free", user: dict = None, hr_reply: str = None) -> str:
     """Format single job detail view."""
     title = escape_md(job.get("title", "Untitled"))
     company = escape_md(job.get("company", "Unknown"))
@@ -787,8 +787,7 @@ def no_jobs_found() -> str:
     return (
         "😔 *No matching jobs found right now*\n\n"
         "Try updating your skills or location in ⚙️ Settings\\.\n\n"
-        "✨ *Didn't find what you're looking for?*\n"
-        "Don't worry — you can paste *ANY* job link \\(LinkedIn, Indeed, etc\\.\\) directly into this chat to get an Apply Smart Kit for it\\!"
+        "Check back later, we scan new roles daily\\!"
     )
 
 
@@ -935,21 +934,21 @@ def _pricing_block(pricing: dict | None) -> str:
     return f"Pro: ₹{pricing.get('current_price', 499)}/mo"
 
 
-def upgrade_early_adopter_message(pricing: dict) -> str:
+def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> str:
     """Dynamic upgrade message shown during early adopter period."""
     ea_price = pricing['early_adopter_price']
     reg_price = pricing['regular_price']
     slots_left = pricing.get('slots_remaining', 200)
 
     return (
-        "\U0001F680 *Froncy Pro — Early Adopter Offer*\n\n"
+        f"\U0001F680 *{escape_md(bot_name)} Pro — Early Adopter Offer*\n\n"
         f"*₹{ea_price}/month*\n"
         f"Regular price: ~₹{reg_price}/month~\n\n"
         f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
         f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
         "*Why upgrade?*\n\n"
         "\u26A1 *Get relevant jobs instantly*\n"
-        "Froncy continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
+        f"{escape_md(bot_name)} continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
         "\U0001F3AF *Know which jobs fit you*\n"
         "Get full match scores based on your skills, experience and profile\\.\n\n"
         "\U0001F3E2 *Direct\\-source opportunities*\n"
@@ -962,7 +961,7 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
         "\u2705 Instant matched job alerts\n"
         "\u2705 Full job match scores\n"
         "\u2705 Unlimited job alerts\n"
-        "\u2705 HR contact requests \\(15/month\\)\n"
+        "\u2705 HR contact requests \\(5/month\\)\n"
         "\u2705 Human resume review \\(One time\\)\n"
         "\u2705 Application tracking & follow\\-up reminders\n\n"
         "No unnecessary AI features\\.\n"
@@ -971,11 +970,11 @@ def upgrade_early_adopter_message(pricing: dict) -> str:
     )
 
 
-def upgrade_regular_message(pricing: dict) -> str:
+def upgrade_regular_message(pricing: dict, bot_name: str = "Froncy") -> str:
     """Dynamic upgrade message after early adopter period ends."""
     price = pricing.get('current_price', 499)
     return (
-        f"💸 *Froncy Pro — ₹{price}/month*\n\n"
+        f"💸 *{escape_md(bot_name)} Pro — ₹{price}/month*\n\n"
         "*🚀 What you can do with Pro:*\n\n"
         "✅ 10 Apply Smart kits/day — one click generates:\n"
         "   📄 ATS\\-tailored Resume PDF\n"
@@ -1141,9 +1140,9 @@ def error_subscription_expired() -> str:
     return "⚠️ Your plan has expired\\. Renew to continue using premium features\\."
 
 
-def help_message() -> str:
+def help_message(bot_name: str = "Froncy") -> str:
     return (
-        "ℹ️ *FroncyBot Help*\n\n"
+        "ℹ️ *{escape_md(bot_name)} Help*\n\n"
         "*Commands:*\n"
         "/start — Open bot / main menu\n"
         "/menu — Show main menu\n"

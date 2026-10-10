@@ -402,20 +402,42 @@ async def getresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("❌ Invalid user ID. It must be a number.")
         return
 
-    from db.users import get_raw_resume_bytes
+    from db.users import get_raw_resume_bytes, get_user
     bot_id = context.bot_data.get('bot_id', 1)
-    raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
+    user = await get_user(target_id, bot_id=bot_id)
     
-    if not raw_bytes:
-        await update.message.reply_text("❌ No raw resume found for this user in the database.")
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return
+        
+    resume_url = user.get("resume_url")
+    if resume_url:
+        await update.message.reply_document(
+            document=resume_url,
+            filename=user.get("resume_filename") or f"resume_{target_id}.pdf",
+            caption=f"Here is the resume for user <code>{target_id}</code>.",
+            parse_mode="HTML"
+        )
         return
 
-    await update.message.reply_document(
-        document=raw_bytes,
-        filename=filename or f"resume_{target_id}.pdf",
-        caption=f"Here is the broken resume for user <code>{target_id}</code>.",
-        parse_mode="HTML"
-    )
+    # Fallback for very old users before migration
+    raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
+    if raw_bytes:
+        await update.message.reply_document(
+            document=raw_bytes,
+            filename=filename or f"resume_{target_id}.pdf",
+            caption=f"Here is the raw resume for user <code>{target_id}</code>.",
+            parse_mode="HTML"
+        )
+        return
+        
+    # Fallback to resume_text
+    if user and user.get("resume_text"):
+        text = user["resume_text"]
+        safe_text = text[:4000] # Telegram limit
+        await update.message.reply_text(f"⚠️ No raw PDF found, but here is the parsed text:\n\n{safe_text}")
+    else:
+        await update.message.reply_text("❌ No raw resume or parsed text found for this user in the database.")
 
 
 async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -842,3 +864,428 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.edit_text(chunk, parse_mode="HTML")
         else:
             await update.message.reply_text(chunk, parse_mode="HTML")
+
+
+async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin command to test instant job alert. Usage: /pingjob <user_id> <job_id>"""
+    from config import settings
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    if len(args) != 2:
+        await update.message.reply_text("Usage: /pingjob <user_id> <job_id>")
+        return
+
+    target_id, job_id = args
+    try: target_id, job_id = int(target_id), int(job_id)
+    except: return await update.message.reply_text("IDs must be integers")
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        job_row = await conn.fetchrow("SELECT * FROM manual_jobs WHERE id = $1", job_id)
+    
+    if not job_row:
+        await update.message.reply_text("Job not found")
+        return
+        
+    job = dict(job_row)
+    job["is_manual"] = True
+    
+    from utils.messages import escape_md
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    title = escape_md(job.get("title", "New Job"))
+    company = escape_md(job.get("company", "Unknown"))
+    location = escape_md(job.get("location") or "Remote")
+    job_url = job.get("url", "")
+    
+    salary_line = ""
+    salary = job.get("salary")
+    if salary and salary.lower() not in ("not disclosed", ""):
+        salary_line = f"\n💰 {escape_md(salary)}"
+
+    yoe = job.get("min_yoe")
+    yoe_line = ""
+    if yoe is not None and yoe > 0:
+        yoe_line = f"\n🎓 {yoe}\+ YOE"
+
+    msg = (
+        f"🚨 *NEW JOB ALERT*\n\n"
+        f"*{title}*\n"
+        f"🏢 {company}\n"
+        f"📍 {location}"
+        f"{salary_line}"
+        f"{yoe_line}\n"
+        f"🎯 *95% match*\n\n"
+        f"⚡️ Direct from company careers\n"
+        f"🕐 Detected 0 min ago"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔗 Apply Now", url=job_url),
+            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job_id}"),
+        ],
+    ])
+    
+    try:
+        await context.bot.send_message(
+            chat_id=target_id,
+            text=msg,
+            parse_mode="MarkdownV2",
+            reply_markup=kb,
+            disable_web_page_preview=True
+        )
+        await update.message.reply_text("Pinged successfully!")
+    except Exception as e:
+        await update.message.reply_text(f"Error pinging: {e}")
+
+async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/completerequest <req_id> <message to user> - Complete a manual request."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    if not args or len(args) < 2:
+        await update.message.reply_text(
+            "<b>Usage:</b> /completerequest &lt;req_id&gt; &lt;message to user...&gt;\n\n"
+            "<b>Example:</b>\n"
+            "<code>/completerequest 1 Here is the hiring manager: John Doe (john@okta.com)</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        req_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Request ID must be a number.")
+        return
+
+    # Extract message preserving newlines
+    # e.g. "/completerequest 123 \nHello\nWorld" -> "\nHello\nWorld"
+    import re
+    match_text = re.search(r'^/completerequest\s+\d+\s+(.*)$', update.message.text, re.DOTALL | re.IGNORECASE)
+    reply_text = match_text.group(1).strip() if match_text else " ".join(args[1:])
+    
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        req = await conn.fetchrow("SELECT user_id, request_type, job_id FROM manual_requests WHERE id = $1", req_id)
+        if not req:
+            await update.message.reply_text(f"❌ Could not find request #{req_id}.")
+            return
+
+        target_user_id = req["user_id"]
+        req_type = req["request_type"]
+        job_id = req["job_id"]
+        
+        # Parse comma-separated HR details intelligently
+        parsed_hr_text = reply_text
+        if req_type == "HR_CONTACT":
+            parts = [p.strip() for p in reply_text.split(",")]
+            formatted_lines = []
+            for p in parts:
+                if not p: continue
+                if "linkedin.com" in p.lower():
+                    formatted_lines.append(f"Linkedin: {p}")
+                elif "@" in p:
+                    formatted_lines.append(f"Email: {p}")
+                else:
+                    formatted_lines.append(f"Contact: {p}")
+            if formatted_lines:
+                parsed_hr_text = "\n".join(formatted_lines)
+                
+        from db.manual_requests import complete_request
+        success = await complete_request(req_id, admin_reply=parsed_hr_text)
+        if not success:
+            await update.message.reply_text("❌ Failed to update request status in DB. Still sending message.")
+            
+        # Fetch user and job if applicable
+        bot_id = context.bot_data.get("bot_id", 1)
+        target_user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1 AND bot_id = $2", target_user_id, bot_id)
+        job = None
+        if req_type == "HR_CONTACT" and job_id:
+            job = await conn.fetchrow("SELECT * FROM manual_jobs WHERE id = $1", job_id)
+
+    try:
+        from bot_registry import get_app_for_bot_id, get_primary_app
+        bot_id_to_use = target_user["bot_id"] if target_user and "bot_id" in target_user else 1
+        target_app = get_app_for_bot_id(bot_id_to_use) or get_primary_app()
+        bot_name = target_app.bot.first_name if target_app else "Froncy"
+        
+        target_user_dict = dict(target_user) if target_user else {}
+        from utils.helpers import get_effective_plan
+        plan = get_effective_plan(target_user_dict)
+        
+        if req_type == "HR_CONTACT" and job:
+            job_dict = dict(job)
+            job_dict["is_manual"] = True
+            from utils.messages import compute_manual_job_match, job_detail_message
+            # We add match to job_dict so job_detail_message uses it
+            match = compute_manual_job_match(target_user_dict, job_dict)
+            job_dict["match"] = match
+            base_msg = job_detail_message(job_dict, plan, target_user_dict)
+            
+            from utils.messages import escape_md
+            safe_reply_text = escape_md(parsed_hr_text)
+            hr_block = f"👔 *HR Contact Details*\n{safe_reply_text}\n\n"
+            
+            divider = "─" * 18 + "\nWhat would you like to do?"
+            if divider in base_msg:
+                final_msg = base_msg.replace(divider, hr_block + divider)
+            else:
+                final_msg = f"{base_msg}\n\n{hr_block.strip()}" 
+            
+            from utils.keyboards import job_detail_keyboard
+            kb = job_detail_keyboard(
+                job_dict, plan=plan, score=match.get("score", 0), 
+                user_id=target_user_id, hr_granted=True
+            )
+            
+            await target_app.bot.send_message(
+                chat_id=target_user_id,
+                text=final_msg,
+                parse_mode="MarkdownV2",
+                reply_markup=kb,
+                disable_web_page_preview=True
+            )
+        else:
+            title = "👔 *HR Contact Details*" if req_type == "HR_CONTACT" else "📄 *Resume Review Feedback*"
+            
+            await target_app.bot.send_message(
+                chat_id=target_user_id,
+                text=f"{title}\n\n{escape_md(parsed_hr_text)}",
+                parse_mode="MarkdownV2"
+            )
+            
+        await update.message.reply_text(f"✅ Request #{req_id} marked as complete! Message sent to user <code>{target_user_id}</code>.", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to send message to user: {e}")
+
+async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/pending - View all pending HR and Resume requests."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    from db.manual_requests import get_pending_requests
+    from db.users import get_user
+    from db.manual_jobs import get_manual_job_by_id
+
+    # bot_id is 1 for primary but requests could come from any bot
+    
+    requests = await get_pending_requests()
+    
+    if not requests:
+        await update.message.reply_text(
+            "✅ <b>All caught up!</b>\n\nThere are no pending HR or Resume Review requests.",
+            parse_mode="HTML"
+        )
+        return
+
+    lines = [f"📋 <b>Pending Requests ({len(requests)})</b>\n"]
+    
+    for req in requests:
+        req_id = req["id"]
+        req_type = req["request_type"]
+        uid = req["user_id"]
+        job_id = req["job_id"]
+        notes = req["notes"] or ""
+        date = req["created_at"].strftime("%Y-%m-%d %H:%M")
+        
+        icon = "👔" if req_type == "HR_CONTACT" else "📄"
+        type_str = "HR Contact" if req_type == "HR_CONTACT" else "Resume Review"
+        
+        line = f"\n{icon} <b>#{req_id} — {type_str}</b>\n"
+        line += f"👤 User: <code>{uid}</code>\n"
+        line += f"🕒 {date}"
+        if notes:
+            line += f" | <i>{notes}</i>"
+        line += "\n"
+        
+        if req_type == "HR_CONTACT" and job_id:
+            job = await get_manual_job_by_id(job_id)
+            if job:
+                job_url = job.get('url', '')
+                line += f"💼 Job: {job['title']} @ {job['company']}\n🔗 <a href='{job_url}'>Link</a>\n"
+            else:
+                line += f"💼 Job ID: {job_id} (Not found)\n"
+                
+        line += f"✅ <b>Action:</b> <code>/completerequest {req_id}"
+        if req_type == "HR_CONTACT":
+            line += " https://linkedin.com, email@co.com</code>\n" + f"🔄 <b>Refund:</b> <code>/refundrequest {req_id} No public HR details available.</code>"
+        else:
+            line += " Done</code>\n" + f"🔄 <b>Refund:</b> <code>/refundrequest {req_id} Resume is unreadable.</code>"
+            
+        lines.append(line)
+        
+    # Send in chunks if too long, chunking by line to avoid breaking HTML tags
+    current_chunk = ""
+    for line in lines:
+        if len(current_chunk) + len(line) > 3800:
+            await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
+            current_chunk = line + "\n"
+        else:
+            current_chunk += line + "\n"
+            
+    if current_chunk.strip():
+        await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
+
+async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/masstrial <days> <message> - Grant a trial to all free users and message them."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /masstrial &lt;days&gt; &lt;message&gt;\n\n"
+            "Example:\n<code>/masstrial 3 🎉 Happy Navratri! Enjoy 3 days of Pro for free!</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        days = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Days must be a number.")
+        return
+
+    message = " ".join(context.args[1:])
+    bot_id = context.bot_data.get('bot_id', 1)
+
+    from db.connection import get_pool
+    pool = get_pool()
+    
+    # 1. Fetch eligible users
+    async with pool.acquire() as conn:
+        users = await conn.fetch(
+            """
+            SELECT telegram_id 
+            FROM users 
+            WHERE bot_id = $1 
+              AND (plan = 'free' OR plan IS NULL) 
+              AND is_onboarded = TRUE 
+              AND (is_deleted IS NULL OR is_deleted = FALSE)
+            """,
+            bot_id
+        )
+        
+        if not users:
+            await update.message.reply_text("❌ No eligible free users found.")
+            return
+
+        # 2. Update their plan to trial
+        await conn.execute(
+            f"""
+            UPDATE users 
+            SET plan = 'trial',
+                is_trial = TRUE,
+                trial_expires_at = NOW() + INTERVAL '{days} days',
+                hr_requests_left = GREATEST(COALESCE(hr_requests_left, 0), 1),
+                updated_at = NOW()
+            WHERE bot_id = $1 
+              AND (plan = 'free' OR plan IS NULL) 
+              AND is_onboarded = TRUE 
+              AND (is_deleted IS NULL OR is_deleted = FALSE)
+            """,
+            bot_id
+        )
+
+    await update.message.reply_text(f"✅ Upgraded {len(users)} users to {days}-day Trial! Now sending messages...")
+
+    # 3. Broadcast the message
+    import asyncio
+    from telegram.error import TelegramError
+    
+    sent = 0
+    failed = 0
+    for u in users:
+        try:
+            await context.bot.send_message(
+                chat_id=u["telegram_id"],
+                text=message + "\n\n<i>✨ Use /menu to see your active trial!</i>",
+                parse_mode="HTML"
+            )
+            sent += 1
+        except TelegramError:
+            failed += 1
+        await asyncio.sleep(0.05)  # Respect rate limits
+
+    await update.message.reply_text(f"🎉 <b>Mass Trial Complete</b>\n\nSent: {sent}\nFailed: {failed}", parse_mode="HTML")
+
+async def refundrequest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/refundrequest <req_id> <reason> - Cancel a request and refund the user a credit."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /refundrequest &lt;req_id&gt; &lt;reason&gt;\n"
+            "Example: <code>/refundrequest 15 No HR details publicly available for this startup.</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        req_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Request ID must be a number.")
+        return
+
+    reason = " ".join(context.args[1:])
+    
+    from db.manual_requests import refund_request
+    from db.connection import get_pool
+    
+    req = await refund_request(req_id, reason)
+    if not req:
+        await update.message.reply_text(f"❌ Could not find or refund request #{req_id}.")
+        return
+        
+    req_type = req["request_type"]
+    target_user_id = req["user_id"]
+    job_id = req.get("job_id")
+    
+    # Refund the credit
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if req_type == "HR_CONTACT":
+            await conn.execute("UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1", target_user_id)
+            credit_name = "HR Contact"
+        else:
+            await conn.execute("UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1", target_user_id)
+            credit_name = "Resume Review"
+            
+    # Try to notify the user
+    try:
+        from bot_registry import get_app_for_token
+        # Just use the context bot to send the message
+        job_info = ""
+        if job_id:
+            from db.manual_jobs import get_manual_job_by_id
+            job = await get_manual_job_by_id(job_id)
+            if job:
+                job_info = f" for <b>{job['title']} @ {job['company']}</b>"
+                
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=(
+                f"⚠️ <b>{credit_name} Request Cancelled</b>\n\n"
+                f"We couldn't fulfill your request{job_info} because:\n"
+                f"<i>\"{reason}\"</i>\n\n"
+                f"✅ <b>Don't worry!</b> Your {credit_name} credit has been refunded to your account balance. "
+                "You can use it on any other job!"
+            ),
+            parse_mode="HTML"
+        )
+        msg = f"✅ <b>Refunded request #{req_id}</b> and credited {target_user_id} with 1 {credit_name} credit.\nNotified user successfully."
+    except Exception as e:
+        msg = f"✅ <b>Refunded request #{req_id}</b> and credited user.\n⚠️ <b>Failed to notify user:</b> {e}"
+        
+    await update.message.reply_text(msg, parse_mode="HTML")

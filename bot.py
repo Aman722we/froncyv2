@@ -31,7 +31,7 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command
+from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command, completerequest_command, admin_pingjob, pending_command, masstrial_command, refundrequest_command
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
@@ -47,6 +47,10 @@ from handlers.analytics import (
     deleted_users_command, deleted_users_page_callback
 )
 from handlers.refer import refer_command, refer_callback
+from handlers.requests import (
+    request_hr_callback, buy_hr_callback,
+    request_resume_review_callback, buy_resume_review_callback,
+)
 from db.tracker import log_daily_active
 
 from utils.messages import help_message
@@ -86,7 +90,7 @@ async def global_error_handler(update, context) -> None:
 
 async def help_command(update, context):
     """Handle /help."""
-    await update.message.reply_text(help_message(), parse_mode="MarkdownV2")
+    await update.message.reply_text(help_message(bot_name=context.bot.first_name), parse_mode="MarkdownV2")
 
 
 
@@ -176,6 +180,11 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("bulkadd", bulkadd_command))
     app.add_handler(CommandHandler("listsources", listsources_command))
     app.add_handler(CommandHandler("syncnow", syncnow_command))
+    app.add_handler(CommandHandler("completerequest", completerequest_command))
+    app.add_handler(CommandHandler("pending", pending_command))
+    app.add_handler(CommandHandler("masstrial", masstrial_command))
+    app.add_handler(CommandHandler("refundrequest", refundrequest_command))
+    app.add_handler(CommandHandler("pingjob", admin_pingjob))
     app.add_handler(CommandHandler("analytics", analytics_command))
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))
@@ -298,6 +307,12 @@ def build_bot(token: str | None = None) -> Application:
 
     # Upgrade/Payments Callbacks
     app.add_handler(CallbackQueryHandler(checkout_handler, pattern="^upgrade_(pro|proplus|premium)$"))
+
+    # HR Contact & Resume Review Requests (Monetization V2)
+    app.add_handler(CallbackQueryHandler(request_hr_callback, pattern=r"^req_hr_\d+$"))
+    app.add_handler(CallbackQueryHandler(buy_hr_callback, pattern=r"^buy_hr_\d+$"))
+    app.add_handler(CallbackQueryHandler(request_resume_review_callback, pattern="^req_resume_review$"))
+    app.add_handler(CallbackQueryHandler(buy_resume_review_callback, pattern="^buy_resume_review$"))
 
     # Global error handler — alerts admin on any unhandled exception
     app.add_error_handler(global_error_handler)
