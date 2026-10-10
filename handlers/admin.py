@@ -1050,3 +1050,65 @@ async def completerequest_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"✅ Request #{req_id} marked as complete! Message sent to user <code>{target_user_id}</code>.", parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text(f"❌ Failed to send message to user: {e}")
+
+async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/pending - View all pending HR and Resume requests."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    from db.manual_requests import get_pending_requests
+    from db.users import get_user
+    from db.manual_jobs import get_manual_job_by_id
+
+    # bot_id is 1 for primary but requests could come from any bot
+    
+    requests = await get_pending_requests()
+    
+    if not requests:
+        await update.message.reply_text(
+            "✅ <b>All caught up!</b>\n\nThere are no pending HR or Resume Review requests.",
+            parse_mode="HTML"
+        )
+        return
+
+    lines = [f"📋 <b>Pending Requests ({len(requests)})</b>\n"]
+    
+    for req in requests:
+        req_id = req["id"]
+        req_type = req["request_type"]
+        uid = req["user_id"]
+        job_id = req["job_id"]
+        notes = req["notes"] or ""
+        date = req["created_at"].strftime("%Y-%m-%d %H:%M")
+        
+        icon = "👔" if req_type == "HR_CONTACT" else "📄"
+        type_str = "HR Contact" if req_type == "HR_CONTACT" else "Resume Review"
+        
+        line = f"\n{icon} <b>#{req_id} — {type_str}</b>\n"
+        line += f"👤 User: <code>{uid}</code>\n"
+        line += f"🕒 {date}"
+        if notes:
+            line += f" | <i>{notes}</i>"
+        line += "\n"
+        
+        if req_type == "HR_CONTACT" and job_id:
+            job = await get_manual_job_by_id(job_id)
+            if job:
+                job_url = job.get('url', '')
+                line += f"💼 Job: {job['title']} @ {job['company']}\n🔗 <a href='{job_url}'>Link</a>\n"
+            else:
+                line += f"💼 Job ID: {job_id} (Not found)\n"
+                
+        line += f"✅ <b>Action:</b> <code>/completerequest {req_id}"
+        if req_type == "HR_CONTACT":
+            line += " https://linkedin.com, email@co.com</code>"
+        else:
+            line += " Done</code>"
+            
+        lines.append(line)
+        
+    # Send in chunks if too long
+    msg = "\n".join(lines)
+    for i in range(0, len(msg), 4000):
+        await update.message.reply_text(msg[i:i+4000], parse_mode="HTML", disable_web_page_preview=True)
