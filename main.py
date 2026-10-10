@@ -319,13 +319,7 @@ async def razorpay_webhook(request: Request):
 
         if purchase_type == "hr_contact":
             # Grant 1 HR contact credit and queue the request
-            from db.connection import get_pool
-            pool = get_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1 AND bot_id = $2",
-                    telegram_id, bot_id,
-                )
+            # Removed +1 credit to prevent double dipping since we queue the request immediately
             from db.manual_requests import create_request
             req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
             logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
@@ -356,13 +350,7 @@ async def razorpay_webhook(request: Request):
 
         elif purchase_type == "resume_review":
             # Grant 1 resume review credit and queue the request
-            from db.connection import get_pool
-            pool = get_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1 AND bot_id = $2",
-                    telegram_id, bot_id,
-                )
+            # Removed +1 credit to prevent double dipping since we queue the request immediately
             from db.manual_requests import create_request
             req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
             logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
