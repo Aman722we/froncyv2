@@ -397,7 +397,14 @@ async def resume_received(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         resume_text = extract_text_from_pdf(saved_path)
 
         # Upload to Supabase Storage
-        from services.storage import upload_resume
+        from services.storage import upload_resume, delete_resume
+        from db.users import get_user
+        
+        bot_id = context.bot_data.get('bot_id', 1)
+        old_user = await get_user(user_id, bot_id=bot_id)
+        if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != document.file_name:
+            await delete_resume(user_id, old_user["resume_filename"])
+            
         raw_bytes = bytes(file_bytes)
         resume_url = await upload_resume(user_id, document.file_name, raw_bytes)
 

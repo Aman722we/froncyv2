@@ -668,7 +668,11 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         # ✅ Resume is clean — save to DB and confirm
         try:
             bot_id = context.bot_data.get('bot_id', 1)
-            from services.storage import upload_resume
+            from services.storage import upload_resume, delete_resume
+            from db.users import get_user
+            old_user = await get_user(user_id, bot_id=bot_id)
+            if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != document.file_name:
+                await delete_resume(user_id, old_user["resume_filename"])
             resume_url = await upload_resume(user_id, document.file_name, raw_bytes)
             await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
         except Exception as e:
@@ -746,7 +750,11 @@ async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAU
         bot_id = context.bot_data.get('bot_id', 1)
         if raw_bytes:
             # Save the raw PDF bytes and flag the user
-            from services.storage import upload_resume
+            from services.storage import upload_resume, delete_resume
+            from db.users import get_user
+            old_user = await get_user(user_id, bot_id=bot_id)
+            if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != filename:
+                await delete_resume(user_id, old_user["resume_filename"])
             resume_url = await upload_resume(user_id, filename, raw_bytes)
             await save_raw_resume_bytes(user_id, raw_bytes, filename, bot_id=bot_id, resume_url=resume_url)
             # Also save whatever text we extracted as a fallback for other features
@@ -831,7 +839,11 @@ async def _admin_fixresume_receive(
 
         # Save the clean resume and clear the flag
         bot_id = context.bot_data.get('bot_id', 1)
-        from services.storage import upload_resume
+        from services.storage import upload_resume, delete_resume
+        from db.users import get_user
+        old_user = await get_user(target_user_id, bot_id=bot_id)
+        if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != document.file_name:
+            await delete_resume(target_user_id, old_user["resume_filename"])
         resume_url = await upload_resume(target_user_id, document.file_name, bytes(file_bytes))
         await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=bytes(file_bytes), resume_url=resume_url)
         await set_manual_resume_flag(target_user_id, False, bot_id=bot_id)

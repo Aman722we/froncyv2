@@ -119,7 +119,7 @@ async def update_resume(
         row = await conn.fetchrow(
             """
             UPDATE users
-            SET resume_text = $2, resume_filename = $3, updated_at = NOW()
+            SET resume_text = $2, resume_filename = $3, resume_url = COALESCE($5, resume_url), updated_at = NOW()
             WHERE telegram_id = $1 AND bot_id = $4
             RETURNING *
             """,
@@ -127,6 +127,7 @@ async def update_resume(
             resume_text,
             filename,
             bot_id,
+            resume_url,
         )
         return dict(row) if row else None
 
@@ -468,20 +469,33 @@ async def set_manual_resume_flag(telegram_id: int, flag: bool, bot_id: int = 1) 
         )
 
 
-async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str, bot_id: int = 1) -> None:
+async def save_raw_resume_bytes(telegram_id: int, raw_bytes: bytes, filename: str, bot_id: int = 1, resume_url: str = None) -> None:
     """Save the raw PDF bytes for admin manual processing, without replacing resume_text."""
     pool = get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             """
             UPDATE users
-            SET raw_resume_bytes = $2, resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW()
+            SET resume_filename = $2, needs_manual_resume = TRUE, updated_at = NOW(), resume_url = COALESCE($4, resume_url)
+            WHERE telegram_id = $1 AND bot_id = $3
+            """,
+            telegram_id,
+            filename,
+            bot_id,
+            resume_url,
+        )
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET resume_filename = $3, needs_manual_resume = TRUE, updated_at = NOW(), resume_url = COALESCE($5, resume_url)
             WHERE telegram_id = $1 AND bot_id = $4
             """,
             telegram_id,
             raw_bytes,
             filename,
             bot_id,
+            resume_url,
         )
 
 

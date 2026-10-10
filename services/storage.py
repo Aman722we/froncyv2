@@ -25,3 +25,22 @@ async def upload_resume(user_id: int, filename: str, file_bytes: bytes) -> str |
     else:
         logger.error(f"Failed to upload resume to Supabase: {resp.status_code} - {resp.text}")
         return None
+async def delete_resume(user_id: int, filename: str) -> bool:
+    if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+        return False
+        
+    url = f"{settings.SUPABASE_URL}/storage/v1/object/resumes/{user_id}/{filename}"
+    headers = {
+        "Authorization": f"Bearer {settings.SUPABASE_KEY}",
+        "apikey": settings.SUPABASE_KEY,
+    }
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.delete(url, headers=headers)
+        
+    if resp.status_code in (200, 204):
+        logger.info(f"Deleted old resume: resumes/{user_id}/{filename}")
+        return True
+    else:
+        logger.warning(f"Failed to delete old resume resumes/{user_id}/{filename}: {resp.status_code}")
+        return False
