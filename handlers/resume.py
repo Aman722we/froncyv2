@@ -668,7 +668,9 @@ async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_T
         # ✅ Resume is clean — save to DB and confirm
         try:
             bot_id = context.bot_data.get('bot_id', 1)
-            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes)
+            from services.storage import upload_resume
+            resume_url = await upload_resume(user_id, document.file_name, raw_bytes)
+            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
         except Exception as e:
             logger.error(f"update_resume DB write failed for user {user_id}: {e}")
             await update.message.reply_text(
@@ -744,10 +746,12 @@ async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAU
         bot_id = context.bot_data.get('bot_id', 1)
         if raw_bytes:
             # Save the raw PDF bytes and flag the user
-            await save_raw_resume_bytes(user_id, raw_bytes, filename, bot_id=bot_id)
+            from services.storage import upload_resume
+            resume_url = await upload_resume(user_id, filename, raw_bytes)
+            await save_raw_resume_bytes(user_id, raw_bytes, filename, bot_id=bot_id, resume_url=resume_url)
             # Also save whatever text we extracted as a fallback for other features
             if resume_text:
-                await update_resume(user_id, resume_text, filename, bot_id=bot_id)
+                await update_resume(user_id, resume_text, filename, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
         else:
             # Edge case: no bytes (shouldn't happen normally)
             from db.users import set_manual_resume_flag
@@ -827,7 +831,9 @@ async def _admin_fixresume_receive(
 
         # Save the clean resume and clear the flag
         bot_id = context.bot_data.get('bot_id', 1)
-        await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=file_bytes)
+        from services.storage import upload_resume
+        resume_url = await upload_resume(target_user_id, document.file_name, bytes(file_bytes))
+        await update_resume(target_user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=bytes(file_bytes), resume_url=resume_url)
         await set_manual_resume_flag(target_user_id, False, bot_id=bot_id)
 
         # Notify the user their resume is ready

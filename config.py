@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     # Database (Supabase PostgreSQL)
     DATABASE_URL: str
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
 
     # AI — NVIDIA NIM API
     NVIDIA_BASE_URL: str = "https://api.groq.com/openai/v1"
