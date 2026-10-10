@@ -330,8 +330,8 @@ async def razorpay_webhook(request: Request):
             req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
             logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
             try:
-                from bot_registry import get_primary_app, _bots
-                primary = _bots.get(bot_id, get_primary_app())
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
                 if primary:
                     await primary.bot.send_message(
                         chat_id=telegram_id,
@@ -367,8 +367,8 @@ async def razorpay_webhook(request: Request):
             req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
             logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
             try:
-                from bot_registry import get_primary_app, _bots
-                primary = _bots.get(bot_id, get_primary_app())
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
                 if primary:
                     await primary.bot.send_message(
                         chat_id=telegram_id,
@@ -401,8 +401,8 @@ async def razorpay_webhook(request: Request):
             await update_user_subscription(telegram_id, plan, expires_at, customer_id, sub_id, 'active', bot_id)
             logger.info(f"Subscription charged/activated for user {telegram_id}")
             try:
-                from bot_registry import get_primary_app, _bots
-                primary = _bots.get(bot_id, get_primary_app())
+                from bot_registry import get_primary_app, get_app_for_bot_id
+                primary = get_app_for_bot_id(bot_id) or get_primary_app()
                 guru_name = primary.bot.first_name if primary else "Froncy"
                 if primary:
                     await primary.bot.send_message(
