@@ -1134,3 +1134,86 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             
     if current_chunk.strip():
         await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
+
+async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/masstrial <days> <message> - Grant a trial to all free users and message them."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /masstrial &lt;days&gt; &lt;message&gt;\n\n"
+            "Example:\n<code>/masstrial 3 🎉 Happy Navratri! Enjoy 3 days of Pro for free!</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        days = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Days must be a number.")
+        return
+
+    message = " ".join(context.args[1:])
+    bot_id = context.bot_data.get('bot_id', 1)
+
+    from db.connection import get_pool
+    pool = get_pool()
+    
+    # 1. Fetch eligible users
+    async with pool.acquire() as conn:
+        users = await conn.fetch(
+            """
+            SELECT telegram_id 
+            FROM users 
+            WHERE bot_id = $1 
+              AND (plan = 'free' OR plan IS NULL) 
+              AND is_onboarded = TRUE 
+              AND (is_deleted IS NULL OR is_deleted = FALSE)
+            """,
+            bot_id
+        )
+        
+        if not users:
+            await update.message.reply_text("❌ No eligible free users found.")
+            return
+
+        # 2. Update their plan to trial
+        await conn.execute(
+            f"""
+            UPDATE users 
+            SET plan = 'trial',
+                is_trial = TRUE,
+                trial_expires_at = NOW() + INTERVAL '{days} days',
+                hr_requests_left = GREATEST(COALESCE(hr_requests_left, 0), 3),
+                updated_at = NOW()
+            WHERE bot_id = $1 
+              AND (plan = 'free' OR plan IS NULL) 
+              AND is_onboarded = TRUE 
+              AND (is_deleted IS NULL OR is_deleted = FALSE)
+            """,
+            bot_id
+        )
+
+    await update.message.reply_text(f"✅ Upgraded {len(users)} users to {days}-day Trial! Now sending messages...")
+
+    # 3. Broadcast the message
+    import asyncio
+    from telegram.error import TelegramError
+    
+    sent = 0
+    failed = 0
+    for u in users:
+        try:
+            await context.bot.send_message(
+                chat_id=u["telegram_id"],
+                text=message + "\n\n<i>✨ Use /menu to see your active trial!</i>",
+                parse_mode="HTML"
+            )
+            sent += 1
+        except TelegramError:
+            failed += 1
+        await asyncio.sleep(0.05)  # Respect rate limits
+
+    await update.message.reply_text(f"🎉 <b>Mass Trial Complete</b>\n\nSent: {sent}\nFailed: {failed}", parse_mode="HTML")
