@@ -266,7 +266,7 @@ async def razorpay_webhook(request: Request):
     event = data.get("event")
     
     # We care about subscription events
-    if event not in ("subscription.charged", "subscription.cancelled", "subscription.halted", "payment.captured", "payment_link.paid"):
+    if event not in ("subscription.charged", "subscription.cancelled", "subscription.halted", "payment_link.paid"):
         return {"status": "ignored", "event": event}
 
     payment_info = extract_payment_info(data)
@@ -294,7 +294,7 @@ async def razorpay_webhook(request: Request):
             logger.error(f"Could not extract telegram_id from event: {data}")
             return {"status": "error", "message": "Missing reference data"}
 
-    if event in ("subscription.charged", "payment.captured", "payment_link.paid"):
+    if event in ("subscription.charged", "payment_link.paid"):
         # Check if this is a one-time purchase (HR contact or resume review)
         purchase_type = None
         job_id = None

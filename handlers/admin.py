@@ -1108,7 +1108,14 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             
         lines.append(line)
         
-    # Send in chunks if too long
-    msg = "\n".join(lines)
-    for i in range(0, len(msg), 4000):
-        await update.message.reply_text(msg[i:i+4000], parse_mode="HTML", disable_web_page_preview=True)
+    # Send in chunks if too long, chunking by line to avoid breaking HTML tags
+    current_chunk = ""
+    for line in lines:
+        if len(current_chunk) + len(line) > 3800:
+            await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
+            current_chunk = line + "\n"
+        else:
+            current_chunk += line + "\n"
+            
+    if current_chunk.strip():
+        await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
