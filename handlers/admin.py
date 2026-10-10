@@ -404,25 +404,40 @@ async def getresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     from db.users import get_raw_resume_bytes, get_user
     bot_id = context.bot_data.get('bot_id', 1)
-    raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
+    user = await get_user(target_id, bot_id=bot_id)
     
-    if not raw_bytes:
-        # Fallback to resume_text
-        user = await get_user(target_id, bot_id=bot_id)
-        if user and user.get("resume_text"):
-            text = user["resume_text"]
-            safe_text = text[:4000] # Telegram limit
-            await update.message.reply_text(f"⚠️ No raw PDF found, but here is the parsed text:\n\n{safe_text}")
-        else:
-            await update.message.reply_text("❌ No raw resume or parsed text found for this user in the database.")
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return
+        
+    resume_url = user.get("resume_url")
+    if resume_url:
+        await update.message.reply_document(
+            document=resume_url,
+            filename=user.get("resume_filename") or f"resume_{target_id}.pdf",
+            caption=f"Here is the resume for user <code>{target_id}</code>.",
+            parse_mode="HTML"
+        )
         return
 
-    await update.message.reply_document(
-        document=raw_bytes,
-        filename=filename or f"resume_{target_id}.pdf",
-        caption=f"Here is the broken resume for user <code>{target_id}</code>.",
-        parse_mode="HTML"
-    )
+    # Fallback for very old users before migration
+    raw_bytes, filename = await get_raw_resume_bytes(target_id, bot_id=bot_id)
+    if raw_bytes:
+        await update.message.reply_document(
+            document=raw_bytes,
+            filename=filename or f"resume_{target_id}.pdf",
+            caption=f"Here is the raw resume for user <code>{target_id}</code>.",
+            parse_mode="HTML"
+        )
+        return
+        
+    # Fallback to resume_text
+    if user and user.get("resume_text"):
+        text = user["resume_text"]
+        safe_text = text[:4000] # Telegram limit
+        await update.message.reply_text(f"⚠️ No raw PDF found, but here is the parsed text:\n\n{safe_text}")
+    else:
+        await update.message.reply_text("❌ No raw resume or parsed text found for this user in the database.")
 
 
 async def fixresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
