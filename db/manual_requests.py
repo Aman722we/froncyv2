@@ -101,3 +101,12 @@ async def is_request_completed(user_id: int, request_type: str, job_id: int) -> 
             user_id, request_type.upper(), job_id
         )
         return val is not None
+async def refund_request(request_id: int, admin_reply: str) -> dict | None:
+    """Mark request as REFUNDED and return the request dict if successful."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE manual_requests SET status = 'REFUNDED', completed_at = NOW(), admin_reply = $2 WHERE id = $1 RETURNING *",
+            request_id, admin_reply
+        )
+        return dict(row) if row else None

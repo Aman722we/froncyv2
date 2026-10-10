@@ -1117,9 +1117,9 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
         line += f"✅ <b>Action:</b> <code>/completerequest {req_id}"
         if req_type == "HR_CONTACT":
-            line += " https://linkedin.com, email@co.com</code>"
+            line += " https://linkedin.com, email@co.com</code>\n" + f"🔄 <b>Refund:</b> <code>/refundrequest {req_id} No public HR details available.</code>"
         else:
-            line += " Done</code>"
+            line += " Done</code>\n" + f"🔄 <b>Refund:</b> <code>/refundrequest {req_id} Resume is unreadable.</code>"
             
         lines.append(line)
         
@@ -1217,3 +1217,75 @@ async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await asyncio.sleep(0.05)  # Respect rate limits
 
     await update.message.reply_text(f"🎉 <b>Mass Trial Complete</b>\n\nSent: {sent}\nFailed: {failed}", parse_mode="HTML")
+
+async def refundrequest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/refundrequest <req_id> <reason> - Cancel a request and refund the user a credit."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /refundrequest &lt;req_id&gt; &lt;reason&gt;\n"
+            "Example: <code>/refundrequest 15 No HR details publicly available for this startup.</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        req_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Request ID must be a number.")
+        return
+
+    reason = " ".join(context.args[1:])
+    
+    from db.manual_requests import refund_request
+    from db.connection import get_pool
+    
+    req = await refund_request(req_id, reason)
+    if not req:
+        await update.message.reply_text(f"❌ Could not find or refund request #{req_id}.")
+        return
+        
+    req_type = req["request_type"]
+    target_user_id = req["user_id"]
+    job_id = req.get("job_id")
+    
+    # Refund the credit
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if req_type == "HR_CONTACT":
+            await conn.execute("UPDATE users SET hr_requests_left = COALESCE(hr_requests_left, 0) + 1 WHERE telegram_id = $1", target_user_id)
+            credit_name = "HR Contact"
+        else:
+            await conn.execute("UPDATE users SET resume_reviews_left = COALESCE(resume_reviews_left, 0) + 1 WHERE telegram_id = $1", target_user_id)
+            credit_name = "Resume Review"
+            
+    # Try to notify the user
+    try:
+        from bot_registry import get_app_for_token
+        # Just use the context bot to send the message
+        job_info = ""
+        if job_id:
+            from db.manual_jobs import get_manual_job_by_id
+            job = await get_manual_job_by_id(job_id)
+            if job:
+                job_info = f" for <b>{job['title']} @ {job['company']}</b>"
+                
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=(
+                f"⚠️ <b>{credit_name} Request Cancelled</b>\n\n"
+                f"We couldn't fulfill your request{job_info} because:\n"
+                f"<i>\"{reason}\"</i>\n\n"
+                f"✅ <b>Don't worry!</b> Your {credit_name} credit has been refunded to your account balance. "
+                "You can use it on any other job!"
+            ),
+            parse_mode="HTML"
+        )
+        msg = f"✅ <b>Refunded request #{req_id}</b> and credited {target_user_id} with 1 {credit_name} credit.\nNotified user successfully."
+    except Exception as e:
+        msg = f"✅ <b>Refunded request #{req_id}</b> and credited user.\n⚠️ <b>Failed to notify user:</b> {e}"
+        
+    await update.message.reply_text(msg, parse_mode="HTML")
