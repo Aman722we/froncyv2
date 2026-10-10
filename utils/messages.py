@@ -97,6 +97,8 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
     
     hr_left = user.get("hr_requests_left", 0) or 0
     rr_left = user.get("resume_reviews_left", 0) or 0
+    if plan not in ("pro", "proplus", "premium"):
+        rr_left = 0
     
     # We will format it exactly as requested:
     # Plan: ⭐ Pro (Unlimited jobs • HR Requests: X left • Resume Reviews: Y left • Renews: Z)
