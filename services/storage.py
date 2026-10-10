@@ -29,14 +29,18 @@ async def delete_resume(user_id: int, filename: str) -> bool:
     if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
         return False
         
-    url = f"{settings.SUPABASE_URL}/storage/v1/object/resumes/{user_id}/{filename}"
+    url = f"{settings.SUPABASE_URL}/storage/v1/object/resumes"
     headers = {
         "Authorization": f"Bearer {settings.SUPABASE_KEY}",
         "apikey": settings.SUPABASE_KEY,
     }
     
+    # The Supabase storage API expects a DELETE to the bucket URL with a JSON body containing prefixes
+    # e.g. {"prefixes": ["user_id/filename.pdf"]}
+    payload = {"prefixes": [f"{user_id}/{filename}"]}
+    
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.delete(url, headers=headers)
+        resp = await client.request("DELETE", url, headers=headers, json=payload)
         
     if resp.status_code in (200, 204):
         logger.info(f"Deleted old resume: resumes/{user_id}/{filename}")
