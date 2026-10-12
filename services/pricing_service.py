@@ -70,8 +70,7 @@ async def start_trial(telegram_id: int, db_pool):
             trial_used = TRUE,
             trial_started_at = $2,
             trial_expires_at = $3,
-            plan = 'trial',
-            hr_requests_left = 1
+            plan = 'trial'
         WHERE telegram_id = $1
           AND trial_started_at IS NULL
     """, telegram_id, now, trial_expires)

@@ -137,6 +137,18 @@ async def get_guru_stats(bot_id: int) -> dict:
             "SELECT early_adopter_price, regular_price, early_adopter_active FROM pricing_config LIMIT 1"
         )
 
+        # ── Paid Add-ons (HR requests @ ₹49, Resume reviews @ ₹99) ───────────
+        addon_row = await conn.fetchrow(
+            """
+            SELECT 
+                COUNT(*) FILTER (WHERE request_type = 'HR_CONTACT' AND notes LIKE '%49%') AS hr_sales,
+                COUNT(*) FILTER (WHERE request_type = 'RESUME_REVIEW' AND notes LIKE '%99%') AS rr_sales
+            FROM manual_requests
+            WHERE bot_id = $1
+            """,
+            bot_id
+        )
+
     stats = dict(row)
 
     # ── Payout calculation ─────────────────────────────────────────────────────
@@ -145,12 +157,22 @@ async def get_guru_stats(bot_id: int) -> dict:
     current_price = pricing["early_adopter_price"] if (pricing and is_early) else (pricing["regular_price"] if pricing else 199)
     pro_count     = stats["pro_users"] or 0
 
-    total_revenue  = pro_count * current_price          # e.g. 10 * 199 = 1990
-    guru_payout    = total_revenue * split_pct          # e.g. 1990 * 0.50 = 995.0
+    hr_sales      = addon_row["hr_sales"] if addon_row else 0
+    rr_sales      = addon_row["rr_sales"] if addon_row else 0
+    pro_revenue   = pro_count * current_price
+    hr_revenue    = hr_sales * 49
+    rr_revenue    = rr_sales * 99
+    total_revenue = pro_revenue + hr_revenue + rr_revenue
+    guru_payout   = total_revenue * split_pct          # exact float, no rounding
 
     stats["guru_name"]       = bot_cfg["guru_name"] if bot_cfg else "Guru"
     stats["split_pct"]       = int(split_pct * 100)
     stats["current_price"]   = current_price
+    stats["hr_sales"]        = hr_sales
+    stats["rr_sales"]        = rr_sales
+    stats["pro_revenue"]     = pro_revenue
+    stats["hr_revenue"]      = hr_revenue
+    stats["rr_revenue"]      = rr_revenue
     stats["total_revenue"]   = total_revenue
     stats["guru_payout"]     = guru_payout              # exact float, no rounding
 

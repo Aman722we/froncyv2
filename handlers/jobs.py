@@ -56,7 +56,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
     seen_jobs = await get_seen_jobs(user_id)
-    feed_limit = 8 if plan == "free" else 12
+    feed_limit = 8 if plan in ("pro", "proplus", "premium") else 5
 
     from datetime import datetime, timedelta, timezone
     # Fetch jobs + freshness count in parallel

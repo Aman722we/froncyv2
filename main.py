@@ -321,7 +321,7 @@ async def razorpay_webhook(request: Request):
             # Grant 1 HR contact credit and queue the request
             # Removed +1 credit to prevent double dipping since we queue the request immediately
             from db.manual_requests import create_request
-            req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49")
+            req_id = await create_request(telegram_id, "HR_CONTACT", job_id=job_id, notes="Paid ₹49", bot_id=bot_id)
             logger.info(f"HR contact purchased (₹49) by user {telegram_id}, request #{req_id}")
             try:
                 from bot_registry import get_primary_app, get_app_for_bot_id
@@ -352,7 +352,7 @@ async def razorpay_webhook(request: Request):
             # Grant 1 resume review credit and queue the request
             # Removed +1 credit to prevent double dipping since we queue the request immediately
             from db.manual_requests import create_request
-            req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99")
+            req_id = await create_request(telegram_id, "RESUME_REVIEW", notes="Paid ₹99", bot_id=bot_id)
             logger.info(f"Resume review purchased (₹99) by user {telegram_id}, request #{req_id}")
             try:
                 from bot_registry import get_primary_app, get_app_for_bot_id
@@ -396,15 +396,15 @@ async def razorpay_webhook(request: Request):
                     await primary.bot.send_message(
                         chat_id=telegram_id,
                         text=(
-                            f"🎉 *You're now on {escape_md(guru_name)} Pro\\!*\n\n"
-                            f"Valid until: {escape_md(expires_at.strftime('%B %d, %Y'))}\n\n"
-                            "✅ Instant job alerts \\(direct from company career pages\\)\n"
-                            "✅ Full job match scores\n"
-                            "✅ 5 HR contact requests/month\n"
-                            "✅ 1 human resume review included\n\n"
-                            "Type /menu to explore your new features\\."
+                            f"🎉 <b>You're now on {guru_name} Pro!</b>\n\n"
+                            f"Valid until: {expires_at.strftime('%B %d, %Y')}\n\n"
+                            "⚡ <b>Instant job alerts</b> (direct from company career pages)\n"
+                            "📬 <b>Daily feed with 8 curated jobs</b>\n"
+                            "🎯 <b>Full job match scores & ATS checks</b>\n"
+                            "📋 <b>Application tracking & reminders</b>\n\n"
+                            "Type /menu to explore your new features."
                         ),
-                        parse_mode="MarkdownV2",
+                        parse_mode="HTML",
                     )
             except Exception as e:
                 logger.error(f"Failed to notify user {telegram_id} of upgrade: {e}")

@@ -357,6 +357,9 @@ async def init_db() -> asyncpg.Pool:
                 );
             """)
             await conn.execute("ALTER TABLE manual_requests ADD COLUMN IF NOT EXISTS admin_reply TEXT;")
+            await conn.execute("ALTER TABLE manual_requests ADD COLUMN IF NOT EXISTS bot_id INT DEFAULT 1;")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_requests_bot ON manual_requests (bot_id, request_type);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_jobs_active_partial ON manual_jobs (posted_at DESC) WHERE is_active = TRUE;")
         except Exception as e:
             logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
 

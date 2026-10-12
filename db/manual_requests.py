@@ -11,17 +11,18 @@ async def create_request(
     request_type: str,
     job_id: int | None = None,
     notes: str | None = None,
+    bot_id: int = 1,
 ) -> int:
     """Insert a new pending request. Returns the new request ID."""
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO manual_requests (user_id, request_type, job_id, notes)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO manual_requests (user_id, request_type, job_id, notes, bot_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
-            user_id, request_type.upper(), job_id, notes,
+            user_id, request_type.upper(), job_id, notes, bot_id,
         )
         return row["id"]
 

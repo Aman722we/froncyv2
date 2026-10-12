@@ -54,15 +54,15 @@ def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
         expires_str = "72 hours from now"
     return (
         "\U0001F680 *3\\-Day Pro Trial — Activated\\!*\n\n"
-        "For the next 72 hours, you have full Pro access:\n\n"
+        "For the next 72 hours, you have full Pro trial access:\n\n"
         "\u26A1 *Instant job alerts*\n"
-        "Get notified when a relevant job appears directly on company career pages\\.\n\n"
+        "Get notified the moment a relevant job appears directly on company career pages\\.\n\n"
         "\U0001F3AF *Full Job Match Scores*\n"
-        "See how well each opportunity matches your profile\\.\n\n"
+        "See exactly how well each opportunity matches your skills and profile\\.\n\n"
         "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
-        "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
-        "\U0001F464 *HR Contact Request \\(1 Free\\)*\n"
-        f"Found a job worth applying to? Request the relevant hiring/HR contact from {escape_md(bot_name)} \\(1 free request included in trial\\)\\.\n\n"
+        "Discover jobs directly from company career pages before they spread to saturated job boards\\.\n\n"
+        "\U0001F4EC *Curated Daily Feed*\n"
+        "Get your top 5 matched jobs delivered right to your chat every day\\.\n\n"
         "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
         "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
@@ -100,8 +100,11 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
     if plan not in ("pro", "proplus", "premium"):
         rr_left = 0
     
-    # We will format it exactly as requested:
-    # Plan: ⭐ Pro (Unlimited jobs • HR Requests: X left • Resume Reviews: Y left • Renews: Z)
+    credits_tag = ""
+    if hr_left > 0:
+        credits_tag += f" • HR: {hr_left}"
+    if rr_left > 0:
+        credits_tag += f" • Review: {rr_left}"
 
     if plan == "pro":
         expires_at = user.get("plan_expires_at")
@@ -109,7 +112,7 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
         early_tag = " \(Early Adopter 🚀\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            f"Plan: ⭐ Pro{early_tag} \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • Renews: {escape_md(date_str)}\)"
+            f"Plan: ⭐ Pro{early_tag} \(8 jobs/day • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\)"
         )
 
     is_trial = user.get("is_trial", False)
@@ -124,19 +127,19 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • {escape_md(time_str)}\)"
+                    f"Plan: 💎 Pro Trial \(5 jobs/day • Instant Alerts{credits_tag} • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • active\)"
+                f"Plan: 💎 Pro Trial \(5 jobs/day • Instant Alerts{credits_tag} • active\)"
             )
 
     # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        f"Plan: Free \(5 jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left\)"
+        f"Plan: Free \(5 jobs/day{credits_tag}\)"
     )
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
@@ -947,25 +950,20 @@ def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> st
         f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
         f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
         "*Why upgrade?*\n\n"
-        "\u26A1 *Get relevant jobs instantly*\n"
-        f"{escape_md(bot_name)} continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
-        "\U0001F3AF *Know which jobs fit you*\n"
-        "Get full match scores based on your skills, experience and profile\\.\n\n"
-        "\U0001F3E2 *Direct\\-source opportunities*\n"
-        "Get fresh jobs directly from company career pages — before they become widely circulated\\.\n\n"
-        "\U0001F464 *Get hiring contacts*\n"
-        "Request relevant HR/recruiter contacts for jobs you actually want to pursue\\.\n\n"
-        "\U0001F4C4 *Human Resume Review*\n"
-        "Get your resume reviewed and understand what may be stopping you from getting interview calls\\.\n\n"
+        "\u26A1 *Instant Career Page Alerts*\n"
+        f"{escape_md(bot_name)} continuously monitors company career pages 24/7 and alerts you the moment a job matching your skills appears\\.\n\n"
+        "\U0001F4EC *Daily Feed with 8 Curated Jobs*\n"
+        "Receive 8 top matched opportunities delivered to your chat every day \\(free tier gets 5\\)\\.\n\n"
+        "\U0001F3AF *Know Which Jobs Fit You*\n"
+        "Get full match scores and ATS skill gap analysis on every opportunity\\.\n\n"
+        "\U0001F3E2 *Direct\\-Source Opportunities*\n"
+        "Get fresh jobs directly from company career pages before they become saturated on public boards\\.\n\n"
         "*What you unlock*\n\n"
-        "\u2705 Instant matched job alerts\n"
-        "\u2705 Full job match scores\n"
-        "\u2705 Unlimited job alerts\n"
-        "\u2705 HR contact requests \\(5/month\\)\n"
-        "\u2705 Human resume review \\(One time\\)\n"
+        "\u2705 Instant matched career page alerts\n"
+        "\u2705 Curated daily feed \\(8 jobs/day\\)\n"
+        "\u2705 Full job match scores & ATS checks\n"
         "\u2705 Application tracking & follow\\-up reminders\n\n"
-        "No unnecessary AI features\\.\n"
-        "Just the things that help you find and pursue better opportunities faster\\.\n\n"
+        "💡 _HR Contacts and Resume Reviews available as affordable one\\-time add\\-ons whenever you need them\\._\n\n"
         "Cancel anytime\\. No hidden charges\\."
     )
 

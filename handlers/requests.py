@@ -99,38 +99,22 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="HTML",
         )
 
-    elif is_pro and hr_left <= 0:
-        # Pro but exhausted monthly credits -> show purchase option
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Request HR Details - ₹49", callback_data=f"buy_hr_{job_id}")],
-            [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")],
-        ])
-        await query.edit_message_text(
-            text=(
-                "⚠️ <b>You've used all 5 HR contact requests this month!</b>\n"
-                "<i>(Resets on your next billing date)</i>\n\n"
-                "You can still request the relevant hiring manager or recruiter contact for this job for a small one-time fee.\n\n"
-                "💎 <b>One-time: ₹49</b> for this job\n\n"
-                "<i>Contacts are sourced from public professional profiles only.</i>"
-            ),
-            parse_mode="HTML",
-            reply_markup=kb
-        )
-
     else:
-        # Free user → show ₹49 purchase option
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Get HR Contact — ₹49", callback_data=f"buy_hr_{job_id}")],
-            [InlineKeyboardButton("💎 Go Pro (₹199/mo) — includes 5/month", callback_data="menu_upgrade")],
-            [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")],
-        ])
+        # User has no credits -> show ₹49 purchase option
+        buttons = [
+            [InlineKeyboardButton("💳 Request HR Details — ₹49", callback_data=f"buy_hr_{job_id}")],
+        ]
+        if not is_pro:
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo) — Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
+        buttons.append([InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")])
+
+        kb = InlineKeyboardMarkup(buttons)
         await query.edit_message_text(
             text=(
                 "👤 <b>Request HR Contact</b>\n\n"
-                "Get the relevant hiring manager or recruiter contact for this job.\n\n"
-                "💰 <b>One-time: ₹49</b> for this job\n"
-                "💎 Or <b>Go Pro at ₹199/mo</b> to get 5 requests every month + instant alerts + resume review.\n\n"
-                "<i>Contacts are sourced from public professional profiles only.</i>"
+                "Get the verified hiring manager or recruiter contact for this job.\n\n"
+                "💰 <b>One-time: ₹49</b> for this job\n\n"
+                "<i>Contacts are researched and verified from public professional profiles.</i>"
             ),
             parse_mode="HTML",
             reply_markup=kb,
@@ -271,20 +255,17 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
             [InlineKeyboardButton("💳 Get Resume Review — ₹99", callback_data="buy_resume_review")]
         ]
         if not is_pro:
-            buttons.append([InlineKeyboardButton("💎 Go Pro (₹1199/mo) — includes 1 review", callback_data="menu_upgrade")])
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo) — Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
         buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
         
         kb = InlineKeyboardMarkup(buttons)
-        reason = "⚠️ <b>You've used your included review for this month!</b>" if is_pro else ""
-        pro_upsell = "" if is_pro else "\n💎 Or <b>Go Pro at ₹1199/mo</b> — includes 1 review + instant alerts + 5 HR contacts/month."
         
         await query.edit_message_text(
             text=(
-                f"{reason + chr(10)*2 if reason else '👤 <b>Human Resume Review</b>' + chr(10)*2}"
-                "A real person will review your resume and tell you exactly why you might not be getting callbacks — and what to fix.\n\n"
-                "💰 <b>One-time: ₹99</b>\n"
-                f"{pro_upsell}\n"
-                "<i>Please make sure your resume is uploaded before requesting.</i>"
+                "👤 <b>Human Resume Review</b>\n\n"
+                "A real industry reviewer will review your resume and tell you exactly why you might not be getting callbacks — and actionable steps to fix it.\n\n"
+                "💰 <b>One-time: ₹99</b>\n\n"
+                "<i>Please make sure your resume is uploaded under <b>Resume</b> before requesting.</i>"
             ),
             parse_mode="HTML",
             reply_markup=kb,
