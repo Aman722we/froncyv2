@@ -651,8 +651,6 @@ def format_daily_feed_message(
     if skill_tip:
         footer += f"\n💡 *Pro Tip:* {escape_md(skill_tip)}\n"
 
-    footer += f"\n_P\\.S\\. Found a job elsewhere? Just paste the link here to unlock an Apply Kit for it\\!_"
-
     return header + "".join(lines) + footer
 
 

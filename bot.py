@@ -272,7 +272,12 @@ def build_bot(token: str | None = None) -> Application:
             from handlers.settings import settings_experience_receive
             await settings_experience_receive(update, context)
         elif URL_REGEX.search(text):
-            await handle_url_submission(update, context)
+            await update.message.reply_text(
+                "ℹ️ <b>Job Link Submissions Paused</b>\n\n"
+                "External link submissions are currently paused while we focus on delivering direct, instant job alerts from company career pages.\n\n"
+                "👉 Type /menu to browse fresh opportunities!",
+                parse_mode="HTML"
+            )
         else:
             await ats_analyze_result(update, context)
 

@@ -153,10 +153,6 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
             InlineKeyboardButton("💾 Saved Jobs", callback_data="menu_saved"),
             InlineKeyboardButton("📋 My Applications", callback_data="tracker"),
         ],
-        [
-            InlineKeyboardButton("🔗 Submit Job Link", callback_data="submit_job_link_info"),
-            InlineKeyboardButton("📂 My Submitted Links", callback_data="my_links"),
-        ],
     ]
     if plan == "pro":
         buttons.append([
