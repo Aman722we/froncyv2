@@ -93,7 +93,8 @@ def onboarding_complete(skills: list[str], location: str, has_resume: bool) -> s
 # ──────────────────────────────────────────────
 
 def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
-    plan = user.get("plan", "free")
+    from utils.helpers import get_effective_plan
+    plan = get_effective_plan(user)
     
     hr_left = user.get("hr_requests_left", 0) or 0
     rr_left = user.get("resume_reviews_left", 0) or 0
@@ -636,12 +637,13 @@ def format_daily_feed_message(
 
     footer = "━━━━━━━━━━━━━━━━━━\n"
 
-    remaining = max(0, total_count - 12)
+    shown_count = len(jobs)
+    remaining = max(0, total_count - shown_count)
     if plan == "free":
         footer += f"🔒 \\+{remaining} more jobs available today\n"
         footer += "*Upgrade to unlock*\n"
     else:
-        footer += f"✅ Showing top 12 matches\n"
+        footer += f"✅ Showing top {shown_count} matches\n"
         if remaining > 0:
             footer += f"\\+{remaining} more available \\(use /jobs command with filters to explore\\)\n"
 

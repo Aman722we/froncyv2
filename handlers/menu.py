@@ -4,6 +4,7 @@ Main Menu handler — /menu command and back_menu callback.
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils import keyboards, messages
+from utils.helpers import get_effective_plan
 from db.users import get_user
 from db.connection import get_pool
 from services.pricing_service import get_current_pricing
@@ -22,8 +23,8 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Handle /menu command."""
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(update.effective_user.id, bot_id=bot_id)
-    plan = user.get("plan", "free") if user else "free"
-    upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
+    plan = get_effective_plan(user) if user else "free"
+    upgrade_price = await _get_upgrade_price() if plan not in ("pro", "proplus", "premium") else None
 
     await update.message.reply_text(
         messages.main_menu(user, bot_name=context.bot.first_name),
@@ -38,8 +39,8 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await query.answer()
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(update.effective_user.id, bot_id=bot_id)
-    plan = user.get("plan", "free") if user else "free"
-    upgrade_price = await _get_upgrade_price() if plan not in ("pro",) else None
+    plan = get_effective_plan(user) if user else "free"
+    upgrade_price = await _get_upgrade_price() if plan not in ("pro", "proplus", "premium") else None
 
     await query.edit_message_text(
         messages.main_menu(user, bot_name=context.bot.first_name),

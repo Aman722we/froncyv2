@@ -7,17 +7,33 @@ import hashlib
 from datetime import datetime, timezone
 
 def get_effective_plan(user: dict) -> str:
-    """Returns 'free' if the user is on trial but it has expired, otherwise returns user.plan."""
+    """Returns effective plan considering trial and subscription expiry."""
     if not user:
         return "free"
     plan = user.get("plan", "free")
-    is_trial = user.get("is_trial", False)
     
+    # 1. Paid / Active Pro plans take precedence
+    if plan in ("pro", "proplus", "premium"):
+        plan_expires = user.get("plan_expires_at")
+        if plan_expires:
+            if hasattr(plan_expires, "tzinfo") and plan_expires.tzinfo is None:
+                plan_expires = plan_expires.replace(tzinfo=timezone.utc)
+            if plan_expires <= datetime.now(timezone.utc):
+                return "free"
+        return plan
+
+    # 2. Trial plan
+    is_trial = user.get("is_trial", False) or plan == "trial"
     if is_trial:
         trial_expires = user.get("trial_expires_at")
-        if trial_expires and trial_expires <= datetime.now(timezone.utc):
-            return "free"
-    return plan
+        if trial_expires:
+            if hasattr(trial_expires, "tzinfo") and trial_expires.tzinfo is None:
+                trial_expires = trial_expires.replace(tzinfo=timezone.utc)
+            if trial_expires <= datetime.now(timezone.utc):
+                return "free"
+        return "trial"
+
+    return "free"
 def escape_md(text: str) -> str:
     """
     Escape special characters for Telegram MarkdownV2.
