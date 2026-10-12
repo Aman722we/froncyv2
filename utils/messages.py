@@ -109,10 +109,10 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
     if plan == "pro":
         expires_at = user.get("plan_expires_at")
         date_str = expires_at.strftime("%b %d") if expires_at else "soon"
-        early_tag = " \(Early Adopter 🚀\)" if user.get("is_early_adopter") else ""
+        early_tag = " \\(Early Adopter 🚀\\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            f"Plan: ⭐ Pro{early_tag} \(8 jobs/day • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\)"
+            f"Plan: ⭐ Pro{early_tag} \\(8 jobs/day • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\\)"
         )
 
     is_trial = user.get("is_trial", False)
@@ -127,19 +127,19 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    f"Plan: 💎 Pro Trial \(5 jobs/day • Instant Alerts{credits_tag} • {escape_md(time_str)}\)"
+                    f"Plan: 💎 Pro Trial \\(5 jobs/day • Instant Alerts{credits_tag} • {escape_md(time_str)}\\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                f"Plan: 💎 Pro Trial \(5 jobs/day • Instant Alerts{credits_tag} • active\)"
+                f"Plan: 💎 Pro Trial \\(5 jobs/day • Instant Alerts{credits_tag} • active\\)"
             )
 
     # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        f"Plan: Free \(5 jobs/day{credits_tag}\)"
+        f"Plan: Free \\(5 jobs/day{credits_tag}\\)"
     )
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:

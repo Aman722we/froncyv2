@@ -2,6 +2,7 @@
 APScheduler setup — daily alerts, evening digest, weekly scorecard.
 Scraping has been removed. All jobs are manually curated via the admin panel.
 """
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger

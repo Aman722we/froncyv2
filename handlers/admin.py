@@ -910,7 +910,7 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     yoe = job.get("min_yoe")
     yoe_line = ""
     if yoe is not None and yoe > 0:
-        yoe_line = f"\n🎓 {yoe}\+ YOE"
+        yoe_line = f"\n🎓 {yoe}\\+ YOE"
 
     msg = (
         f"🚨 *NEW JOB ALERT*\n\n"
