@@ -46,7 +46,7 @@ async def _build_refer_message(user_id: int, bot_username: str, bot_id: int = 1)
         f"  • 8 high-match jobs in your Daily Feed\n"
         f"  • Instant job alerts when new matches drop\n"
         f"  • Browse all active jobs with match scores & filters\n"
-        f"  • AI Cover letters & ATS Resume checks\n\n"
+        f"  • AI Cover letters\n\n"
         f"🔗 <b>Your referral link:</b>\n"
         f"<code>{link}</code>\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"

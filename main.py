@@ -400,7 +400,7 @@ async def razorpay_webhook(request: Request):
                             f"Valid until: {expires_at.strftime('%B %d, %Y')}\n\n"
                             "⚡ <b>Instant job alerts</b> (direct from company career pages)\n"
                             "📬 <b>Daily feed with 8 curated jobs</b>\n"
-                            "🎯 <b>Full job match scores & ATS checks</b>\n"
+                            "🎯 <b>Full job match scores & AI Cover letters</b>\n"
                             "📋 <b>Application tracking & reminders</b>\n\n"
                             "Type /menu to explore your new features."
                         ),

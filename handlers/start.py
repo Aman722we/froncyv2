@@ -523,7 +523,7 @@ async def _complete_onboarding(
                             f"• 8 high-match jobs in your Daily Feed\n"
                             f"• Instant job alerts when new matches drop\n"
                             f"• Browse all active jobs with match scores & filters\n"
-                            f"• AI Cover letters & ATS Resume checks\n\n"
+                            f"• AI Cover letters\n\n"
                             f"⏳ Active until: <b>{date_str}</b>\n\n"
                             f"Type /menu to explore your Pro features! 🚀"
                         ),
