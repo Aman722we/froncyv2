@@ -107,40 +107,42 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
     if rr_left > 0:
         credits_tag += f" • Review: {rr_left}"
 
-    if plan == "pro":
+    if plan in ("pro", "proplus", "premium"):
         expires_at = user.get("plan_expires_at")
-        date_str = expires_at.strftime("%b %d") if expires_at else "soon"
+        date_str = f"{expires_at.day} {expires_at.strftime('%b')}" if expires_at else "soon"
         early_tag = " \\(Early Adopter 🚀\\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            f"Plan: ⭐ Pro{early_tag} \\(8 jobs/day • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\\)"
+            rf"Plan: 💎 Pro{early_tag} \(unlimited jobs • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\)"
         )
 
-    is_trial = user.get("is_trial", False)
+    is_trial = user.get("is_trial", False) or plan == "trial"
     
     if is_trial:
         trial_expires = user.get("trial_expires_at")
         from datetime import datetime, timezone
         if trial_expires:
+            if hasattr(trial_expires, "tzinfo") and trial_expires.tzinfo is None:
+                trial_expires = trial_expires.replace(tzinfo=timezone.utc)
             remaining = trial_expires - datetime.now(timezone.utc)
             hours_left = max(0, int(remaining.total_seconds() / 3600))
             if hours_left > 0:
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    f"Plan: 💎 Pro Trial \\(5 jobs/day • Instant Alerts{credits_tag} • {escape_md(time_str)}\\)"
+                    rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                f"Plan: 💎 Pro Trial \\(5 jobs/day • Instant Alerts{credits_tag} • active\\)"
+                rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • active\)"
             )
 
     # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        f"Plan: Free \\(5 jobs/day{credits_tag}\\)"
+        rf"Plan: Free \(limited jobs • no instant alerts{credits_tag}\)"
     )
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
@@ -1043,15 +1045,15 @@ def user_status(user: dict) -> str:
         date_str = expires_at.strftime("%b %d, %Y") if expires_at else "Unknown"
         sub_status = user.get("subscription_status", "")
         if sub_status == "cancelled":
-            plan_label = escape_md(f"⭐ Pro{early_tag} — active till {date_str} (Cancelled)")
+            plan_label = escape_md(f"💎 Pro{early_tag} — active till {date_str} (Cancelled)")
         else:
-            plan_label = escape_md(f"⭐ Pro{early_tag} — renews {date_str}")
+            plan_label = escape_md(f"💎 Pro{early_tag} — renews {date_str}")
     elif is_trial and trial_expires:
         now = datetime.now(timezone.utc)
         remaining = trial_expires - now
         hours = max(0, int(remaining.total_seconds() / 3600))
         if hours > 0:
-            plan_label = escape_md(f"⚡ Pro Trial — {hours}h left")
+            plan_label = escape_md(f"⭐️ Pro Trial — {hours}h left")
         else:
             plan_label = escape_md("🆓 Free (trial ended)")
             plan = "free"  # treat as free for limit display
