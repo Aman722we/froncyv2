@@ -1,4 +1,4 @@
-﻿"""
+"""
 handlers/guru.py -- Creator Dashboard
 
 Commands accessible to the Creator (the influencer who owns the bot).
@@ -79,6 +79,11 @@ async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     pro_users      = stats.get("pro_users", 0)
     split_pct      = stats.get("split_pct", 50)
     current_price  = stats.get("current_price", 199)
+    pro_revenue    = stats.get("pro_revenue", 0)
+    hr_sales       = stats.get("hr_sales", 0)
+    hr_revenue     = stats.get("hr_revenue", 0)
+    rr_sales       = stats.get("rr_sales", 0)
+    rr_revenue     = stats.get("rr_revenue", 0)
     total_revenue  = stats.get("total_revenue", 0)
     guru_payout    = stats.get("guru_payout", 0.0)
 
@@ -96,10 +101,13 @@ async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"  • Free              : <b>{free_users}</b>\n"
         f"  • Trial             : <b>{trial_users}</b>\n"
         f"  • Pro               : <b>{pro_users}</b>\n\n"
-        "💰 <b>Revenue (This Month)</b>\n"
-        f"  • Pro price         : ₹{current_price}/mo\n"
-        f"  • Total generated   : ₹{total_revenue}\n"
-        f"  • Your share ({split_pct}%) : <b>{payout_str}</b>\n\n"
+        "💰 <b>Revenue Breakdown (This Month)</b>\n"
+        f"  • Pro Subscriptions : {pro_users} × ₹{current_price} = <b>₹{pro_revenue}</b>\n"
+        f"  • HR Contacts (₹49) : {hr_sales} × ₹49 = <b>₹{hr_revenue}</b>\n"
+        f"  • Resume Reviews (₹99) : {rr_sales} × ₹99 = <b>₹{rr_revenue}</b>\n"
+        "────────────────────\n"
+        f"  • Total Generated   : <b>₹{total_revenue}</b>\n"
+        f"  • Your Share ({split_pct}%) : <b>{payout_str}</b>\n\n"
         "<i>Payout is transferred at the end of each month.</i>"
     )
 

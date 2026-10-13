@@ -18,7 +18,7 @@ def _step_bar(current: int) -> str:
     bar = "".join(filled if i < current else empty for i in range(ONBOARDING_STEPS))
     return f"\\[{bar}\\] Step {escape_md(str(current))} of {ONBOARDING_STEPS}"
 
-def welcome_message(first_name: str = "there") -> str:
+def welcome_message(first_name: str = "there", bot_name: str = "Froncy") -> str:
     safe_name = escape_md(first_name)
     return (
         f"👋 Hey {safe_name}\\!\n\n"
@@ -26,7 +26,7 @@ def welcome_message(first_name: str = "there") -> str:
         f"{escape_md(bot_name)} curates the best frontend jobs & internships for freshers, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
-        "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
+        "*7 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
         "Let's get you interviews, not just applications\\. 🎯\n\n"
         "What best describes you?"
     )
@@ -48,23 +48,32 @@ def skills_prompt(first_name: str = None) -> str:
 def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
     """Shown after onboarding completes."""
     if trial_expires_at:
-        from datetime import timezone
-        expires_str = escape_md(trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC"))
+        try:
+            hour_12 = trial_expires_at.hour % 12 or 12
+            formatted_date = (
+                trial_expires_at.strftime("%A, %B ")
+                + str(trial_expires_at.day)
+                + f" at {hour_12}:{trial_expires_at.minute:02d} "
+                + trial_expires_at.strftime("%p UTC")
+            )
+            expires_str = escape_md(formatted_date)
+        except Exception:
+            expires_str = escape_md(trial_expires_at.strftime("%A, %B %d at %I:%M %p UTC"))
     else:
-        expires_str = "72 hours from now"
+        expires_str = "7 days from now"
     return (
-        "\U0001F680 *3\\-Day Pro Trial — Activated\\!*\n\n"
-        "For the next 72 hours, you have full Pro access:\n\n"
+        "\U0001F680 *7\\-Day Pro Trial — Activated\\!*\n\n"
+        "For the next 7 days, you have full Pro trial access:\n\n"
         "\u26A1 *Instant job alerts*\n"
-        "Get notified when a relevant job appears directly on company career pages\\.\n\n"
+        "Get notified the moment a relevant job appears directly on company career pages\\.\n\n"
         "\U0001F3AF *Full Job Match Scores*\n"
-        "See how well each opportunity matches your profile\\.\n\n"
+        "See exactly how well each opportunity matches your skills and profile\\.\n\n"
         "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
-        "Discover jobs directly from company career pages instead of waiting for them to spread across job boards\\.\n\n"
-        "\U0001F464 *HR Contact Request \\(1 Free\\)*\n"
-        f"Found a job worth applying to? Request the relevant hiring/HR contact from {escape_md(bot_name)} \\(1 free request included in trial\\)\\.\n\n"
+        "Discover jobs directly from company career pages before they spread to saturated job boards\\.\n\n"
+        "\U0001F4EC *Curated Daily Feed*\n"
+        "Get your top 8 matched jobs delivered right to your chat every day\\.\n\n"
         "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
-        "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
+        "After 7 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
         f"Your trial expires: {expires_str}\n\n"
         "*What would you like to do first?*"
@@ -93,50 +102,56 @@ def onboarding_complete(skills: list[str], location: str, has_resume: bool) -> s
 # ──────────────────────────────────────────────
 
 def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
-    plan = user.get("plan", "free")
+    from utils.helpers import get_effective_plan
+    plan = get_effective_plan(user)
     
     hr_left = user.get("hr_requests_left", 0) or 0
     rr_left = user.get("resume_reviews_left", 0) or 0
     if plan not in ("pro", "proplus", "premium"):
         rr_left = 0
     
-    # We will format it exactly as requested:
-    # Plan: ⭐ Pro (Unlimited jobs • HR Requests: X left • Resume Reviews: Y left • Renews: Z)
+    credits_tag = ""
+    if hr_left > 0:
+        credits_tag += f" • HR: {hr_left}"
+    if rr_left > 0:
+        credits_tag += f" • Review: {rr_left}"
 
-    if plan == "pro":
+    if plan in ("pro", "proplus", "premium"):
         expires_at = user.get("plan_expires_at")
-        date_str = expires_at.strftime("%b %d") if expires_at else "soon"
-        early_tag = " \(Early Adopter 🚀\)" if user.get("is_early_adopter") else ""
+        date_str = f"{expires_at.day} {expires_at.strftime('%b')}" if expires_at else "soon"
+        early_tag = " \\(Early Adopter 🚀\\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            f"Plan: ⭐ Pro{early_tag} \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • Renews: {escape_md(date_str)}\)"
+            rf"Plan: 💎 Pro{early_tag} \(unlimited jobs • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\)"
         )
 
-    is_trial = user.get("is_trial", False)
+    is_trial = user.get("is_trial", False) or plan == "trial"
     
     if is_trial:
         trial_expires = user.get("trial_expires_at")
         from datetime import datetime, timezone
         if trial_expires:
+            if hasattr(trial_expires, "tzinfo") and trial_expires.tzinfo is None:
+                trial_expires = trial_expires.replace(tzinfo=timezone.utc)
             remaining = trial_expires - datetime.now(timezone.utc)
             hours_left = max(0, int(remaining.total_seconds() / 3600))
             if hours_left > 0:
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • {escape_md(time_str)}\)"
+                    rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                f"Plan: 💎 Pro Trial \(Unlimited jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left • active\)"
+                rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • active\)"
             )
 
     # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        f"Plan: Free \(5 jobs • HR Requests: {hr_left} left • Resume Reviews: {rr_left} left\)"
+        rf"Plan: Free \(limited jobs • no instant alerts{credits_tag}\)"
     )
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
@@ -431,7 +446,15 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     }
 
 
-def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user: dict = None, applied_job_ids: set = None) -> str:
+def format_job_list_message(
+    jobs: list[dict],
+    plan: str,
+    total_count: int,
+    user: dict = None,
+    applied_job_ids: set = None,
+    page: int = 1,
+    total_active: int = 0,
+) -> str:
     """Format a list of jobs for display."""
     showing = len(jobs)
     
@@ -445,8 +468,13 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
         else:
             stream_label = "Jobs"
     
-    header = f"🔍 *Today's {escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
-    header += "──────────────────\n\n"
+    if plan == "free":
+        total_pages = max(1, (total_count + 4) // 5)
+        header = f"🔍 *Latest {escape_md(stream_label)}* \\(Page {page} of {total_pages}\\)\n"
+        header += "──────────────────\n\n"
+    else:
+        header = f"🔍 *{escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
+        header += "──────────────────\n\n"
 
     if applied_job_ids is None:
         applied_job_ids = set()
@@ -460,9 +488,14 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
 
     footer = "──────────────────\n"
     if plan == "free":
-        footer += escape_md(f"Showing {showing} of {total_count} (Free plan)")
+        start_idx = (page - 1) * 5 + 1
+        end_idx = (page - 1) * 5 + showing
+        count_str = f"all {total_active}+" if total_active else "all"
+        footer += escape_md(f"Showing jobs {start_idx}-{end_idx} of {total_count} latest • Upgrade Pro to browse {count_str} jobs")
 
     return header + "".join(lines) + footer
+
+
 
 
 def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:
@@ -633,20 +666,19 @@ def format_daily_feed_message(
 
     footer = "━━━━━━━━━━━━━━━━━━\n"
 
-    remaining = max(0, total_count - 12)
+    shown_count = len(jobs)
+    remaining = max(0, total_count - shown_count)
     if plan == "free":
         footer += f"🔒 \\+{remaining} more jobs available today\n"
         footer += "*Upgrade to unlock*\n"
     else:
-        footer += f"✅ Showing top 12 matches\n"
+        footer += f"✅ Showing top {shown_count} matches\n"
         if remaining > 0:
             footer += f"\\+{remaining} more available \\(use /jobs command with filters to explore\\)\n"
 
     # ── Skill gap Pro Tip (Phase 4) ─────────────────────────────────────
     if skill_tip:
         footer += f"\n💡 *Pro Tip:* {escape_md(skill_tip)}\n"
-
-    footer += f"\n_P\\.S\\. Found a job elsewhere? Just paste the link here to unlock an Apply Kit for it\\!_"
 
     return header + "".join(lines) + footer
 
@@ -947,25 +979,20 @@ def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> st
         f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
         f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
         "*Why upgrade?*\n\n"
-        "\u26A1 *Get relevant jobs instantly*\n"
-        f"{escape_md(bot_name)} continuously monitors company career pages and alerts you when a job matching your profile appears\\.\n\n"
-        "\U0001F3AF *Know which jobs fit you*\n"
-        "Get full match scores based on your skills, experience and profile\\.\n\n"
-        "\U0001F3E2 *Direct\\-source opportunities*\n"
-        "Get fresh jobs directly from company career pages — before they become widely circulated\\.\n\n"
-        "\U0001F464 *Get hiring contacts*\n"
-        "Request relevant HR/recruiter contacts for jobs you actually want to pursue\\.\n\n"
-        "\U0001F4C4 *Human Resume Review*\n"
-        "Get your resume reviewed and understand what may be stopping you from getting interview calls\\.\n\n"
+        "\u26A1 *Instant Career Page Alerts*\n"
+        f"{escape_md(bot_name)} continuously monitors company career pages 24/7 and alerts you the moment a job matching your skills appears\\.\n\n"
+        "\U0001F4EC *Daily Feed with 8 Curated Jobs*\n"
+        "Receive 8 top matched opportunities delivered to your chat every day \\(free tier gets 5\\)\\.\n\n"
+        "\U0001F3AF *Know Which Jobs Fit You*\n"
+        "Get full match scores and skill gap analysis on every opportunity\\.\n\n"
+        "\U0001F3E2 *Direct\\-Source Opportunities*\n"
+        "Get fresh jobs directly from company career pages before they become saturated on public boards\\.\n\n"
         "*What you unlock*\n\n"
-        "\u2705 Instant matched job alerts\n"
-        "\u2705 Full job match scores\n"
-        "\u2705 Unlimited job alerts\n"
-        "\u2705 HR contact requests \\(5/month\\)\n"
-        "\u2705 Human resume review \\(One time\\)\n"
+        "\u2705 Instant matched career page alerts\n"
+        "\u2705 Curated daily feed \\(8 jobs/day\\)\n"
+        "\u2705 Full job match scores & AI Cover letters\n"
         "\u2705 Application tracking & follow\\-up reminders\n\n"
-        "No unnecessary AI features\\.\n"
-        "Just the things that help you find and pursue better opportunities faster\\.\n\n"
+        "💡 _HR Contacts and Resume Reviews available as affordable one\\-time add\\-ons whenever you need them\\._\n\n"
         "Cancel anytime\\. No hidden charges\\."
     )
 
@@ -977,14 +1004,14 @@ def upgrade_regular_message(pricing: dict, bot_name: str = "Froncy") -> str:
         f"💸 *{escape_md(bot_name)} Pro — ₹{price}/month*\n\n"
         "*🚀 What you can do with Pro:*\n\n"
         "✅ 10 Apply Smart kits/day — one click generates:\n"
-        "   📄 ATS\\-tailored Resume PDF\n"
+        "   📄 Tailored Resume PDF\n"
         "   ✍️ Cover Letter\n"
         "   💬 LinkedIn DM \\+ Connection Note\n"
         "   📧 Cold email to the hiring manager\n\n"
         "✅ Unlimited job alerts daily\n"
         "✅ Full match scores on every listing\n"
         "✅ 10 AI cover letters/day\n"
-        "✅ 5 ATS resume checks/day\n"
+        "✅ Browse all active jobs in database\n"
         "✅ Application tracker \\+ 3\\-day follow\\-up reminders\n"
         "✅ Llama 3 70B \\(better AI quality\\)\n\n"
         "Less than one dinner out\\. ☕"
@@ -999,7 +1026,7 @@ def upgrade_plans(current_plan: str) -> str:
         "✅ Unlimited web dev jobs daily\n"
         "✅ Full match scores on every listing\n"
         "✅ 10 tailored cover letters/day\n"
-        "✅ 5 ATS checks/day\n"
+        "✅ Browse all active jobs in database\n"
         "✅ Application tracker \\+ 7\\-day reminders\n\n"
         "All for less than a cup of chai\\. ☕"
     )
@@ -1027,15 +1054,15 @@ def user_status(user: dict) -> str:
         date_str = expires_at.strftime("%b %d, %Y") if expires_at else "Unknown"
         sub_status = user.get("subscription_status", "")
         if sub_status == "cancelled":
-            plan_label = escape_md(f"⭐ Pro{early_tag} — active till {date_str} (Cancelled)")
+            plan_label = escape_md(f"💎 Pro{early_tag} — active till {date_str} (Cancelled)")
         else:
-            plan_label = escape_md(f"⭐ Pro{early_tag} — renews {date_str}")
+            plan_label = escape_md(f"💎 Pro{early_tag} — renews {date_str}")
     elif is_trial and trial_expires:
         now = datetime.now(timezone.utc)
         remaining = trial_expires - now
         hours = max(0, int(remaining.total_seconds() / 3600))
         if hours > 0:
-            plan_label = escape_md(f"⚡ Pro Trial — {hours}h left")
+            plan_label = escape_md(f"⭐️ Pro Trial — {hours}h left")
         else:
             plan_label = escape_md("🆓 Free (trial ended)")
             plan = "free"  # treat as free for limit display

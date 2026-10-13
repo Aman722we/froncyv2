@@ -2,6 +2,7 @@
 APScheduler setup — daily alerts, evening digest, weekly scorecard.
 Scraping has been removed. All jobs are manually curated via the admin panel.
 """
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
@@ -75,9 +76,11 @@ async def _send_daily_alerts():
                 user_record = dict(user)
                 plan = get_effective_plan(user_record)
                 
+                bot_id = user.get("bot_id", 1)
                 # Build a proper user dict that compute_manual_job_match expects
                 user_dict = {
                     "telegram_id": user["telegram_id"],
+                    "bot_id": bot_id,
                     "skills": user["skills"] or [],
                     "location_pref": user["location_pref"] or "remote",
                     "plan": plan,
@@ -86,8 +89,8 @@ async def _send_daily_alerts():
                     "role_pref": user["role_pref"] or "fullstack",
                 }
 
-                feed_limit = 8 if plan == "free" else 12
-                jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
+                feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
+                jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit, bot_id=bot_id)
                 if not jobs:
                     continue
 
@@ -236,7 +239,7 @@ async def _send_weekly_digest():
             first_name  = escape_md(u["first_name"] or "there")
             user_skills  = {s.lower() for s in (u["skills"] or [])}
             try:
-                stats = await get_weekly_scorecard(telegram_id)
+                stats = await get_weekly_scorecard(telegram_id, bot_id=u.get("bot_id", 1))
                 viewed  = stats["viewed"]
                 saved   = stats["saved"]
                 applied = stats["applied"]
@@ -328,12 +331,12 @@ async def _downgrade_expired_trials_job():
 
 
 async def _cleanup_old_manual_jobs():
-    """Soft-delete manual jobs older than 30 days."""
+    """Soft-delete manual jobs older than 15 days."""
     try:
         from db.manual_jobs import cleanup_old_manual_jobs
         logger.info("🧹 Running manual jobs cleanup...")
-        deleted = await cleanup_old_manual_jobs(days=30)
-        logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs.")
+        deleted = await cleanup_old_manual_jobs(days=15)
+        logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs (older than 15 days).")
     except Exception as e:
         logger.error(f"❌ Failed to cleanup old manual jobs: {e}")
         if _bot_app:
@@ -495,7 +498,7 @@ def start_scheduler():
         _cleanup_old_manual_jobs,
         CronTrigger(hour=0, minute=0),
         id="cleanup_manual_jobs",
-        name="Deactivate manual jobs older than 30 days",
+        name="Deactivate manual jobs older than 15 days",
         replace_existing=True,
     )
 
@@ -519,6 +522,9 @@ def start_scheduler():
 
     scheduler.start()
     logger.info("📅 Scheduler started")
+
+    # Run initial cleanup of old jobs (15-day pruning) on boot
+    asyncio.create_task(_cleanup_old_manual_jobs())
 
 
 def stop_scheduler():

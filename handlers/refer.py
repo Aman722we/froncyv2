@@ -14,10 +14,10 @@ from services.referral_service import get_referral_stats, REFERRAL_BONUS_DAYS, R
 BOT_USERNAME = "FroncyJobsBot"
 
 
-async def _build_refer_message(user_id: int, bot_username: str) -> tuple[str, InlineKeyboardMarkup]:
+async def _build_refer_message(user_id: int, bot_username: str, bot_id: int = 1) -> tuple[str, InlineKeyboardMarkup]:
     """Build the referral message and keyboard for a user."""
     pool = get_pool()
-    stats = await get_referral_stats(user_id, pool)
+    stats = await get_referral_stats(user_id, pool, bot_id=bot_id)
 
     referrals_made = stats["referrals_made"]
     bonus_days     = stats["bonus_days_earned"]
@@ -41,7 +41,12 @@ async def _build_refer_message(user_id: int, bot_username: str) -> tuple[str, In
         "🎁 <b>Refer a Friend — Earn Free Pro Days!</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Share your personal link below. When a friend joins and <b>completes setup</b>, "
-        f"you earn <b>{REFERRAL_BONUS_DAYS} free Pro days</b> instantly!\n\n"
+        f"you unlock <b>{REFERRAL_BONUS_DAYS} free Pro days</b> instantly!\n\n"
+        f"⭐️ <b>What Pro Trial unlocks for you:</b>\n"
+        f"  • 8 high-match jobs in your Daily Feed\n"
+        f"  • Instant job alerts when new matches drop\n"
+        f"  • Browse all active jobs with match scores & filters\n"
+        f"  • AI Cover letters\n\n"
         f"🔗 <b>Your referral link:</b>\n"
         f"<code>{link}</code>\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -49,10 +54,15 @@ async def _build_refer_message(user_id: int, bot_username: str) -> tuple[str, In
         f"  • Friends referred : <b>{referrals_made}</b>\n"
         f"  • Bonus days earned: <b>{bonus_days}</b>\n"
         f"  {cap_note}\n\n"
-        "💡 <i>Tap the link above to copy it, then share via WhatsApp or DM!</i>"
+        "💡 <i>Tap the link above to copy it, or tap the button below to share directly!</i>"
     )
 
+    from urllib.parse import quote
+    share_text = quote("Hey! Check out this bot to get instant job alerts and a curated daily tech job feed 🚀")
+    share_url = f"https://t.me/share/url?url={quote(link)}&text={share_text}"
+
     kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📲 Share with Friends", url=share_url)],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
     ])
 
@@ -62,7 +72,15 @@ async def _build_refer_message(user_id: int, bot_username: str) -> tuple[str, In
 async def refer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /refer command."""
     user_id = update.effective_user.id
-    msg, kb = await _build_refer_message(user_id, context.bot.username)
+    bot_id = context.bot_data.get('bot_id', 1)
+    username = context.bot.username
+    if not username:
+        try:
+            me = await context.bot.get_me()
+            username = me.username
+        except Exception:
+            username = BOT_USERNAME
+    msg, kb = await _build_refer_message(user_id, username, bot_id=bot_id)
     await update.message.reply_text(
         msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
     )
@@ -73,7 +91,15 @@ async def refer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
-    msg, kb = await _build_refer_message(user_id, context.bot.username)
+    bot_id = context.bot_data.get('bot_id', 1)
+    username = context.bot.username
+    if not username:
+        try:
+            me = await context.bot.get_me()
+            username = me.username
+        except Exception:
+            username = BOT_USERNAME
+    msg, kb = await _build_refer_message(user_id, username, bot_id=bot_id)
     await query.edit_message_text(
         msg, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb
     )

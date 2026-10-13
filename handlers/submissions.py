@@ -790,9 +790,16 @@ async def _render_my_links(update: Update, context: ContextTypes.DEFAULT_TYPE, p
 
 async def my_links_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Entry point: /my_links command or 📂 My Submitted Links button."""
+    msg = (
+        "ℹ️ <b>Job Link Submissions Paused</b>\n\n"
+        "Community link submissions are currently paused while we focus on direct career page alerts.\n\n"
+        "👉 Type /menu to browse fresh opportunities!"
+    )
     if update.callback_query:
         await update.callback_query.answer()
-    await _render_my_links(update, context, page=1)
+        await update.callback_query.edit_message_text(msg, parse_mode="HTML")
+    else:
+        await update.message.reply_text(msg, parse_mode="HTML")
 
 
 async def my_links_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

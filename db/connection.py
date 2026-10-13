@@ -53,23 +53,31 @@ async def init_db() -> asyncpg.Pool:
             # Create user_seen_jobs for deduplication algorithm
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS user_seen_jobs (
-                    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    telegram_id BIGINT,
                     job_id INT,
                     seen_at TIMESTAMPTZ DEFAULT NOW(),
-                    UNIQUE(telegram_id, job_id)
+                    bot_id INT DEFAULT 1
                 );
             """)
+            await conn.execute("ALTER TABLE user_seen_jobs ADD COLUMN IF NOT EXISTS bot_id INT DEFAULT 1;")
+            await conn.execute("UPDATE user_seen_jobs SET bot_id = 1 WHERE bot_id IS NULL;")
+            await conn.execute("ALTER TABLE user_seen_jobs DROP CONSTRAINT IF EXISTS user_seen_jobs_telegram_id_job_id_key;")
+            await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_seen_jobs_unique ON user_seen_jobs (telegram_id, job_id, bot_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_user_bot ON user_seen_jobs (telegram_id, bot_id, seen_at DESC);")
             
             # Create jobs_sent_log to track daily feed history (3-day cooldowns)
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs_sent_log (
                     id SERIAL PRIMARY KEY,
-                    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+                    telegram_id BIGINT,
                     job_id INT,
-                    sent_at TIMESTAMPTZ DEFAULT NOW()
+                    sent_at TIMESTAMPTZ DEFAULT NOW(),
+                    bot_id INT DEFAULT 1
                 );
             """)
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_sent_log_user ON jobs_sent_log (telegram_id, job_id, sent_at DESC);")
+            await conn.execute("ALTER TABLE jobs_sent_log ADD COLUMN IF NOT EXISTS bot_id INT DEFAULT 1;")
+            await conn.execute("UPDATE jobs_sent_log SET bot_id = 1 WHERE bot_id IS NULL;")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_sent_log_user_bot ON jobs_sent_log (telegram_id, bot_id, sent_at DESC);")
         except Exception as e:
             logger.warning(f"Failed to apply constraint/seen_jobs migrations: {e}")
 
@@ -165,6 +173,7 @@ async def init_db() -> asyncpg.Pool:
         try:
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT;")
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INT DEFAULT 0;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN DEFAULT FALSE;")
         except Exception as e:
             logger.warning(f"Failed to apply referral migrations: {e}")
 
@@ -357,6 +366,9 @@ async def init_db() -> asyncpg.Pool:
                 );
             """)
             await conn.execute("ALTER TABLE manual_requests ADD COLUMN IF NOT EXISTS admin_reply TEXT;")
+            await conn.execute("ALTER TABLE manual_requests ADD COLUMN IF NOT EXISTS bot_id INT DEFAULT 1;")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_requests_bot ON manual_requests (bot_id, request_type);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_jobs_active_partial ON manual_jobs (posted_at DESC) WHERE is_active = TRUE;")
         except Exception as e:
             logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
 

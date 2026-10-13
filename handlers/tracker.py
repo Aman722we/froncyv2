@@ -40,7 +40,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
     
     if success:
         msg = "✅ Job added to your tracker!"
-        if plan == "pro":
+        if plan in ("pro", "trial"):
             msg += "\nI'll remind you to follow up in 3 days."
         await query.answer(msg, show_alert=True)
     else:
@@ -183,7 +183,8 @@ async def weekly_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
     
-    if user.get("plan", "free") != "pro":
+    from utils.helpers import get_effective_plan
+    if get_effective_plan(user) not in ("pro", "proplus", "premium", "trial"):
         await query.message.reply_text("This feature is for Pro users only.")
         return
         

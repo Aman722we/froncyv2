@@ -132,6 +132,8 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             extracted_salary
         )
         if row:
+            from db.manual_jobs import invalidate_jobs_cache
+            invalidate_jobs_cache()
             return row["id"]
         return None
 async def sync_one_source(source: dict) -> dict:

@@ -26,7 +26,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     bot_id = context.bot_data.get('bot_id', 1)
     user, seen_jobs, total_active_jobs = await asyncio.gather(
         get_user(user_id, bot_id=bot_id),
-        get_seen_jobs(user_id),
+        get_seen_jobs(user_id, bot_id=bot_id),
         count_manual_jobs(),
     )
     
@@ -46,6 +46,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     user_dict = {
         "telegram_id": user_id,
+        "bot_id": bot_id,
         "skills": user.get("skills", []),
         "location_pref": user.get("location_pref", "remote"),
         "plan": plan,
@@ -53,10 +54,8 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref", "fullstack"),
     }
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
-    seen_jobs = await get_seen_jobs(user_id)
-    feed_limit = 8 if plan == "free" else 12
+    feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
 
     from datetime import datetime, timedelta, timezone
     # Fetch jobs + freshness count in parallel
@@ -66,13 +65,14 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             seen_job_ids=seen_jobs,
             limit=feed_limit,
             exclude_sent_within_days=3,
-            max_age_days=10
+            max_age_days=10,
+            bot_id=bot_id,
         ),
         count_new_jobs_since(datetime.now(timezone.utc) - timedelta(hours=24)),
     )
 
     if jobs:
-        await log_jobs_sent(user_id, [j["id"] for j in jobs])
+        await log_jobs_sent(user_id, [j["id"] for j in jobs], bot_id=bot_id)
 
     # Build optional skill tip (Phase 4) — compute from last 20 matched jobs
     skill_tip = None
@@ -134,41 +134,18 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.callback_query and update.callback_query.data.startswith("jobs_page_"):
         page = int(update.callback_query.data.split("_")[-1])
 
-    limit = get_limit(plan, "jobs_per_day")
     jobs_seen_today = user.get("jobs_seen_today", 0)
     offset = (page - 1) * 5
     display_count = 5
-
-    # Free users: block pagination past their allowance
-    if plan == "free":
-        max_viewable_offset = 6  # 6 additional jobs
-        if offset >= max_viewable_offset:
-            msg = (
-                "🔒 *100+ more personalized jobs available*\n\n"
-                "Upgrade to unlock filters & get full access."
-            )
-            from utils.messages import escape_md
-            kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
-                [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-            ])
-            if update.callback_query:
-                await update.callback_query.answer()
-                await update.callback_query.edit_message_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
-            else:
-                await update.message.reply_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
-            return
-        display_count = min(5, max_viewable_offset - offset)
 
     from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs
     
     # Get active filters
     filters = context.user_data.get("job_filters", {})
     
-    # Fetch top 100 personalized jobs to allow in-memory filtering
-    # For /jobs list, we DO NOT filter by seen_jobs to ensure pagination stays stable.
     user_dict = {
         "telegram_id": user.get("telegram_id"),
+        "bot_id": bot_id,
         "skills": user.get("skills") or [],
         "location_pref": user.get("location_pref") or "remote",
         "plan": plan,
@@ -184,8 +161,74 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     f_stream = filters.get("stream", "mine")
     ignore_role = True if f_stream == "all" else False
     
-    all_jobs = await get_personalized_manual_jobs(user_dict, limit=100, ignore_role_filter=ignore_role)
-    
+    if plan == "free":
+        # Free users: latest 10 active jobs from database (up to 2 pages of 5)
+        if page > 2:
+            # Block pagination beyond page 2 (10 jobs) for free users
+            msg = (
+                "🔒 *100\\+ more jobs available with Pro*\n\n"
+                "Upgrade to browse all jobs with personalized match scores and filters\\."
+            )
+            kb = keyboards.InlineKeyboardMarkup([
+                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            ])
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+            else:
+                await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+            return
+        all_jobs = await get_manual_jobs(limit=10, offset=0)
+        filtered_jobs = all_jobs
+    else:
+        # Pro / Trial: personalized, browse all (high limit)
+        all_jobs = await get_personalized_manual_jobs(user_dict, limit=200, ignore_role_filter=ignore_role, bot_id=bot_id)
+        # Apply filters for Pro/Trial
+        filtered_jobs = []
+        f_exp = filters.get("exp", "any")
+        f_time = filters.get("time", "any")
+        f_match = filters.get("match", "any")
+        f_loc = filters.get("loc", "any")
+        
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        for job in all_jobs:
+            # 1. Experience Filter
+            job_exp = job.get("min_yoe", 0)
+            if f_exp != "any":
+                if f_exp == "0" and job_exp > 0: continue
+                elif f_exp == "1" and job_exp != 1: continue
+                elif f_exp == "2" and job_exp != 2: continue
+                elif f_exp == "3" and job_exp < 3: continue
+                
+            # 2. Location Filter
+            if f_loc != "any":
+                job_loc = (job.get("location") or "remote").lower()
+                if f_loc == "remote" and "remote" not in job_loc: continue
+                if f_loc == "onsite" and "remote" in job_loc: continue
+
+            # 3. Recency Filter
+            if f_time != "any":
+                posted = job.get("posted_at")
+                if posted:
+                    if isinstance(posted, str):
+                        dt = datetime.fromisoformat(posted.replace('Z', '+00:00'))
+                    else:
+                        dt = posted
+                    diff_hours = (now - dt).total_seconds() / 3600
+                    if f_time == "1d" and diff_hours > 24: continue
+                    elif f_time == "3d" and diff_hours > 72: continue
+                    
+            # 4. Match Level Filter
+            if f_match != "any":
+                score = job.get("_match_score", 0)
+                if f_match == "high" and score < 70: continue
+                elif f_match == "med" and score < 40: continue
+
+            filtered_jobs.append(job)
+
     # Fetch applied job IDs to show ✅ Applied badge (DO NOT filter out — let all jobs show)
     from db.connection import get_pool as _get_pool_jobs
     applied_job_ids = set()
@@ -199,52 +242,6 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             applied_job_ids = {r["job_id"] for r in rows}
     except Exception as e:
         logger.warning(f"Could not fetch applied jobs for badge: {e}")
-    
-    # Apply filters
-    filtered_jobs = []
-    f_exp = filters.get("exp", "any")
-    f_time = filters.get("time", "any")
-    f_match = filters.get("match", "any")
-    f_loc = filters.get("loc", "any")
-    
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    
-    for job in all_jobs:
-        # 1. Experience Filter
-        job_exp = job.get("min_yoe", 0)
-        if f_exp != "any":
-            if f_exp == "0" and job_exp > 0: continue
-            elif f_exp == "1" and job_exp != 1: continue
-            elif f_exp == "2" and job_exp != 2: continue
-            elif f_exp == "3" and job_exp < 3: continue
-            
-        # 2. Location Filter
-        if f_loc != "any":
-            job_loc = (job.get("location") or "remote").lower()
-            if f_loc == "remote" and "remote" not in job_loc: continue
-            if f_loc == "onsite" and "remote" in job_loc: continue
-
-        # 3. Recency Filter
-        if f_time != "any":
-            posted = job.get("posted_at")
-            if posted:
-                if isinstance(posted, str):
-                    dt = datetime.fromisoformat(posted.replace('Z', '+00:00'))
-                else:
-                    dt = posted
-                diff_hours = (now - dt).total_seconds() / 3600
-                if f_time == "1d" and diff_hours > 24: continue
-                elif f_time == "3d" and diff_hours > 72: continue
-                
-        # 3. Match Level Filter
-        if f_match != "any":
-            score = job.get("_match_score", 0)
-            if f_match == "high" and score < 70: continue
-            elif f_match == "med" and score < 40: continue
-            
-
-        filtered_jobs.append(job)
         
     total_filtered = len(filtered_jobs)
     page_jobs = filtered_jobs[offset:offset+display_count]
@@ -269,8 +266,23 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
-    msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user, applied_job_ids=applied_job_ids)
-    kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
+    msg = messages.format_job_list_message(
+        page_jobs,
+        plan,
+        total_filtered,
+        user=user,
+        applied_job_ids=applied_job_ids,
+        page=page,
+        total_active=total_active_jobs,
+    )
+    kb = keyboards.job_list_keyboard(
+        page_jobs,
+        plan,
+        total_filtered,
+        page=page,
+        total_active=total_active_jobs,
+    )
+
 
     if update.callback_query and not force_new:
         await update.callback_query.answer()
@@ -321,11 +333,11 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
     
     # User actually clicked to view the job, so mark it permanently seen
     from db.manual_jobs import mark_jobs_seen
-    await mark_jobs_seen(user_id, [job_id])
-    bot_id = context.bot_data.get('bot_id', 1)
+    await mark_jobs_seen(user_id, [job_id], bot_id=bot_id)
     user = await get_user(user_id, bot_id=bot_id)
     plan = get_effective_plan(user)
     user_skills = user.get("skills", [])
@@ -567,7 +579,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
-        if plan == "pro":
+        if plan in ("pro", "trial"):
             limit_text = (
                 f"⚠️ *Apply Smart Daily Limit Reached*\n\n"
                 f"You've used all {limit} Apply Smarts for today\\.\n"

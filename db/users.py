@@ -254,8 +254,6 @@ async def update_user_subscription(
                     razorpay_subscription_id = COALESCE($5, razorpay_subscription_id),
                     subscription_status = $6,
                     is_trial = FALSE,
-                    hr_requests_left = 5,
-                    resume_reviews_left = 1,
                     updated_at = NOW()
                 WHERE telegram_id = $1 AND bot_id = $7
                 RETURNING *
