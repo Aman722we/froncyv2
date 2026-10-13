@@ -337,7 +337,7 @@ async def get_click_stats() -> dict:
     }
 
 
-async def get_weekly_scorecard(telegram_id: int) -> dict:
+async def get_weekly_scorecard(telegram_id: int, bot_id: int = 1) -> dict:
     """Return this week's activity stats for a user.
     Used by the Friday Scorecard digest.
     Returns: jobs_viewed, jobs_saved, jobs_applied this week."""
@@ -345,8 +345,8 @@ async def get_weekly_scorecard(telegram_id: int) -> dict:
     async with pool.acquire() as conn:
         jobs_viewed = await conn.fetchval(
             """SELECT COUNT(*) FROM user_seen_jobs
-               WHERE telegram_id = $1 AND seen_at >= NOW() - INTERVAL '7 days'""",
-            telegram_id
+               WHERE telegram_id = $1 AND bot_id = $2 AND seen_at >= NOW() - INTERVAL '7 days'""",
+            telegram_id, bot_id
         ) or 0
 
         jobs_saved = await conn.fetchval(

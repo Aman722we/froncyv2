@@ -26,7 +26,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     bot_id = context.bot_data.get('bot_id', 1)
     user, seen_jobs, total_active_jobs = await asyncio.gather(
         get_user(user_id, bot_id=bot_id),
-        get_seen_jobs(user_id),
+        get_seen_jobs(user_id, bot_id=bot_id),
         count_manual_jobs(),
     )
     
@@ -46,6 +46,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     user_dict = {
         "telegram_id": user_id,
+        "bot_id": bot_id,
         "skills": user.get("skills", []),
         "location_pref": user.get("location_pref", "remote"),
         "plan": plan,
@@ -53,9 +54,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "batch_year": user.get("batch_year"),
         "role_pref": user.get("role_pref", "fullstack"),
     }
-    from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
-    seen_jobs = await get_seen_jobs(user_id)
     feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
 
     from datetime import datetime, timedelta, timezone
@@ -66,13 +65,14 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             seen_job_ids=seen_jobs,
             limit=feed_limit,
             exclude_sent_within_days=3,
-            max_age_days=10
+            max_age_days=10,
+            bot_id=bot_id,
         ),
         count_new_jobs_since(datetime.now(timezone.utc) - timedelta(hours=24)),
     )
 
     if jobs:
-        await log_jobs_sent(user_id, [j["id"] for j in jobs])
+        await log_jobs_sent(user_id, [j["id"] for j in jobs], bot_id=bot_id)
 
     # Build optional skill tip (Phase 4) — compute from last 20 matched jobs
     skill_tip = None
@@ -145,6 +145,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     user_dict = {
         "telegram_id": user.get("telegram_id"),
+        "bot_id": bot_id,
         "skills": user.get("skills") or [],
         "location_pref": user.get("location_pref") or "remote",
         "plan": plan,
@@ -182,7 +183,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         filtered_jobs = all_jobs
     else:
         # Pro / Trial: personalized, browse all (high limit)
-        all_jobs = await get_personalized_manual_jobs(user_dict, limit=200, ignore_role_filter=ignore_role)
+        all_jobs = await get_personalized_manual_jobs(user_dict, limit=200, ignore_role_filter=ignore_role, bot_id=bot_id)
         # Apply filters for Pro/Trial
         filtered_jobs = []
         f_exp = filters.get("exp", "any")
@@ -332,11 +333,11 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
     
     # User actually clicked to view the job, so mark it permanently seen
     from db.manual_jobs import mark_jobs_seen
-    await mark_jobs_seen(user_id, [job_id])
-    bot_id = context.bot_data.get('bot_id', 1)
+    await mark_jobs_seen(user_id, [job_id], bot_id=bot_id)
     user = await get_user(user_id, bot_id=bot_id)
     plan = get_effective_plan(user)
     user_skills = user.get("skills", [])

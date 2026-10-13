@@ -76,9 +76,11 @@ async def _send_daily_alerts():
                 user_record = dict(user)
                 plan = get_effective_plan(user_record)
                 
+                bot_id = user.get("bot_id", 1)
                 # Build a proper user dict that compute_manual_job_match expects
                 user_dict = {
                     "telegram_id": user["telegram_id"],
+                    "bot_id": bot_id,
                     "skills": user["skills"] or [],
                     "location_pref": user["location_pref"] or "remote",
                     "plan": plan,
@@ -88,7 +90,7 @@ async def _send_daily_alerts():
                 }
 
                 feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
-                jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
+                jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit, bot_id=bot_id)
                 if not jobs:
                     continue
 
@@ -237,7 +239,7 @@ async def _send_weekly_digest():
             first_name  = escape_md(u["first_name"] or "there")
             user_skills  = {s.lower() for s in (u["skills"] or [])}
             try:
-                stats = await get_weekly_scorecard(telegram_id)
+                stats = await get_weekly_scorecard(telegram_id, bot_id=u.get("bot_id", 1))
                 viewed  = stats["viewed"]
                 saved   = stats["saved"]
                 applied = stats["applied"]
