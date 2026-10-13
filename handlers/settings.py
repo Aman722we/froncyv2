@@ -499,7 +499,8 @@ async def cancel_subscription_confirm(update: Update, context: ContextTypes.DEFA
     user_id = update.effective_user.id
     
     db_pool = get_pool()
-    success = await cancel_user_subscription(user_id, db_pool)
+    bot_id = context.bot_data.get('bot_id', 1)
+    success = await cancel_user_subscription(user_id, db_pool, bot_id=bot_id)
     
     if success:
         logger.info(f"User {user_id} cancelled their subscription.")
