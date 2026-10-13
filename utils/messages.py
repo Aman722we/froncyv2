@@ -449,8 +449,12 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
         else:
             stream_label = "Jobs"
     
-    header = f"🔍 *Today's {escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
-    header += "──────────────────\n\n"
+    if plan == "free":
+        header = f"🔍 *Latest {escape_md(stream_label)}* \\({showing} shown\\)\n"
+        header += "──────────────────\n\n"
+    else:
+        header = f"🔍 *{escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
+        header += "──────────────────\n\n"
 
     if applied_job_ids is None:
         applied_job_ids = set()
@@ -464,9 +468,10 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
 
     footer = "──────────────────\n"
     if plan == "free":
-        footer += escape_md(f"Showing {showing} of {total_count} (Free plan)")
+        footer += escape_md(f"Showing {showing} latest jobs • Upgrade Pro for personalized matches")
 
     return header + "".join(lines) + footer
+
 
 
 def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:

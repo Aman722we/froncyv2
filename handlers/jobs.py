@@ -56,7 +56,7 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs, log_jobs_sent
     
     seen_jobs = await get_seen_jobs(user_id)
-    feed_limit = 8 if plan in ("pro", "proplus", "premium") else 5
+    feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
 
     from datetime import datetime, timedelta, timezone
     # Fetch jobs + freshness count in parallel
@@ -134,39 +134,15 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.callback_query and update.callback_query.data.startswith("jobs_page_"):
         page = int(update.callback_query.data.split("_")[-1])
 
-    limit = get_limit(plan, "jobs_per_day")
     jobs_seen_today = user.get("jobs_seen_today", 0)
     offset = (page - 1) * 5
     display_count = 5
-
-    # Free users: block pagination past their allowance
-    if plan == "free":
-        max_viewable_offset = 6  # 6 additional jobs
-        if offset >= max_viewable_offset:
-            msg = (
-                "🔒 *100+ more personalized jobs available*\n\n"
-                "Upgrade to unlock filters & get full access."
-            )
-            from utils.messages import escape_md
-            kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
-                [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-            ])
-            if update.callback_query:
-                await update.callback_query.answer()
-                await update.callback_query.edit_message_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
-            else:
-                await update.message.reply_text(escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
-            return
-        display_count = min(5, max_viewable_offset - offset)
 
     from db.manual_jobs import get_personalized_manual_jobs, get_seen_jobs, count_manual_jobs
     
     # Get active filters
     filters = context.user_data.get("job_filters", {})
     
-    # Fetch top 100 personalized jobs to allow in-memory filtering
-    # For /jobs list, we DO NOT filter by seen_jobs to ensure pagination stays stable.
     user_dict = {
         "telegram_id": user.get("telegram_id"),
         "skills": user.get("skills") or [],
@@ -184,7 +160,31 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     f_stream = filters.get("stream", "mine")
     ignore_role = True if f_stream == "all" else False
     
-    all_jobs = await get_personalized_manual_jobs(user_dict, limit=100, ignore_role_filter=ignore_role)
+    if plan == "free":
+        # Free users: latest 10 active jobs only — no personalized scoring, no pagination
+        if page > 1:
+            # Block pagination for free users
+            msg = (
+                "🔒 *100\\+ more jobs available with Pro*\n\n"
+                "Upgrade to browse all jobs with personalized match scores and filters\\."
+            )
+            kb = keyboards.InlineKeyboardMarkup([
+                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            ])
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+            else:
+                await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+            return
+        all_jobs = await get_manual_jobs(limit=10, offset=0)
+        display_count = len(all_jobs)
+        offset = 0
+    else:
+        # Pro / Trial: personalized, browse all (high limit)
+        all_jobs = await get_personalized_manual_jobs(user_dict, limit=200, ignore_role_filter=ignore_role)
+
     
     # Fetch applied job IDs to show ✅ Applied badge (DO NOT filter out — let all jobs show)
     from db.connection import get_pool as _get_pool_jobs

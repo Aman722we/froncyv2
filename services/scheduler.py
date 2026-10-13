@@ -87,7 +87,7 @@ async def _send_daily_alerts():
                     "role_pref": user["role_pref"] or "fullstack",
                 }
 
-                feed_limit = 8 if plan in ("pro", "proplus", "premium") else 5
+                feed_limit = 8 if plan in ("pro", "proplus", "premium", "trial") else 5
                 jobs = await get_personalized_manual_jobs(user_dict, limit=feed_limit)
                 if not jobs:
                     continue
