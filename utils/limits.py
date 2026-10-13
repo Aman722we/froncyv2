@@ -11,7 +11,7 @@ PLAN_LIMITS = {
         "llm_model": "fast",        # Llama 3 8B
     },
     "trial": {
-        # Trial = full Pro access for 3 days
+        # Trial = full Pro access for 7 days
         "jobs_per_day": 999,
         "cover_letters_per_day": 10,
         "ats_checks_per_day": 5,

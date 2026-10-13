@@ -18,7 +18,7 @@ def _step_bar(current: int) -> str:
     bar = "".join(filled if i < current else empty for i in range(ONBOARDING_STEPS))
     return f"\\[{bar}\\] Step {escape_md(str(current))} of {ONBOARDING_STEPS}"
 
-def welcome_message(first_name: str = "there") -> str:
+def welcome_message(first_name: str = "there", bot_name: str = "Froncy") -> str:
     safe_name = escape_md(first_name)
     return (
         f"👋 Hey {safe_name}\\!\n\n"
@@ -26,7 +26,7 @@ def welcome_message(first_name: str = "there") -> str:
         f"{escape_md(bot_name)} curates the best frontend jobs & internships for freshers, "
         "writes cover letters that actually get read, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
-        "*3 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
+        "*7 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
         "Let's get you interviews, not just applications\\. 🎯\n\n"
         "What best describes you?"
     )
@@ -48,13 +48,22 @@ def skills_prompt(first_name: str = None) -> str:
 def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
     """Shown after onboarding completes."""
     if trial_expires_at:
-        from datetime import timezone
-        expires_str = escape_md(trial_expires_at.strftime("%A, %B %-d at %-I:%M %p UTC"))
+        try:
+            hour_12 = trial_expires_at.hour % 12 or 12
+            formatted_date = (
+                trial_expires_at.strftime("%A, %B ")
+                + str(trial_expires_at.day)
+                + f" at {hour_12}:{trial_expires_at.minute:02d} "
+                + trial_expires_at.strftime("%p UTC")
+            )
+            expires_str = escape_md(formatted_date)
+        except Exception:
+            expires_str = escape_md(trial_expires_at.strftime("%A, %B %d at %I:%M %p UTC"))
     else:
-        expires_str = "72 hours from now"
+        expires_str = "7 days from now"
     return (
-        "\U0001F680 *3\\-Day Pro Trial — Activated\\!*\n\n"
-        "For the next 72 hours, you have full Pro trial access:\n\n"
+        "\U0001F680 *7\\-Day Pro Trial — Activated\\!*\n\n"
+        "For the next 7 days, you have full Pro trial access:\n\n"
         "\u26A1 *Instant job alerts*\n"
         "Get notified the moment a relevant job appears directly on company career pages\\.\n\n"
         "\U0001F3AF *Full Job Match Scores*\n"
@@ -62,9 +71,9 @@ def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
         "\U0001F3E2 *Fresh, direct\\-source jobs*\n"
         "Discover jobs directly from company career pages before they spread to saturated job boards\\.\n\n"
         "\U0001F4EC *Curated Daily Feed*\n"
-        "Get your top 5 matched jobs delivered right to your chat every day\\.\n\n"
+        "Get your top 8 matched jobs delivered right to your chat every day\\.\n\n"
         "No card needed\\. No auto\\-charge\\. Ever\\.\n\n"
-        "After 3 days, choose whether to upgrade to Pro or stay on Free\\.\n"
+        "After 7 days, choose whether to upgrade to Pro or stay on Free\\.\n"
         "Either way, your data stays\\.\n\n"
         f"Your trial expires: {expires_str}\n\n"
         "*What would you like to do first?*"

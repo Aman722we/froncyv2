@@ -60,9 +60,9 @@ async def increment_slots_filled(db_pool):
 
 
 async def start_trial(telegram_id: int, db_pool):
-    """Start 3-day free trial for a new user. Only activates once."""
+    """Start 7-day free trial for a new user. Only activates once."""
     now = datetime.now(timezone.utc)
-    trial_expires = now + timedelta(days=3)
+    trial_expires = now + timedelta(days=7)
 
     await db_pool.execute("""
         UPDATE users

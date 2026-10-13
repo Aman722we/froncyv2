@@ -448,7 +448,7 @@ async def _complete_onboarding(
     location = context.user_data.get("location", "all")
     exp      = context.user_data.get("experience_level", "0")
 
-    # Activate 3-day free trial for new user
+    # Activate 7-day free trial for new user
     db_pool = get_pool()
     trial_expires_at = await start_trial(user_id, db_pool)
 
