@@ -134,12 +134,13 @@ async def generate_cover_letter(
     user_role: str = "frontend",
 ) -> str:
     """
-    Generate a tailored cover letter using NVIDIA NIM API.
+    Generate a tailored cover letter using Groq API (8B / Qwen pool).
+    Uses the NVIDIA_API_KEY_8B pool with 5 Groq keys and round-robin cycling across all tiers.
 
     Args:
         resume_text: Extracted text from user's resume
         job_description: Job posting text or description
-        mode: FAST (8B) or QUALITY (70B)
+        mode: Kept for signature compatibility; uses 8B multi-key pool for all tiers
         tone: formal, friendly, or concise
         user_role: The user's selected role stream (e.g. frontend, backend, devops)
 
@@ -149,8 +150,6 @@ async def generate_cover_letter(
     Raises:
         Exception on API failure after retries
     """
-    client, model = _get_client(mode)
-
     tone_instruction = TONE_PROMPTS.get(tone, TONE_PROMPTS["formal"])
     system_prompt = get_system_prompt(user_role)
 
@@ -158,14 +157,16 @@ async def generate_cover_letter(
 {resume_text[:2000]}
 
 Job Description:
-{job_description[:1500]}
+{job_description[:2500]}
 
 {tone_instruction}
 
 Write the cover letter now:"""
 
-    # Attempt with 1 retry
-    for attempt in range(2):
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        # Always get a client from the FAST (8B) pool with 5 Groq keys via round-robin
+        client, model = _get_client(LLMMode.FAST, timeout=30.0)
         try:
             logger.info(f"Generating cover letter with {model} (attempt {attempt + 1})")
 
@@ -185,10 +186,21 @@ Write the cover letter now:"""
             return result
 
         except Exception as e:
-            logger.error(f"LLM API error (attempt {attempt + 1}): {e}")
-            if attempt == 0:
-                # Exponential backoff before retry
-                await asyncio.sleep(2)
+            err_str = str(e)
+            if "429" in err_str or "Rate limit" in err_str:
+                import re
+                import time
+                match = re.search(r"try again in ([\d\.]+)s", err_str)
+                wait_sec = float(match.group(1)) if match else 15.0
+                used_key = getattr(client, '_used_api_key', None)
+                if used_key:
+                    _key_cooldowns[used_key] = time.time() + wait_sec + 1.0
+                logger.warning(f"Cover letter rate limit hit on Groq key. Circuit breaker active for {wait_sec + 1.0:.1f}s. Rotating to next key...")
+                continue
+
+            logger.error(f"LLM API error during cover letter gen (attempt {attempt + 1}): {e}")
+            if attempt < max_attempts - 1:
+                await asyncio.sleep(1)
             else:
                 raise
 
