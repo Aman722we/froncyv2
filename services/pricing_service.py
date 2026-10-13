@@ -59,7 +59,7 @@ async def increment_slots_filled(db_pool):
     """)
 
 
-async def start_trial(telegram_id: int, db_pool):
+async def start_trial(telegram_id: int, db_pool, bot_id: int = 1):
     """Start 7-day free trial for a new user. Only activates once."""
     now = datetime.now(timezone.utc)
     trial_expires = now + timedelta(days=7)
@@ -71,18 +71,18 @@ async def start_trial(telegram_id: int, db_pool):
             trial_started_at = $2,
             trial_expires_at = $3,
             plan = 'trial'
-        WHERE telegram_id = $1
+        WHERE telegram_id = $1 AND bot_id = $4
           AND trial_started_at IS NULL
-    """, telegram_id, now, trial_expires)
+    """, telegram_id, now, trial_expires, bot_id)
 
     return trial_expires
 
 
-async def check_trial_status(telegram_id: int, db_pool) -> dict:
+async def check_trial_status(telegram_id: int, db_pool, bot_id: int = 1) -> dict:
     """Returns trial status for a user."""
     user = await db_pool.fetchrow(
-        "SELECT * FROM users WHERE telegram_id = $1",
-        telegram_id
+        "SELECT * FROM users WHERE telegram_id = $1 AND bot_id = $2",
+        telegram_id, bot_id
     )
     if not user:
         return {"status": "no_trial"}
@@ -100,8 +100,8 @@ async def check_trial_status(telegram_id: int, db_pool) -> dict:
         await db_pool.execute("""
             UPDATE users
             SET plan = 'free', is_trial = FALSE
-            WHERE telegram_id = $1
-        """, telegram_id)
+            WHERE telegram_id = $1 AND bot_id = $2
+        """, telegram_id, bot_id)
         return {"status": "expired"}
 
     if user["trial_expires_at"]:

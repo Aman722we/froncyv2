@@ -579,7 +579,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
 
-        if plan == "pro":
+        if plan in ("pro", "trial"):
             limit_text = (
                 f"⚠️ *Apply Smart Daily Limit Reached*\n\n"
                 f"You've used all {limit} Apply Smarts for today\\.\n"

@@ -40,7 +40,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
     
     if success:
         msg = "✅ Job added to your tracker!"
-        if plan == "pro":
+        if plan in ("pro", "trial"):
             msg += "\nI'll remind you to follow up in 3 days."
         await query.answer(msg, show_alert=True)
     else:

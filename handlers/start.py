@@ -79,6 +79,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             referrer_id = int(arg[4:])
             if referrer_id != user.id:  # Can't refer yourself
                 context.user_data["referrer_id"] = referrer_id
+                # Persist to database so server restarts don't lose the referral
+                try:
+                    pool = get_pool()
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            """
+                            UPDATE users 
+                            SET referred_by = $1 
+                            WHERE telegram_id = $2 AND bot_id = $3 AND referred_by IS NULL
+                            """,
+                            referrer_id, user.id, bot_id
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to persist referred_by on start: {e}")
 
 
     # 🔔 Notify admin ONLY if this is their absolute first time clicking /start
@@ -450,7 +464,8 @@ async def _complete_onboarding(
 
     # Activate 7-day free trial for new user
     db_pool = get_pool()
-    trial_expires_at = await start_trial(user_id, db_pool)
+    bot_id = context.bot_data.get("bot_id", 1)
+    trial_expires_at = await start_trial(user_id, db_pool, bot_id=bot_id)
 
     msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
     kb = keyboards.onboarding_complete_keyboard()
@@ -484,21 +499,33 @@ async def _complete_onboarding(
 
     # ✅ Process referral reward if applicable
     referrer_id = context.user_data.pop("referrer_id", None)
+    if not referrer_id:
+        db_u = await get_user(user_id, bot_id=bot_id)
+        if db_u:
+            referrer_id = db_u.get("referred_by")
+
     if referrer_id:
         try:
-            from services.referral_service import process_referral, REFERRAL_BONUS_DAYS
-            rewarded = await process_referral(referrer_id, user_id, db_pool)
+            from services.referral_service import process_referral
+            rewarded, days_awarded, new_expires = await process_referral(referrer_id, user_id, db_pool, bot_id=bot_id)
             if rewarded:
                 # Notify the referrer
                 import html as _html
                 new_name = _html.escape(user_tg.first_name or "Someone")
+                date_str = new_expires.strftime("%b %d, %Y") if new_expires else f"{days_awarded} days"
                 try:
                     await context.bot.send_message(
                         chat_id=referrer_id,
                         text=(
-                            f"🎉 <b>Referral Reward!</b>\n\n"
-                            f"Your friend <b>{new_name}</b> just joined Froncy using your link!\n"
-                            f"You've earned <b>{REFERRAL_BONUS_DAYS} free Pro days</b>. Keep it up! 🚀"
+                            f"🎉 <b>Referral Reward Activated!</b>\n\n"
+                            f"Your friend <b>{new_name}</b> just joined and completed setup!\n\n"
+                            f"⭐️ <b>You've unlocked {days_awarded} Days of Pro Trial:</b>\n"
+                            f"• 8 high-match jobs in your Daily Feed\n"
+                            f"• Instant job alerts when new matches drop\n"
+                            f"• Browse all active jobs with match scores & filters\n"
+                            f"• AI Cover letters & ATS Resume checks\n\n"
+                            f"⏳ Active until: <b>{date_str}</b>\n\n"
+                            f"Type /menu to explore your Pro features! 🚀"
                         ),
                         parse_mode="HTML",
                     )
