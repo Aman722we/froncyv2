@@ -91,7 +91,7 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     if "tone" in data_parts:
         tone = data_parts[-2]
         
-    mode = LLMMode.QUALITY if plan in ("pro", "proplus", "premium", "trial") else LLMMode.FAST
+    mode = LLMMode.FAST
 
     if is_manual:
         job = await get_manual_job_by_id(job_id)
@@ -102,7 +102,18 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
         await query.message.reply_text(messages.error_job_not_found(), parse_mode="MarkdownV2")
         return
 
-    jd = f"{job.get('title')} at {job.get('company')} - {job.get('location')}. Skills: {', '.join(job.get('skills', []))}"
+    skills_str = ", ".join(job.get('skills', []))
+    description = (job.get("description") or "").strip()
+    if description:
+        jd = (
+            f"Job Title: {job.get('title')}\n"
+            f"Company: {job.get('company')}\n"
+            f"Location: {job.get('location')}\n"
+            f"Required Skills: {skills_str}\n\n"
+            f"Job Description:\n{description[:2500]}"
+        )
+    else:
+        jd = f"{job.get('title')} at {job.get('company')} - {job.get('location')}. Skills: {skills_str}"
 
     # ── Animated progress loader ──────────────────────────────────────────
     back_cb = "explore_loading_jobs"
@@ -114,30 +125,19 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
     # Reset navigation state
     context.user_data["navigated_away_from_loading"] = False
 
-    # Quality (70B) takes ~60-70s; Fast (8B) takes ~3-5s.
-    if mode == LLMMode.QUALITY:
-        stages = [
-            r"🔍 *Analyzing job requirements\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"📄 *Scanning your resume skills\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"🧠 *Generating your cover letter\.\.\.*" + "\n" + r"_\(Quality AI · takes ~60 seconds\)_" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"✨ *Polishing tone and structure\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"⚡ *Optimizing for ATS keywords\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"⏳ *Almost done\!* The AI is finishing up\.\.\." + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-        ]
-        stage_interval = 10  # seconds between each stage
-    else:
-        stages = [
-            r"⚡ *Generating your cover letter\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-            r"✨ *Polishing up\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
-        ]
-        stage_interval = 6
+    stages = [
+        r"⚡ *Analyzing job requirements\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+        r"✨ *Generating and polishing your cover letter\.\.\.*" + "\n\n" + r"_Feel free to explore other jobs, we'll send the cover letter here\!_",
+    ]
+    stage_interval = 4
 
     # Show first stage immediately
     await query.edit_message_text(stages[0], parse_mode="MarkdownV2", reply_markup=loading_kb)
 
-    # Fire generation in the background
+    # Fire generation in the background with user stream role
+    user_role = (user.get("role_pref") or "frontend").lower()
     gen_task = asyncio.create_task(
-        generate_cover_letter(user["resume_text"], jd, mode=mode, tone=tone)
+        generate_cover_letter(user["resume_text"], jd, mode=mode, tone=tone, user_role=user_role)
     )
 
     letter = None
