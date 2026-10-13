@@ -175,7 +175,7 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
 # Jobs
 # ──────────────────────────────────────────────
 
-def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: int = 1) -> InlineKeyboardMarkup:
+def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: int = 1, total_active: int = 0) -> InlineKeyboardMarkup:
     """Apply buttons for each job in the listing, with pagination and filters."""
     buttons = []
 
@@ -205,20 +205,27 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
     if page > 1:
         nav_row.append(InlineKeyboardButton("◀️ Previous", callback_data=f"jobs_page_{page - 1}"))
         
-    if (page * 5) < total_count:
-        if plan == "free" and (page * 5) >= 6:
-            # Free users hit the upscale wall after 6 jobs
-            buttons.append([
-                InlineKeyboardButton(
-                    f"🔒 See all {total_count} jobs — Upgrade to Pro",
-                    callback_data="menu_upgrade",
-                )
-            ])
-        else:
+    if plan == "free":
+        # Free users: browse up to 2 pages (10 jobs max)
+        if page < 2 and total_count > 5:
+            nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"jobs_page_{page + 1}"))
+    else:
+        # Pro / Trial: browse all available pages
+        if (page * 5) < total_count:
             nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"jobs_page_{page + 1}"))
 
     if nav_row:
         buttons.append(nav_row)
+
+    # For free users on the last viewable page (page 2), show prompt to unlock all jobs
+    if plan == "free" and page >= 2:
+        count_label = f"{total_active}+ " if total_active else ""
+        buttons.append([
+            InlineKeyboardButton(
+                f"🔒 Browse all {count_label}jobs — Upgrade to Pro",
+                callback_data="menu_upgrade",
+            )
+        ])
 
     filter_btn = InlineKeyboardButton("⚙️ Filters", callback_data="jobs_filter_menu")
     if plan == "free":
@@ -230,6 +237,7 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
     ])
 
     return InlineKeyboardMarkup(buttons)
+
 
 
 def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:

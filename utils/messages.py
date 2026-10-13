@@ -435,7 +435,15 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     }
 
 
-def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user: dict = None, applied_job_ids: set = None) -> str:
+def format_job_list_message(
+    jobs: list[dict],
+    plan: str,
+    total_count: int,
+    user: dict = None,
+    applied_job_ids: set = None,
+    page: int = 1,
+    total_active: int = 0,
+) -> str:
     """Format a list of jobs for display."""
     showing = len(jobs)
     
@@ -450,7 +458,8 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
             stream_label = "Jobs"
     
     if plan == "free":
-        header = f"🔍 *Latest {escape_md(stream_label)}* \\({showing} shown\\)\n"
+        total_pages = max(1, (total_count + 4) // 5)
+        header = f"🔍 *Latest {escape_md(stream_label)}* \\(Page {page} of {total_pages}\\)\n"
         header += "──────────────────\n\n"
     else:
         header = f"🔍 *{escape_md(stream_label)}* \\({showing} of {total_count} available\\)\n"
@@ -468,9 +477,13 @@ def format_job_list_message(jobs: list[dict], plan: str, total_count: int, user:
 
     footer = "──────────────────\n"
     if plan == "free":
-        footer += escape_md(f"Showing {showing} latest jobs • Upgrade Pro for personalized matches")
+        start_idx = (page - 1) * 5 + 1
+        end_idx = (page - 1) * 5 + showing
+        count_str = f"all {total_active}+" if total_active else "all"
+        footer += escape_md(f"Showing jobs {start_idx}-{end_idx} of {total_count} latest • Upgrade Pro to browse {count_str} jobs")
 
     return header + "".join(lines) + footer
+
 
 
 

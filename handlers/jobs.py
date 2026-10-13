@@ -161,9 +161,9 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ignore_role = True if f_stream == "all" else False
     
     if plan == "free":
-        # Free users: latest 10 active jobs only — no personalized scoring, no pagination
-        if page > 1:
-            # Block pagination for free users
+        # Free users: latest 10 active jobs from database (up to 2 pages of 5)
+        if page > 2:
+            # Block pagination beyond page 2 (10 jobs) for free users
             msg = (
                 "🔒 *100\\+ more jobs available with Pro*\n\n"
                 "Upgrade to browse all jobs with personalized match scores and filters\\."
@@ -179,13 +179,55 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
             return
         all_jobs = await get_manual_jobs(limit=10, offset=0)
-        display_count = len(all_jobs)
-        offset = 0
+        filtered_jobs = all_jobs
     else:
         # Pro / Trial: personalized, browse all (high limit)
         all_jobs = await get_personalized_manual_jobs(user_dict, limit=200, ignore_role_filter=ignore_role)
+        # Apply filters for Pro/Trial
+        filtered_jobs = []
+        f_exp = filters.get("exp", "any")
+        f_time = filters.get("time", "any")
+        f_match = filters.get("match", "any")
+        f_loc = filters.get("loc", "any")
+        
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        for job in all_jobs:
+            # 1. Experience Filter
+            job_exp = job.get("min_yoe", 0)
+            if f_exp != "any":
+                if f_exp == "0" and job_exp > 0: continue
+                elif f_exp == "1" and job_exp != 1: continue
+                elif f_exp == "2" and job_exp != 2: continue
+                elif f_exp == "3" and job_exp < 3: continue
+                
+            # 2. Location Filter
+            if f_loc != "any":
+                job_loc = (job.get("location") or "remote").lower()
+                if f_loc == "remote" and "remote" not in job_loc: continue
+                if f_loc == "onsite" and "remote" in job_loc: continue
 
-    
+            # 3. Recency Filter
+            if f_time != "any":
+                posted = job.get("posted_at")
+                if posted:
+                    if isinstance(posted, str):
+                        dt = datetime.fromisoformat(posted.replace('Z', '+00:00'))
+                    else:
+                        dt = posted
+                    diff_hours = (now - dt).total_seconds() / 3600
+                    if f_time == "1d" and diff_hours > 24: continue
+                    elif f_time == "3d" and diff_hours > 72: continue
+                    
+            # 4. Match Level Filter
+            if f_match != "any":
+                score = job.get("_match_score", 0)
+                if f_match == "high" and score < 70: continue
+                elif f_match == "med" and score < 40: continue
+
+            filtered_jobs.append(job)
+
     # Fetch applied job IDs to show ✅ Applied badge (DO NOT filter out — let all jobs show)
     from db.connection import get_pool as _get_pool_jobs
     applied_job_ids = set()
@@ -199,52 +241,6 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             applied_job_ids = {r["job_id"] for r in rows}
     except Exception as e:
         logger.warning(f"Could not fetch applied jobs for badge: {e}")
-    
-    # Apply filters
-    filtered_jobs = []
-    f_exp = filters.get("exp", "any")
-    f_time = filters.get("time", "any")
-    f_match = filters.get("match", "any")
-    f_loc = filters.get("loc", "any")
-    
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    
-    for job in all_jobs:
-        # 1. Experience Filter
-        job_exp = job.get("min_yoe", 0)
-        if f_exp != "any":
-            if f_exp == "0" and job_exp > 0: continue
-            elif f_exp == "1" and job_exp != 1: continue
-            elif f_exp == "2" and job_exp != 2: continue
-            elif f_exp == "3" and job_exp < 3: continue
-            
-        # 2. Location Filter
-        if f_loc != "any":
-            job_loc = (job.get("location") or "remote").lower()
-            if f_loc == "remote" and "remote" not in job_loc: continue
-            if f_loc == "onsite" and "remote" in job_loc: continue
-
-        # 3. Recency Filter
-        if f_time != "any":
-            posted = job.get("posted_at")
-            if posted:
-                if isinstance(posted, str):
-                    dt = datetime.fromisoformat(posted.replace('Z', '+00:00'))
-                else:
-                    dt = posted
-                diff_hours = (now - dt).total_seconds() / 3600
-                if f_time == "1d" and diff_hours > 24: continue
-                elif f_time == "3d" and diff_hours > 72: continue
-                
-        # 3. Match Level Filter
-        if f_match != "any":
-            score = job.get("_match_score", 0)
-            if f_match == "high" and score < 70: continue
-            elif f_match == "med" and score < 40: continue
-            
-
-        filtered_jobs.append(job)
         
     total_filtered = len(filtered_jobs)
     page_jobs = filtered_jobs[offset:offset+display_count]
@@ -269,8 +265,23 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(msg, reply_markup=back_kb, parse_mode="MarkdownV2")
         return
 
-    msg = messages.format_job_list_message(page_jobs, plan, total_filtered, user=user, applied_job_ids=applied_job_ids)
-    kb = keyboards.job_list_keyboard(page_jobs, plan, total_filtered, page)
+    msg = messages.format_job_list_message(
+        page_jobs,
+        plan,
+        total_filtered,
+        user=user,
+        applied_job_ids=applied_job_ids,
+        page=page,
+        total_active=total_active_jobs,
+    )
+    kb = keyboards.job_list_keyboard(
+        page_jobs,
+        plan,
+        total_filtered,
+        page=page,
+        total_active=total_active_jobs,
+    )
+
 
     if update.callback_query and not force_new:
         await update.callback_query.answer()
