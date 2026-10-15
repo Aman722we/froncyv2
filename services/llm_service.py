@@ -776,7 +776,7 @@ Extract the following fields and output ONLY valid JSON matching this schema:
 }
 
 Field Rules:
-1. "skills": List of up to 6 key technical skills, tools, frameworks, or languages explicitly mentioned.
+1. "skills": List of 4 to 8 primary technical skills, tools, programming languages, databases, or frameworks explicitly required (e.g. Python, Docker, React, AWS, PostgreSQL). Prioritize concrete technologies over vague buzzwords.
 2. "min_yoe": Integer. Absolute minimum years of professional experience required. If entry-level/fresher/grad/0 years/not stated, return 0. If "1-3 years", return 1. If "5+ years", return 5.
 3. "max_yoe": Integer or null. Upper bound of experience if given (e.g. 2 for "0-2 years", 3 for "1-3 years"). If open-ended like "3+ years" or not specified, return null.
 4. "salary": String. Disclosed compensation/salary range (e.g. "$120,000 - $140,000", "₹12 - ₹18 LPA"). If none disclosed, return "Not disclosed".

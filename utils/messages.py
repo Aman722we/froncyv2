@@ -242,6 +242,153 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
         "job_exp": job_exp,
     }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Intelligent Skill Concept Mapping & Synonym Normalization
+# ─────────────────────────────────────────────────────────────────────────────
+
+SKILL_SYNONYMS: dict[str, str] = {
+    "k8s": "kubernetes",
+    "golang": "go",
+    "postgres": "postgresql",
+    "postgresql": "postgres",
+    "nextjs": "next.js",
+    "reactjs": "react",
+    "nodejs": "node.js",
+    "node": "node.js",
+    "ts": "typescript",
+    "js": "javascript",
+    "py": "python",
+    "cicd": "ci/cd",
+    "ci / cd": "ci/cd",
+    "amazon web services": "aws",
+    "google cloud": "gcp",
+    "google cloud platform": "gcp",
+    "tf": "terraform",
+    "mongo": "mongodb",
+    "restful": "rest apis",
+    "rest": "rest apis",
+    "rest api": "rest apis",
+    "fast-api": "fastapi",
+    "spring": "spring boot",
+    "springboot": "spring boot",
+    "expressjs": "express",
+    "express.js": "express",
+    "vuejs": "vue",
+    "vue.js": "vue",
+    "angularjs": "angular",
+    "tailwindcss": "tailwind",
+    "tailwind css": "tailwind",
+    "gql": "graphql",
+}
+
+TECH_CONCEPT_MAP: dict[str, list[str]] = {
+    # Container & Cloud Infrastructure
+    "container orchestration": ["docker", "kubernetes", "k8s", "helm", "ecs", "eks", "openshift", "podman", "containerd", "containers"],
+    "containers": ["docker", "kubernetes", "k8s", "containerd", "podman"],
+    "containerization": ["docker", "kubernetes", "k8s", "containerd", "podman"],
+    "distributed systems": ["microservices", "kafka", "grpc", "rabbitmq", "redis", "consul", "service mesh", "envoy", "pub/sub", "distributed", "event-driven", "zeromq"],
+    "microservices": ["microservice", "docker", "kubernetes", "grpc", "kafka", "rest apis", "fastapi", "spring boot", "go", "golang"],
+    "cloud-native": ["kubernetes", "k8s", "docker", "aws", "gcp", "azure", "serverless", "cloud", "microservices"],
+    "cloud-native architecture": ["kubernetes", "k8s", "docker", "aws", "gcp", "azure", "serverless", "cloud", "microservices"],
+    "cloud": ["aws", "azure", "gcp", "google cloud", "amazon web services", "digitalocean", "serverless", "lambda", "s3", "ec2"],
+    "infrastructure as code": ["terraform", "pulumi", "cloudformation", "cdk", "ansible", "chef", "puppet", "iac"],
+    "iac": ["terraform", "pulumi", "cloudformation", "cdk", "ansible"],
+    "ci/cd": ["git", "github actions", "jenkins", "gitlab ci", "circleci", "argo cd", "argocd", "travis", "bitbucket pipelines", "cicd"],
+    "devops": ["docker", "kubernetes", "k8s", "aws", "terraform", "ci/cd", "jenkins", "github actions", "ansible", "linux"],
+    
+    # AI / ML & GenAI
+    "genai": ["llm", "langchain", "rag", "llamaindex", "huggingface", "prompt engineering", "openai", "anthropic", "dspy", "fine-tuning", "pytorch", "chatgpt"],
+    "generative ai": ["llm", "langchain", "rag", "llamaindex", "huggingface", "prompt engineering", "openai", "anthropic", "dspy", "fine-tuning", "pytorch"],
+    "llm evaluation": ["prompt engineering", "llm", "genai", "langchain", "rag", "openai", "evals", "dspy"],
+    "prompt automation": ["prompt engineering", "langchain", "llm", "genai", "openai", "python"],
+    "multi-agent systems": ["langchain", "langgraph", "crewai", "autogen", "llm", "genai", "python"],
+    "llmops": ["mlops", "langchain", "huggingface", "rag", "fine-tuning", "llm", "docker", "kubernetes"],
+    "text2sql": ["sql", "llm", "langchain", "rag", "python"],
+    "fine-tuning": ["pytorch", "huggingface", "transformers", "lora", "qlora", "tensorflow", "python"],
+    "ai/ml": ["machine learning", "python", "pytorch", "tensorflow", "scikit-learn", "pandas", "numpy", "deep learning", "nlp"],
+    "machine learning": ["python", "pytorch", "tensorflow", "scikit-learn", "pandas", "numpy", "deep learning", "nlp", "xgboost"],
+    "data science": ["python", "pandas", "numpy", "scikit-learn", "sql", "r", "jupyter", "matplotlib", "seaborn", "statistics"],
+    "deep learning": ["pytorch", "tensorflow", "keras", "neural networks", "cnn", "rnn", "transformers"],
+    "nlp": ["natural language processing", "spacy", "nltk", "transformers", "huggingface", "bert", "llm"],
+
+    # Big Data & Data Engineering
+    "big data": ["spark", "apache spark", "pyspark", "databricks", "hadoop", "kafka", "flink", "hive"],
+    "data engineering": ["sql", "python", "spark", "pyspark", "airflow", "kafka", "dbt", "snowflake", "bigquery", "etl"],
+    "data pipelines": ["airflow", "kafka", "spark", "dbt", "etl", "python", "sql"],
+    "etl": ["airflow", "spark", "dbt", "sql", "python", "glue"],
+
+    # Testing & QA
+    "test frameworks": ["jest", "cypress", "playwright", "selenium", "pytest", "mocha", "chai", "junit", "testng", "postman", "jmeter", "vitest", "testing"],
+    "automated testing": ["jest", "cypress", "playwright", "selenium", "pytest", "junit", "postman", "qa", "automation"],
+    "qa automation": ["selenium", "playwright", "cypress", "pytest", "appium", "test automation"],
+
+    # APIs & Web Architecture
+    "rest apis": ["rest", "api", "fastapi", "express", "flask", "django", "spring boot", "postman", "swagger", "openapi"],
+    "api development": ["rest apis", "fastapi", "express", "graphql", "grpc", "node", "spring boot", "swagger"],
+    "web development": ["html", "css", "javascript", "typescript", "react", "node", "vue", "angular"],
+
+    # Web & Fullstack / Backend / Frontend
+    "frontend": ["react", "next.js", "nextjs", "vue", "angular", "svelte", "typescript", "javascript", "html", "css", "tailwind"],
+    "backend": ["node", "express", "python", "django", "fastapi", "java", "spring boot", "go", "golang", "rust", "sql", "postgresql", "mongodb"],
+    "fullstack": ["react", "node", "next.js", "nextjs", "express", "mern", "mean", "typescript", "javascript", "mongodb", "postgresql", "python"],
+
+    # Databases
+    "relational databases": ["sql", "postgresql", "postgres", "mysql", "mariadb", "oracle", "sqlite", "mssql"],
+    "nosql": ["mongodb", "dynamodb", "cassandra", "redis", "couchbase", "neo4j", "firebase"],
+
+    # Security
+    "security engineering": ["oauth", "jwt", "iam", "sso", "owasp", "penetration testing", "encryption", "tls", "saml", "zero trust", "security"],
+
+    # Mobile
+    "mobile development": ["react native", "flutter", "ios", "android", "swift", "kotlin", "dart"],
+
+    # Observability
+    "observability": ["datadog", "prometheus", "grafana", "new relic", "splunk", "cloudwatch", "opentelemetry", "elk", "sentry", "monitoring"],
+    "monitoring": ["datadog", "prometheus", "grafana", "new relic", "cloudwatch", "sentry", "elk"],
+
+    # Message Queues
+    "message queues": ["kafka", "rabbitmq", "sqs", "sns", "pubsub", "nats", "celery", "redis"],
+}
+
+
+def _matches_skill(user_skill_set: set[str], jskill_raw: str) -> bool:
+    """Check if any skill in user_skill_set matches jskill_raw directly or via concept expansion."""
+    jskill_lower = jskill_raw.lower().strip()
+    if not jskill_lower:
+        return False
+
+    # 1. Direct or normalized match
+    jskill_norm = SKILL_SYNONYMS.get(jskill_lower, jskill_lower)
+    if jskill_lower in user_skill_set or jskill_norm in user_skill_set:
+        return True
+
+    # 2. Slash compound match (e.g. "React/Next.js")
+    if "/" in jskill_lower:
+        for sub in jskill_lower.split("/"):
+            sub_s = sub.strip()
+            sub_norm = SKILL_SYNONYMS.get(sub_s, sub_s)
+            if sub_s in user_skill_set or sub_norm in user_skill_set:
+                return True
+
+    # 3. Concept Expansion: Job asks for concept (e.g. "Container Orchestration") -> user has concrete tool (Docker, Kubernetes)
+    tools = TECH_CONCEPT_MAP.get(jskill_lower) or TECH_CONCEPT_MAP.get(jskill_norm)
+    if tools:
+        if any(t in user_skill_set or SKILL_SYNONYMS.get(t, t) in user_skill_set for t in tools):
+            return True
+
+    # 4. Reverse Concept: User has concept (e.g. "Cloud") -> job asks for "AWS"
+    for concept, c_tools in TECH_CONCEPT_MAP.items():
+        if (concept in user_skill_set or SKILL_SYNONYMS.get(concept, concept) in user_skill_set) and (jskill_lower in c_tools or jskill_norm in c_tools):
+            return True
+
+    # 5. Safe substring match for compounds (e.g., "react" in "react.js", "sql" in "postgresql")
+    for u in user_skill_set:
+        if len(u) >= 4 and (u in jskill_lower or jskill_lower in u):
+            return True
+
+    return False
+
+
 def compute_manual_job_match(user: dict, job: dict) -> dict:
     """
     Compute match score for manual jobs using 5 signals:
@@ -250,7 +397,7 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     from datetime import datetime, timezone
     import re
 
-    # ?? Skills (40%) ??
+    # ── Skills (40%) ──
     user_skills = user.get("skills", [])
     job_skills = job.get("skills", [])
     job_desc = (job.get("description") or "").lower()
@@ -261,35 +408,64 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
     if not job_skills and not job_desc:
         skill_pct = 50
     else:
-        user_set = set(s.lower() for s in user_skills)
+        # Build normalized user skills set
+        user_set = set()
+        for s in user_skills:
+            s_clean = str(s).lower().strip()
+            if s_clean:
+                user_set.add(s_clean)
+                norm = SKILL_SYNONYMS.get(s_clean)
+                if norm:
+                    user_set.add(norm)
+
         matched_count = 0
-        
         if job_skills:
             for raw_jskill in job_skills:
-                jskill_lower = raw_jskill.lower()
-                if "/" in jskill_lower:
-                    sub_skills = [s.strip() for s in jskill_lower.split("/")]
-                    if any(sub in user_set for sub in sub_skills):
-                        matched_count += 1
-                        matched_disp.append(raw_jskill)
-                    else:
-                        missing_disp.append(raw_jskill)
+                if _matches_skill(user_set, raw_jskill):
+                    matched_count += 1
+                    matched_disp.append(raw_jskill)
                 else:
-                    if jskill_lower in user_set:
-                        matched_count += 1
-                        matched_disp.append(raw_jskill)
-                    else:
-                        missing_disp.append(raw_jskill)
-            skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
+                    missing_disp.append(raw_jskill)
+
+            if matched_count == 0:
+                skill_pct = 0
+            elif len(missing_disp) == 0:
+                # True 100% when every single skill is satisfied
+                skill_pct = 100
+            else:
+                # Soft penalty for missing skills:
+                # Prevents 15% drops from 20-item laundry lists, but prevents fake 100% scores when skills are missing!
+                effective_missing = min(4, len(missing_disp))
+                skill_pct = int((matched_count / (matched_count + 0.5 * effective_missing)) * 100)
+                skill_pct = max(0, min(100, skill_pct))
+
         elif job_desc and user_set:
-            for s in user_set:
-                if re.search(r"\b" + re.escape(s) + r"\b", job_desc):
+            for s in user_skills:
+                s_lower = str(s).lower().strip()
+                if not s_lower:
+                    continue
+                search_terms = [s_lower]
+                if s_lower in SKILL_SYNONYMS:
+                    search_terms.append(SKILL_SYNONYMS[s_lower])
+                for concept, tools in TECH_CONCEPT_MAP.items():
+                    if s_lower in tools:
+                        search_terms.append(concept)
+
+                found = any(re.search(r"\b" + re.escape(term) + r"\b", job_desc) for term in search_terms)
+                if found:
                     matched_count += 1
                     matched_disp.append(s)
                 else:
                     missing_disp.append(s)
-            denominator = min(3, max(1, len(user_set)))
-            skill_pct = min(100, int((matched_count / denominator) * 100))
+
+            if matched_count == 0:
+                skill_pct = 0
+            elif len(missing_disp) == 0:
+                skill_pct = 100
+            else:
+                effective_missing = min(3, len(missing_disp))
+                skill_pct = int((matched_count / (matched_count + 0.5 * effective_missing)) * 100)
+                skill_pct = max(0, min(100, skill_pct))
     # ── Experience (25%) ──
     user_exp = str(user.get("experience_level", "0")).strip()
     u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
