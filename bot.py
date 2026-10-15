@@ -31,7 +31,13 @@ from handlers.tracker import (
     mark_applied_callback, tracker_dashboard, weekly_summary,
     manage_app_callback, update_app_status_callback
 )
-from handlers.admin import get_addjob_handler, send_message_command, badresumes_command, getresume_command, fixresume_command, addbot_command, setcreator_command, addsource_command, delsource_command, listsources_command, bulkadd_command, syncnow_command, completerequest_command, admin_pingjob, pending_command, masstrial_command, refundrequest_command
+from handlers.admin import (
+    get_addjob_handler, send_message_command, badresumes_command, getresume_command,
+    fixresume_command, addbot_command, setcreator_command, addsource_command,
+    delsource_command, listsources_command, bulkadd_command, syncnow_command,
+    completerequest_command, admin_pingjob, pending_command, masstrial_command,
+    refundrequest_command, jobdashboard_command, jobdashboard_callback
+)
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
     handle_url_submission, URL_REGEX,
@@ -200,6 +206,9 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("fixresume", fixresume_command))
     app.add_handler(CommandHandler("addbot", addbot_command))
     app.add_handler(CommandHandler("setcreator", setcreator_command))
+    app.add_handler(CommandHandler("jobdashboard", jobdashboard_command))
+    app.add_handler(CommandHandler("jobstats", jobdashboard_command))
+    app.add_handler(CallbackQueryHandler(jobdashboard_callback, pattern="^admin_refresh_jobdashboard$"))
 
     # ── Creator Dashboard (accessible to the Creator + super admin) ──
     app.add_handler(CommandHandler("dashboard", dashboard_command))
