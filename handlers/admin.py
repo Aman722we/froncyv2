@@ -1306,9 +1306,7 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
     async with pool.acquire() as conn:
         stats = await conn.fetchrow("""
             SELECT 
-                COUNT(*) as total_24h,
-                COUNT(*) FILTER (WHERE first_seen_at >= NOW() - INTERVAL '24 hours') as ingested_24h,
-                COUNT(*) FILTER (WHERE posted_at >= NOW() - INTERVAL '24 hours') as published_24h,
+                COUNT(*) as published_24h,
                 COUNT(*) FILTER (WHERE min_yoe = 0) as yoe_0,
                 COUNT(*) FILTER (WHERE min_yoe >= 1) as yoe_1_plus,
                 COUNT(*) FILTER (WHERE min_yoe >= 2) as yoe_2_plus,
@@ -1323,18 +1321,18 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
                 COUNT(DISTINCT company) as unique_companies
             FROM manual_jobs
             WHERE is_active = TRUE 
-              AND (first_seen_at >= NOW() - INTERVAL '24 hours' OR posted_at >= NOW() - INTERVAL '24 hours')
+              AND posted_at >= NOW() - INTERVAL '24 hours'
         """)
 
         active_total = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
         active_sources = await conn.fetchval("SELECT COUNT(*) FROM career_sources WHERE is_active = TRUE")
 
         jobs = await conn.fetch("""
-            SELECT title, skills, company, min_yoe, COALESCE(first_seen_at, posted_at) as created_time
+            SELECT title, skills, company, min_yoe, posted_at
             FROM manual_jobs
             WHERE is_active = TRUE 
-              AND (first_seen_at >= NOW() - INTERVAL '24 hours' OR posted_at >= NOW() - INTERVAL '24 hours')
-            ORDER BY COALESCE(first_seen_at, posted_at) DESC
+              AND posted_at >= NOW() - INTERVAL '24 hours'
+            ORDER BY posted_at DESC
         """)
 
     role_counts = {r: 0 for r in ROLE_KEYWORDS if r != "other"}
@@ -1352,40 +1350,35 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
 
     top_companies = sorted(company_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    total_24h = (stats["total_24h"] if stats else 0) or 0
-    ingested_24h = (stats["ingested_24h"] if stats else 0) or 0
     published_24h = (stats["published_24h"] if stats else 0) or 0
     yoe_0 = (stats["yoe_0"] if stats else 0) or 0
     senior_roles = (stats["senior_roles"] if stats else 0) or 0
-    non_senior = max(0, total_24h - senior_roles)
-    pct_0 = round((yoe_0 / total_24h * 100), 1) if total_24h else 0
-    senior_pct = round((senior_roles / total_24h * 100), 1) if total_24h else 0
-    non_senior_pct = round((non_senior / total_24h * 100), 1) if total_24h else 0
+    non_senior = max(0, published_24h - senior_roles)
+    pct_0 = round((yoe_0 / published_24h * 100), 1) if published_24h else 0
+    senior_pct = round((senior_roles / published_24h * 100), 1) if published_24h else 0
+    non_senior_pct = round((non_senior / published_24h * 100), 1) if published_24h else 0
 
     now_ist = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p")
 
     top_comp_str = "\n".join([
         f"  • {html.escape(comp)}: <b>{cnt}</b> jobs" for comp, cnt in top_companies
-    ]) if top_companies else "  <i>No companies recorded in last 24h</i>"
+    ]) if top_companies else "  <i>No companies posted in last 24h</i>"
 
     latest_jobs = jobs[:5]
     latest_jobs_str = "\n".join([
         f"  • <b>{html.escape(j['title'])}</b> @ {html.escape(j['company'])} ({j['min_yoe']} YOE)" for j in latest_jobs
-    ]) if latest_jobs else "  <i>No jobs ingested in the last 24h</i>"
+    ]) if latest_jobs else "  <i>No jobs published in the last 24h</i>"
 
     msg = (
-        "📊 <b>24-Hour Active Jobs Dashboard</b>\n"
+        "📊 <b>24-Hour Published Jobs Dashboard</b>\n"
         f"<i>Last updated: {now_ist} IST</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📈 <b>Overview (Last 24 Hours)</b>\n"
-        f"• 📥 <b>Ingested into DB (24h):</b> <b>{ingested_24h}</b>\n"
-        "  <i>(Discovered & added to Froncy today)</i>\n"
-        f"• ⚡ <b>Published by Employer (24h):</b> <b>{published_24h}</b>\n"
-        "  <i>(Strictly published by companies in last 24h)</i>\n"
-        f"• 🏢 <b>Unique Hiring Companies:</b> <b>{stats['unique_companies'] if stats else 0}</b>\n"
+        "📈 <b>Overview (Published Last 24 Hours)</b>\n"
+        f"• ⚡ <b>Published by Employers (24h):</b> <b>{published_24h}</b>\n"
+        f"• 🏢 <b>Active Hiring Companies:</b> <b>{stats['unique_companies'] if stats else 0}</b>\n"
         f"• 📡 <b>Active Sources Monitored:</b> <b>{active_sources or 0}</b>\n"
         f"• 🗄️ <b>Total Active Jobs in DB:</b> <b>{active_total or 0}</b>\n\n"
-        "🎯 <b>Experience Breakdown (24h Ingested)</b>\n"
+        "🎯 <b>Experience Breakdown (Last 24h Published)</b>\n"
         f"• 👶 <b>0 YOE (Fresher / Entry):</b> <b>{yoe_0}</b> ({pct_0}%)\n"
         f"• 🌱 <b>1+ YOE:</b> <b>{(stats['yoe_1_plus'] if stats else 0) or 0}</b>\n"
         f"• 🌿 <b>2+ YOE:</b> <b>{(stats['yoe_2_plus'] if stats else 0) or 0}</b>\n"
@@ -1398,16 +1391,16 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
         f"• 💎 <b>Senior Roles:</b> <b>{senior_roles}</b> ({senior_pct}%)\n"
         "  <i>(Job titles containing 'Senior' or 'Sr.')</i>\n"
         f"• ⚡ <b>Junior / Mid / Other:</b> <b>{non_senior}</b> ({non_senior_pct}%)\n\n"
-        "🧭 <b>Desired Role Streams (24h)</b>\n"
+        "🧭 <b>Desired Role Streams (Last 24h Published)</b>\n"
         f"• 🌐 Frontend: <b>{role_counts.get('frontend', 0)}</b>\n"
         f"• ⚙️ Backend: <b>{role_counts.get('backend', 0)}</b>\n"
         f"• ⚡ Fullstack: <b>{role_counts.get('fullstack', 0)}</b>\n"
         f"• ☁️ DevOps / Cloud: <b>{role_counts.get('devops', 0)}</b>\n"
         f"• 📱 Mobile: <b>{role_counts.get('mobile', 0)}</b>\n"
         f"• 📊 Data / AI / ML: <b>{role_counts.get('data', 0)}</b>\n\n"
-        "🏢 <b>Top Companies Adding Jobs (24h)</b>\n"
+        "🏢 <b>Top Companies Posting Jobs (24h)</b>\n"
         f"{top_comp_str}\n\n"
-        "🕒 <b>Latest Ingested Jobs</b>\n"
+        "🕒 <b>Latest Published Jobs</b>\n"
         f"{latest_jobs_str}"
     )
 
