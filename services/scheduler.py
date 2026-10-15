@@ -511,12 +511,14 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Career Page Sync (Froncy V2) — every 15 minutes
+    # Career Page Sync (Froncy V2) — every 60 minutes
     scheduler.add_job(
         _run_career_sync_job,
         CronTrigger(minute="0"),
         id="career_page_sync",
         name="Sync career pages every 60 min",
+        max_instances=1,
+        coalesce=True,
         replace_existing=True,
     )
 

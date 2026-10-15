@@ -396,30 +396,44 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
             logger.error(f"Failed to process notifications for job_id={job_id}: {e}")
 
 
+_sync_lock = asyncio.Lock()
+
+
+def is_career_sync_running() -> bool:
+    """Return True if career sync is currently running."""
+    return _sync_lock.locked()
+
+
 async def run_career_sync() -> list[dict]:
     """
     Main sync runner. Fetches all active sources and syncs them.
     One failing source does NOT stop others.
     Returns a list of per-source summary dicts.
+    Guarded by _sync_lock: never runs concurrently with another sync.
     """
-    sources = await get_active_career_sources()
-    if not sources:
-        logger.info("Career sync: no active sources configured.")
+    if _sync_lock.locked():
+        logger.warning("⚡ Career sync is already in progress. Skipping overlapping execution.")
         return []
 
-    logger.info(f"⚡ Career sync starting: {len(sources)} active sources")
-    summaries = []
+    async with _sync_lock:
+        sources = await get_active_career_sources()
+        if not sources:
+            logger.info("Career sync: no active sources configured.")
+            return []
 
-    for source in sources:
-        summary = await sync_one_source(source)
-        summaries.append(summary)
-        logger.info(
-            f"  ✓ {source['company_name']}: "
-            f"fetched={summary['fetched']}, new={summary['new']}, "
-            f"dupes={summary['duplicates']}, errors={summary['errors']}"
-        )
+        logger.info(f"⚡ Career sync starting: {len(sources)} active sources")
+        summaries = []
 
-    total_new = sum(s["new"] for s in summaries)
-    logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
-    return summaries
+        for source in sources:
+            summary = await sync_one_source(source)
+            summaries.append(summary)
+            logger.info(
+                f"  ✓ {source['company_name']}: "
+                f"fetched={summary['fetched']}, new={summary['new']}, "
+                f"dupes={summary['duplicates']}, errors={summary['errors']}"
+            )
+
+        total_new = sum(s["new"] for s in summaries)
+        logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
+        return summaries
 
