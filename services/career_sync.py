@@ -3,6 +3,7 @@ Froncy V2 — Career Page Sync Engine.
 Polls active career sources, detects new jobs, stores them,
 and triggers the existing notification pipeline.
 """
+import asyncio
 from datetime import datetime, timezone
 from loguru import logger
 from db.career_sources import (
@@ -172,6 +173,8 @@ async def sync_one_source(source: dict) -> dict:
                 if new_id:
                     summary["new"] += 1
                     new_job_ids.append(new_id)
+                    # Throttle between successive new job extractions to protect LLM limits
+                    await asyncio.sleep(1.2)
                 else:
                     summary["duplicates"] += 1
             except Exception as e:
