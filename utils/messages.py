@@ -309,25 +309,27 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ?? Role Preference (10%) ??
+    # ── Role Preference (10%) ──
     role_pref = (user.get("role_pref") or "fullstack").lower()
     job_title = (job.get("title") or "").lower()
+    job_category = (job.get("role_category") or "").lower()
     job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
 
     TECH_GENERIC = ["engineer", "developer", "sde", "programmer", "software", "coder", "architect"]
     
     ROLE_KEYWORDS = {
         "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"] + TECH_GENERIC,
-        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php"] + TECH_GENERIC,
+        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php", "integration", "database"] + TECH_GENERIC,
         "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"] + TECH_GENERIC,
     }
     role_words = ROLE_KEYWORDS.get(role_pref, [])
     if role_pref == "fullstack":
         role_words = list(set(ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]))
     title_match = any(kw in job_title for kw in role_words)
+    category_match = any(kw in job_category for kw in role_words if kw not in TECH_GENERIC)
     skills_match = any(kw in s for kw in role_words for s in job_skills_lower)
 
-    if title_match:
+    if title_match or category_match:
         role_pct = 100
     elif skills_match:
         role_pct = 70
@@ -689,7 +691,29 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None, hr_repl
     """Format single job detail view."""
     title = escape_md(job.get("title", "Untitled"))
     company = escape_md(job.get("company", "Unknown"))
-    location = escape_md(job.get("location", "Remote") or "Remote")
+
+    raw_loc = (job.get("location") or "").strip()
+    workplace = (job.get("workplace_type") or "").strip().title()
+    if workplace.lower() in ("on-site", "onsite", "in-office"):
+        workplace = "On-site"
+    elif workplace.lower() in ("remote", "wfh"):
+        workplace = "Remote"
+    elif workplace.lower() in ("hybrid",):
+        workplace = "Hybrid"
+
+    if not raw_loc:
+        formatted_loc = "Remote" if workplace == "Remote" else ("Remote / Global" if not workplace else f"Global ({workplace})")
+    elif raw_loc.lower() in ("remote", "remote - us", "remote - global", "remote - india"):
+        formatted_loc = "Remote"
+    else:
+        if any(w in raw_loc.lower() for w in ("(remote)", "(hybrid)", "(on-site)", "(onsite)")):
+            formatted_loc = raw_loc
+        elif workplace in ("Remote", "Hybrid", "On-site"):
+            formatted_loc = f"{raw_loc} ({workplace})"
+        else:
+            formatted_loc = raw_loc
+
+    location = escape_md(formatted_loc)
     salary = escape_md(job.get("salary", "")) if job.get("salary") else "Not specified"
     job_type = job.get("job_type", "full-time")
     duration = job.get("duration")
@@ -803,9 +827,12 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None, hr_repl
                     "Upgrade to see which skills you're missing\\.\n"
                 )
 
+    cat_str = f"💡 *Role Category:* {escape_md(job['role_category'])}\n" if job.get("role_category") else ""
+
     return (
         f"*{title} \\- {company}*\n\n"
         f"{subtitle_str}\n"
+        f"{cat_str}"
         f"{posted_str}\n"
         f"🏷 *Skills*\n{skills_text}\n"
         f"{batch_str}"
