@@ -296,8 +296,20 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     else:
                         yoe_label = f"{min_yoe}+ YOE"
 
-                    suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
-                    suitability_line = f"🟢 *{suitability_escaped}*"
+                    # Dynamic profile suitability check
+                    user_exp_raw = str(user.get("experience_level", "0")).strip()
+                    u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
+                    u_exp = int(user_exp_raw) if user_exp_raw.isdigit() else u_map.get(user_exp_raw, 0)
+
+                    if u_exp >= min_yoe and score >= 50:
+                        suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
+                        suitability_line = f"🟢 *{suitability_escaped}*"
+                    elif min_yoe - u_exp <= 1 and score >= 50:
+                        suitability_escaped = escape_md(f"Reach Opportunity ({yoe_label})")
+                        suitability_line = f"🟡 *{suitability_escaped}*"
+                    else:
+                        suitability_escaped = escape_md(f"Requires {yoe_label} (Experience Gap)")
+                        suitability_line = f"🔴 *{suitability_escaped}*"
 
                     # 2. Role Category
                     role_category = job.get("role_category") or "Software Engineering"

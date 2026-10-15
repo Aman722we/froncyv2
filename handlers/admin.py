@@ -902,6 +902,21 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     location = escape_md(job.get("location") or "Remote")
     job_url = job.get("url", "")
     
+    # Compute real match score and suitability if user exists in DB
+    from db.users import get_user
+    user_obj = await get_user(target_id)
+    u_exp = 0
+    if user_obj:
+        from utils.messages import compute_manual_job_match
+        user_dict = dict(user_obj)
+        match = compute_manual_job_match(user_dict, job)
+        score = match.get("score", 95)
+        user_exp_raw = str(user_dict.get("experience_level", "0")).strip()
+        u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
+        u_exp = int(user_exp_raw) if user_exp_raw.isdigit() else u_map.get(user_exp_raw, 0)
+    else:
+        score = 95
+
     min_yoe = job.get("min_yoe") or 0
     max_yoe = job.get("max_yoe")
     if max_yoe and max_yoe > min_yoe:
@@ -911,8 +926,19 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         yoe_label = f"{min_yoe}+ YOE"
 
-    suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
-    suitability_line = f"🟢 *{suitability_escaped}*"
+    if user_obj:
+        if u_exp >= min_yoe and score >= 50:
+            suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
+            suitability_line = f"🟢 *{suitability_escaped}*"
+        elif min_yoe - u_exp <= 1 and score >= 50:
+            suitability_escaped = escape_md(f"Reach Opportunity ({yoe_label})")
+            suitability_line = f"🟡 *{suitability_escaped}*"
+        else:
+            suitability_escaped = escape_md(f"Requires {yoe_label} (Experience Gap)")
+            suitability_line = f"🔴 *{suitability_escaped}*"
+    else:
+        suitability_escaped = escape_md(f"Requires {yoe_label}")
+        suitability_line = f"ℹ️ *{suitability_escaped}*"
 
     role_category = job.get("role_category") or "Software Engineering"
     role_cat_escaped = escape_md(role_category)
@@ -951,16 +977,6 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_skills = [str(s).strip() for s in skills_list[:5] if str(s).strip()]
         if top_skills:
             skills_line = f"🛠️ *Key Skills:* {escape_md(', '.join(top_skills))}\n"
-
-    # Compute real match score if user exists in DB
-    from db.users import get_user
-    user_obj = await get_user(target_id)
-    if user_obj:
-        from utils.messages import compute_manual_job_match
-        match = compute_manual_job_match(dict(user_obj), job)
-        score = match.get("score", 95)
-    else:
-        score = 95
 
     msg = (
         f"🚨 *NEW JOB ALERT*\n\n"
