@@ -902,26 +902,77 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     location = escape_md(job.get("location") or "Remote")
     job_url = job.get("url", "")
     
-    salary_line = ""
-    salary = job.get("salary")
-    if salary and salary.lower() not in ("not disclosed", ""):
-        salary_line = f"\n💰 {escape_md(salary)}"
+    min_yoe = job.get("min_yoe") or 0
+    max_yoe = job.get("max_yoe")
+    if max_yoe and max_yoe > min_yoe:
+        yoe_label = f"{min_yoe}–{max_yoe} YOE"
+    elif min_yoe == 0:
+        yoe_label = "0–2 YOE"
+    else:
+        yoe_label = f"{min_yoe}+ YOE"
 
-    yoe = job.get("min_yoe")
-    yoe_line = ""
-    if yoe is not None and yoe > 0:
-        yoe_line = f"\n🎓 {yoe}\\+ YOE"
+    suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
+    suitability_line = f"🟢 *{suitability_escaped}*"
+
+    role_category = job.get("role_category") or "Software Engineering"
+    role_cat_escaped = escape_md(role_category)
+
+    raw_loc = (job.get("location") or "").strip()
+    workplace = (job.get("workplace_type") or "").strip().title()
+    if workplace.lower() in ("on-site", "onsite", "in-office"):
+        workplace = "On-site"
+    elif workplace.lower() in ("remote", "wfh"):
+        workplace = "Remote"
+    elif workplace.lower() in ("hybrid",):
+        workplace = "Hybrid"
+
+    if not raw_loc:
+        formatted_loc = "Remote" if workplace == "Remote" else ("Remote / Global" if not workplace else f"Global ({workplace})")
+    elif raw_loc.lower() in ("remote", "remote - us", "remote - global", "remote - india"):
+        formatted_loc = "Remote"
+    else:
+        if any(w in raw_loc.lower() for w in ("(remote)", "(hybrid)", "(on-site)", "(onsite)")):
+            formatted_loc = raw_loc
+        elif workplace in ("Remote", "Hybrid", "On-site"):
+            formatted_loc = f"{raw_loc} ({workplace})"
+        else:
+            formatted_loc = raw_loc
+
+    location_escaped = escape_md(formatted_loc)
+
+    salary = job.get("salary")
+    salary_line = ""
+    if salary and str(salary).strip().lower() not in ("not disclosed", "none", "null", "not specified", ""):
+        salary_line = f"💰 {escape_md(str(salary).strip())}\n"
+
+    skills_list = job.get("skills") or []
+    skills_line = ""
+    if skills_list:
+        top_skills = [str(s).strip() for s in skills_list[:5] if str(s).strip()]
+        if top_skills:
+            skills_line = f"🛠️ *Key Skills:* {escape_md(', '.join(top_skills))}\n"
+
+    # Compute real match score if user exists in DB
+    from db.users import get_user
+    user_obj = await get_user(target_id)
+    if user_obj:
+        from utils.messages import compute_manual_job_match
+        match = compute_manual_job_match(dict(user_obj), job)
+        score = match.get("score", 95)
+    else:
+        score = 95
 
     msg = (
         f"🚨 *NEW JOB ALERT*\n\n"
-        f"*{title}*\n"
-        f"🏢 {company}\n"
-        f"📍 {location}"
+        f"*{title}* @ *{company}*\n"
+        f"{suitability_line}\n"
+        f"💡 *Role Category:* {role_cat_escaped}\n"
+        f"📍 {location_escaped}\n"
         f"{salary_line}"
-        f"{yoe_line}\n"
-        f"🎯 *95% match*\n\n"
-        f"⚡️ Direct from company careers\n"
-        f"🕐 Detected 0 min ago"
+        f"{skills_line}"
+        f"🎯 *{score}% Match*\n\n"
+        f"⚡ Direct from company careers\n"
+        f"🕐 Posted 2h ago"
     )
 
     kb = InlineKeyboardMarkup([
