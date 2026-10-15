@@ -1307,6 +1307,8 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
         stats = await conn.fetchrow("""
             SELECT 
                 COUNT(*) as total_24h,
+                COUNT(*) FILTER (WHERE first_seen_at >= NOW() - INTERVAL '24 hours') as ingested_24h,
+                COUNT(*) FILTER (WHERE posted_at >= NOW() - INTERVAL '24 hours') as published_24h,
                 COUNT(*) FILTER (WHERE min_yoe = 0) as yoe_0,
                 COUNT(*) FILTER (WHERE min_yoe >= 1) as yoe_1_plus,
                 COUNT(*) FILTER (WHERE min_yoe >= 2) as yoe_2_plus,
@@ -1351,6 +1353,8 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
     top_companies = sorted(company_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
     total_24h = (stats["total_24h"] if stats else 0) or 0
+    ingested_24h = (stats["ingested_24h"] if stats else 0) or 0
+    published_24h = (stats["published_24h"] if stats else 0) or 0
     yoe_0 = (stats["yoe_0"] if stats else 0) or 0
     senior_roles = (stats["senior_roles"] if stats else 0) or 0
     non_senior = max(0, total_24h - senior_roles)
@@ -1374,11 +1378,14 @@ async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMark
         f"<i>Last updated: {now_ist} IST</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "📈 <b>Overview (Last 24 Hours)</b>\n"
-        f"• <b>Fresh Active Jobs:</b> <b>{total_24h}</b>\n"
-        f"• <b>Unique Companies:</b> <b>{stats['unique_companies'] if stats else 0}</b>\n"
-        f"• <b>Active Sources Monitored:</b> <b>{active_sources or 0}</b>\n"
-        f"• <b>Total Active Jobs in DB:</b> <b>{active_total or 0}</b>\n\n"
-        "🎯 <b>Experience Breakdown (YOE)</b>\n"
+        f"• 📥 <b>Ingested into DB (24h):</b> <b>{ingested_24h}</b>\n"
+        "  <i>(Discovered & added to Froncy today)</i>\n"
+        f"• ⚡ <b>Published by Employer (24h):</b> <b>{published_24h}</b>\n"
+        "  <i>(Strictly published by companies in last 24h)</i>\n"
+        f"• 🏢 <b>Unique Hiring Companies:</b> <b>{stats['unique_companies'] if stats else 0}</b>\n"
+        f"• 📡 <b>Active Sources Monitored:</b> <b>{active_sources or 0}</b>\n"
+        f"• 🗄️ <b>Total Active Jobs in DB:</b> <b>{active_total or 0}</b>\n\n"
+        "🎯 <b>Experience Breakdown (24h Ingested)</b>\n"
         f"• 👶 <b>0 YOE (Fresher / Entry):</b> <b>{yoe_0}</b> ({pct_0}%)\n"
         f"• 🌱 <b>1+ YOE:</b> <b>{(stats['yoe_1_plus'] if stats else 0) or 0}</b>\n"
         f"• 🌿 <b>2+ YOE:</b> <b>{(stats['yoe_2_plus'] if stats else 0) or 0}</b>\n"
