@@ -1288,3 +1288,148 @@ async def refundrequest_command(update: Update, context: ContextTypes.DEFAULT_TY
         msg = f"✅ <b>Refunded request #{req_id}</b> and credited user.\n⚠️ <b>Failed to notify user:</b> {e}"
         
     await update.message.reply_text(msg, parse_mode="HTML")
+
+
+# ──────────────────────────────────────────────
+# 24-Hour Active Jobs Dashboard (Admin Only)
+# ──────────────────────────────────────────────
+
+async def build_jobdashboard_content() -> tuple[str, telegram.InlineKeyboardMarkup]:
+    """Fetch 24h job ingestion metrics and construct the dashboard text + keyboard."""
+    from datetime import datetime, timezone, timedelta
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    from db.connection import get_pool
+    from utils.constants import ROLE_KEYWORDS
+    import html
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        stats = await conn.fetchrow("""
+            SELECT 
+                COUNT(*) as total_24h,
+                COUNT(*) FILTER (WHERE min_yoe = 0) as yoe_0,
+                COUNT(*) FILTER (WHERE min_yoe >= 1) as yoe_1_plus,
+                COUNT(*) FILTER (WHERE min_yoe >= 2) as yoe_2_plus,
+                COUNT(*) FILTER (WHERE min_yoe >= 3) as yoe_3_plus,
+                COUNT(*) FILTER (WHERE min_yoe >= 4) as yoe_4_plus,
+                COUNT(*) FILTER (WHERE min_yoe >= 5) as yoe_5_plus,
+                COUNT(*) FILTER (WHERE min_yoe = 1) as yoe_1_exact,
+                COUNT(*) FILTER (WHERE min_yoe = 2) as yoe_2_exact,
+                COUNT(*) FILTER (WHERE min_yoe = 3) as yoe_3_exact,
+                COUNT(*) FILTER (WHERE min_yoe = 4) as yoe_4_exact,
+                COUNT(*) FILTER (WHERE title ILIKE '%senior%' OR title ~* '\\m(sr\\.?|senior)\\M') as senior_roles,
+                COUNT(DISTINCT company) as unique_companies
+            FROM manual_jobs
+            WHERE is_active = TRUE 
+              AND (first_seen_at >= NOW() - INTERVAL '24 hours' OR posted_at >= NOW() - INTERVAL '24 hours')
+        """)
+
+        active_total = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
+        active_sources = await conn.fetchval("SELECT COUNT(*) FROM career_sources WHERE is_active = TRUE")
+
+        jobs = await conn.fetch("""
+            SELECT title, skills, company, min_yoe, COALESCE(first_seen_at, posted_at) as created_time
+            FROM manual_jobs
+            WHERE is_active = TRUE 
+              AND (first_seen_at >= NOW() - INTERVAL '24 hours' OR posted_at >= NOW() - INTERVAL '24 hours')
+            ORDER BY COALESCE(first_seen_at, posted_at) DESC
+        """)
+
+    role_counts = {r: 0 for r in ROLE_KEYWORDS if r != "other"}
+    company_counts = {}
+    for j in jobs:
+        t = (j["title"] or "").lower()
+        s = [x.lower() for x in (j["skills"] or [])]
+        for r, kws in ROLE_KEYWORDS.items():
+            if r == "other":
+                continue
+            if any(kw in t or any(kw in skill for skill in s) for kw in kws):
+                role_counts[r] += 1
+        c = j["company"] or "Unknown"
+        company_counts[c] = company_counts.get(c, 0) + 1
+
+    top_companies = sorted(company_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    total_24h = (stats["total_24h"] if stats else 0) or 0
+    yoe_0 = (stats["yoe_0"] if stats else 0) or 0
+    senior_roles = (stats["senior_roles"] if stats else 0) or 0
+    non_senior = max(0, total_24h - senior_roles)
+    pct_0 = round((yoe_0 / total_24h * 100), 1) if total_24h else 0
+    senior_pct = round((senior_roles / total_24h * 100), 1) if total_24h else 0
+    non_senior_pct = round((non_senior / total_24h * 100), 1) if total_24h else 0
+
+    now_ist = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p")
+
+    top_comp_str = "\n".join([
+        f"  • {html.escape(comp)}: <b>{cnt}</b> jobs" for comp, cnt in top_companies
+    ]) if top_companies else "  <i>No companies recorded in last 24h</i>"
+
+    latest_jobs = jobs[:5]
+    latest_jobs_str = "\n".join([
+        f"  • <b>{html.escape(j['title'])}</b> @ {html.escape(j['company'])} ({j['min_yoe']} YOE)" for j in latest_jobs
+    ]) if latest_jobs else "  <i>No jobs ingested in the last 24h</i>"
+
+    msg = (
+        "📊 <b>24-Hour Active Jobs Dashboard</b>\n"
+        f"<i>Last updated: {now_ist} IST</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📈 <b>Overview (Last 24 Hours)</b>\n"
+        f"• <b>Fresh Active Jobs:</b> <b>{total_24h}</b>\n"
+        f"• <b>Unique Companies:</b> <b>{stats['unique_companies'] if stats else 0}</b>\n"
+        f"• <b>Active Sources Monitored:</b> <b>{active_sources or 0}</b>\n"
+        f"• <b>Total Active Jobs in DB:</b> <b>{active_total or 0}</b>\n\n"
+        "🎯 <b>Experience Breakdown (YOE)</b>\n"
+        f"• 👶 <b>0 YOE (Fresher / Entry):</b> <b>{yoe_0}</b> ({pct_0}%)\n"
+        f"• 🌱 <b>1+ YOE:</b> <b>{(stats['yoe_1_plus'] if stats else 0) or 0}</b>\n"
+        f"• 🌿 <b>2+ YOE:</b> <b>{(stats['yoe_2_plus'] if stats else 0) or 0}</b>\n"
+        f"• 🚀 <b>3+ YOE:</b> <b>{(stats['yoe_3_plus'] if stats else 0) or 0}</b>\n"
+        f"• 💼 <b>4+ YOE:</b> <b>{(stats['yoe_4_plus'] if stats else 0) or 0}</b>\n"
+        f"• 👑 <b>5+ YOE:</b> <b>{(stats['yoe_5_plus'] if stats else 0) or 0}</b>\n\n"
+        "<i>Discrete Buckets:</i>\n"
+        f"<code>0 YOE: {yoe_0} | 1 YOE: {(stats['yoe_1_exact'] if stats else 0) or 0} | 2 YOE: {(stats['yoe_2_exact'] if stats else 0) or 0} | 3 YOE: {(stats['yoe_3_exact'] if stats else 0) or 0} | 4 YOE: {(stats['yoe_4_exact'] if stats else 0) or 0} | 5+ YOE: {(stats['yoe_5_plus'] if stats else 0) or 0}</code>\n\n"
+        "👔 <b>Seniority Analysis</b>\n"
+        f"• 💎 <b>Senior Roles:</b> <b>{senior_roles}</b> ({senior_pct}%)\n"
+        "  <i>(Job titles containing 'Senior' or 'Sr.')</i>\n"
+        f"• ⚡ <b>Junior / Mid / Other:</b> <b>{non_senior}</b> ({non_senior_pct}%)\n\n"
+        "🧭 <b>Desired Role Streams (24h)</b>\n"
+        f"• 🌐 Frontend: <b>{role_counts.get('frontend', 0)}</b>\n"
+        f"• ⚙️ Backend: <b>{role_counts.get('backend', 0)}</b>\n"
+        f"• ⚡ Fullstack: <b>{role_counts.get('fullstack', 0)}</b>\n"
+        f"• ☁️ DevOps / Cloud: <b>{role_counts.get('devops', 0)}</b>\n"
+        f"• 📱 Mobile: <b>{role_counts.get('mobile', 0)}</b>\n"
+        f"• 📊 Data / AI / ML: <b>{role_counts.get('data', 0)}</b>\n\n"
+        "🏢 <b>Top Companies Adding Jobs (24h)</b>\n"
+        f"{top_comp_str}\n\n"
+        "🕒 <b>Latest Ingested Jobs</b>\n"
+        f"{latest_jobs_str}"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Refresh Dashboard", callback_data="admin_refresh_jobdashboard")]
+    ])
+    return msg, kb
+
+
+async def jobdashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/jobdashboard or /jobstats — Admin Dashboard for active jobs added in the last 24h."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    msg, kb = await build_jobdashboard_content()
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+async def jobdashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 🔄 Refresh Dashboard inline button."""
+    query = update.callback_query
+    if update.effective_user.id != settings.ADMIN_TELEGRAM_ID:
+        await query.answer("Unauthorized", show_alert=True)
+        return
+
+    await query.answer("Refreshing dashboard...")
+    msg, kb = await build_jobdashboard_content()
+    try:
+        await query.edit_message_text(msg, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+    except Exception:
+        pass

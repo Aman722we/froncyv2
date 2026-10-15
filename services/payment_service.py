@@ -106,9 +106,12 @@ async def create_subscription_link(
         return None
 
 
-async def cancel_user_subscription(telegram_id: int, db_pool) -> bool:
+async def cancel_user_subscription(telegram_id: int, db_pool, bot_id: int = 1) -> bool:
     """Cancel active subscription at cycle end."""
-    user = await db_pool.fetchrow("SELECT razorpay_subscription_id FROM users WHERE telegram_id = $1", telegram_id)
+    user = await db_pool.fetchrow(
+        "SELECT razorpay_subscription_id FROM users WHERE telegram_id = $1 AND bot_id = $2",
+        telegram_id, bot_id
+    )
     if not user or not user.get("razorpay_subscription_id"):
         return False
         
@@ -116,7 +119,10 @@ async def cancel_user_subscription(telegram_id: int, db_pool) -> bool:
     try:
         client = _get_client()
         client.subscription.cancel(sub_id, {"cancel_at_cycle_end": 1})
-        await db_pool.execute("UPDATE users SET subscription_status = 'cancelling' WHERE telegram_id = $1", telegram_id)
+        await db_pool.execute(
+            "UPDATE users SET subscription_status = 'cancelling' WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id, bot_id
+        )
         return True
     except Exception as e:
         logger.error(f"Failed to cancel subscription {sub_id}: {e}")
