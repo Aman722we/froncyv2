@@ -747,6 +747,94 @@ Generate the outreach messages now:"""
 
 _llm_cooldown_until = 0.0
 
+
+def _parse_job_metadata_json(raw_text: str) -> dict:
+    """
+    Robust parser for job metadata JSON.
+    Handles markdown code blocks, truncated JSON strings, and partial responses.
+    """
+    import json
+    import re
+
+    cleaned = raw_text.strip()
+    # Strip markdown fences
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+
+    # 1. Try standard JSON extraction via outermost braces
+    match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except Exception:
+            pass
+
+    # 2. Try direct json.loads
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # 3. If truncated (e.g. missing closing quotes/brackets/braces), attempt auto-closing
+    if cleaned.startswith("{"):
+        test_str = cleaned
+        if test_str.count('"') % 2 != 0:
+            test_str += '"'
+        if test_str.count('[') > test_str.count(']'):
+            test_str += ']'
+        if test_str.count('{') > test_str.count('}'):
+            test_str += '}'
+        try:
+            return json.loads(test_str)
+        except Exception:
+            pass
+
+    # 4. Fallback: Regex extraction from partial output
+    data = {}
+    skills_match = re.search(r'"skills"\s*:\s*\[(.*?)(\]|$)', cleaned, re.DOTALL)
+    if skills_match:
+        items = re.findall(r'"([^"]+)"', skills_match.group(1))
+        data["skills"] = [i.strip() for i in items if i.strip()]
+
+    yoe_match = re.search(r'"min_yoe"\s*:\s*(\d+)', cleaned)
+    if yoe_match:
+        data["min_yoe"] = int(yoe_match.group(1))
+
+    max_yoe_match = re.search(r'"max_yoe"\s*:\s*(\d+)', cleaned)
+    if max_yoe_match:
+        data["max_yoe"] = int(max_yoe_match.group(1))
+
+    sal_match = re.search(r'"salary"\s*:\s*"([^"]+)"', cleaned)
+    if sal_match:
+        data["salary"] = sal_match.group(1).strip()
+
+    wpt_match = re.search(r'"workplace_type"\s*:\s*"([^"]+)"', cleaned)
+    if wpt_match:
+        data["workplace_type"] = wpt_match.group(1).strip()
+
+    cat_match = re.search(r'"role_category"\s*:\s*"([^"]+)"', cleaned)
+    if cat_match:
+        data["role_category"] = cat_match.group(1).strip()
+
+    sum_match = re.search(r'"role_summary"\s*:\s*"([^"]+)"', cleaned)
+    if sum_match:
+        data["role_summary"] = sum_match.group(1).strip()
+
+    ff_match = re.search(r'"is_fresher_friendly"\s*:\s*(true|false)', cleaned, re.IGNORECASE)
+    if ff_match:
+        data["is_fresher_friendly"] = (ff_match.group(1).lower() == "true")
+
+    if data.get("skills") or "min_yoe" in data:
+        return data
+
+    raise ValueError(f"No JSON structure found in LLM response: {repr(raw_text[:120])}")
+
+
 async def extract_job_metadata(
     job_description: str,
     job_title: str = "",
@@ -756,7 +844,6 @@ async def extract_job_metadata(
     Extract structured intelligence from a job posting using AI.
     Extracts: skills, min_yoe, max_yoe, salary, workplace_type, role_category, role_summary, is_fresher_friendly.
     """
-    import json
     import time
     global _key_cooldowns
 
@@ -796,14 +883,18 @@ Field Rules:
 Do NOT include markdown formatting or backticks, just the raw JSON.
 """
 
+    # Keep description focused to the first 2500 chars to avoid exhausting TPM limits
     user_message = (
         f"Job Title: {job_title or 'Untitled'}\n"
         f"Location: {location or 'Not specified'}\n"
-        f"Job Description:\n{job_description[:6000]}\n\n"
+        f"Job Description:\n{job_description[:2500]}\n\n"
         "Return JSON now:"
     )
 
-    for attempt in range(5):  # Try up to 5 times to rotate through keys
+    keys = [k.strip() for k in settings.NVIDIA_API_KEY_8B.split(",") if k.strip()]
+    max_attempts = max(5, min(len(keys), 15))
+
+    for attempt in range(max_attempts):
         client, model = _get_client(LLMMode.FAST, timeout=30.0)
         try:
             response = await client.chat.completions.create(
@@ -813,20 +904,10 @@ Do NOT include markdown formatting or backticks, just the raw JSON.
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.0,
-                max_tokens=600,
-                extra_body={"reasoning_effort": "low"},
+                max_tokens=1200,
             )
             result = response.choices[0].message.content.strip()
-            
-            import re
-            match = re.search(r'\{.*\}', result, re.DOTALL)
-            if not match:
-                raise ValueError(f"No JSON braces found in LLM response: {repr(result)}")
-            
-            try:
-                data = json.loads(match.group())
-            except json.JSONDecodeError as e:
-                raise ValueError(f"JSON decode error: {e}. Raw extracted: {repr(match.group())}")
+            data = _parse_job_metadata_json(result)
             
             # Normalize skills
             skills = data.get("skills", [])
@@ -887,15 +968,23 @@ Do NOT include markdown formatting or backticks, just the raw JSON.
             err_str = str(e)
             if "429" in err_str or "Rate limit" in err_str:
                 import re
-                import time
                 match = re.search(r"try again in ([\d\.]+)s", err_str)
                 wait_sec = float(match.group(1)) if match else 15.0
                 used_key = getattr(client, '_used_api_key', None)
                 if used_key:
                     _key_cooldowns[used_key] = time.time() + wait_sec + 1.0
-                logger.warning(f"LLM Rate limit hit. Circuit breaker active for {wait_sec + 2.0:.1f}s.")
-                continue # Try the next key immediately
+                logger.warning(f"LLM Rate limit hit on key ending in ...{used_key[-6:] if used_key else '??'}. Key cooldown {wait_sec + 1.0:.1f}s.")
                 
+                # Check if all keys are currently cooling down
+                now = time.time()
+                active_free_keys = [k for k in keys if _key_cooldowns.get(k, 0.0) <= now]
+                if not active_free_keys and keys:
+                    shortest_wait = min(_key_cooldowns.get(k, 0.0) - now for k in keys)
+                    sleep_time = max(0.5, min(shortest_wait, 5.0))
+                    logger.info(f"All {len(keys)} keys busy. Pausing {sleep_time:.1f}s before next attempt...")
+                    await asyncio.sleep(sleep_time)
+                continue
+
             logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
 
     loc_lower = (location or "").lower()

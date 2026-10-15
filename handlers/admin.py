@@ -820,11 +820,14 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
         summaries = [await sync_one_source(source)]
     else:
-        from services.career_sync import run_career_sync
+        from services.career_sync import run_career_sync, is_career_sync_running
+        if is_career_sync_running():
+            await msg.edit_text("⚠️ <b>Career sync is already in progress</b> in the background right now.\n\nPlease wait for the current run to finish.", parse_mode="HTML")
+            return
         summaries = await run_career_sync()
     
     if not summaries:
-        await msg.edit_text("No active sources to sync. Add some with /addsource.")
+        await msg.edit_text("No active sources to sync or sync already in progress. Check /listsources.", parse_mode="HTML")
         return
     
     total_new = sum(s.get("new", 0) for s in summaries)
