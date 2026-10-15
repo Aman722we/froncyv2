@@ -346,6 +346,12 @@ async def init_db() -> asyncpg.Pool:
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ;")
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS description TEXT;")
             await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_jobs_source ON manual_jobs (source_provider, source_external_id) WHERE source_external_id IS NOT NULL;")
+            # Intelligent JD Metadata (Froncy V2.1)
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS max_yoe INT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS role_category TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS role_summary TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS workplace_type TEXT;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS is_fresher_friendly BOOLEAN DEFAULT FALSE;")
         except Exception as e:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 

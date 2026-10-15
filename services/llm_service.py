@@ -747,28 +747,61 @@ Generate the outreach messages now:"""
 
 _llm_cooldown_until = 0.0
 
-async def extract_job_metadata(job_description: str) -> dict:
+async def extract_job_metadata(
+    job_description: str,
+    job_title: str = "",
+    location: str = ""
+) -> dict:
     """
-    Extract skills and minimum years of experience from a raw job description using AI.
-    Returns: {"skills": ["skill1", "skill2"], "min_yoe": 2}
+    Extract structured intelligence from a job posting using AI.
+    Extracts: skills, min_yoe, max_yoe, salary, workplace_type, role_category, role_summary, is_fresher_friendly.
     """
     import json
     import time
     global _key_cooldowns
-    
 
-    system_prompt = """You are an expert technical recruiter. Your task is to extract structured data from a raw job description.
-Read the job description and extract two things:
-1. "skills": A list of technical skills, tools, and languages mentioned (e.g., ["Python", "React", "AWS"]). If none are found, return an empty list.
-2. "min_yoe": The absolute minimum years of experience required for this role as an integer. For example, if it says "3-5 years", return 3. If it says "5+ years", return 5. If it says "Entry level" or no explicit minimum years are mentioned, return 0.
+    system_prompt = """You are an expert technical recruiter and talent intelligence specialist.
+Your task is to analyze a job posting (Title, Location, and Description) and extract structured metadata to match candidates accurately and explain unfamiliar corporate roles to junior developers.
 
-Output EXACTLY and ONLY valid JSON matching this schema:
-{"skills": ["skill1", "skill2"], "min_yoe": 2}
-Do not include markdown formatting or backticks, just the raw JSON.
+Extract the following fields and output ONLY valid JSON matching this schema:
+{
+  "skills": ["Java", "REST APIs", "SQL"],
+  "min_yoe": 0,
+  "max_yoe": 2,
+  "salary": "Not disclosed",
+  "workplace_type": "On-site",
+  "role_category": "Backend & API Development",
+  "role_summary": "Backend and API integration development",
+  "is_fresher_friendly": true
+}
+
+Field Rules:
+1. "skills": List of 4 to 8 primary technical skills, tools, programming languages, databases, or frameworks explicitly required (e.g. Python, Docker, React, AWS, PostgreSQL). Prioritize concrete technologies over vague buzzwords.
+2. "min_yoe": Integer. Absolute minimum years of professional experience required. If entry-level/fresher/grad/0 years/not stated, return 0. If "1-3 years", return 1. If "5+ years", return 5.
+3. "max_yoe": Integer or null. Upper bound of experience if given (e.g. 2 for "0-2 years", 3 for "1-3 years"). If open-ended like "3+ years" or not specified, return null.
+4. "salary": String. Disclosed compensation/salary range (e.g. "$120,000 - $140,000", "₹12 - ₹18 LPA"). If none disclosed, return "Not disclosed".
+5. "workplace_type": String. Exactly one of: "Remote", "On-site", "Hybrid". Check title, location, and description.
+6. "role_category": String. Choose the single best fit from:
+   - "Backend & API Development"
+   - "Frontend Development"
+   - "Fullstack Development"
+   - "DevOps & Cloud"
+   - "Data / AI / ML"
+   - "Mobile Development"
+   - "QA & Automation"
+   - "Software Engineering"
+7. "role_summary": String. A 1-sentence plain-English translation (under 12 words) of what this role does (e.g. "Backend and API development for cloud services").
+8. "is_fresher_friendly": Boolean. True if suitable for 0-2 YOE or fresh grads; False if strictly senior (3+ YOE).
+
+Do NOT include markdown formatting or backticks, just the raw JSON.
 """
 
-    user_message = f"Job Description:\n{job_description[:6000]}\n\nReturn JSON now:"
-
+    user_message = (
+        f"Job Title: {job_title or 'Untitled'}\n"
+        f"Location: {location or 'Not specified'}\n"
+        f"Job Description:\n{job_description[:6000]}\n\n"
+        "Return JSON now:"
+    )
 
     for attempt in range(5):  # Try up to 5 times to rotate through keys
         client, model = _get_client(LLMMode.FAST, timeout=30.0)
@@ -780,7 +813,7 @@ Do not include markdown formatting or backticks, just the raw JSON.
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.0,
-                max_tokens=1000,
+                max_tokens=600,
                 extra_body={"reasoning_effort": "low"},
             )
             result = response.choices[0].message.content.strip()
@@ -795,20 +828,60 @@ Do not include markdown formatting or backticks, just the raw JSON.
             except json.JSONDecodeError as e:
                 raise ValueError(f"JSON decode error: {e}. Raw extracted: {repr(match.group())}")
             
-            # Normalize skills to list of strings, min_yoe to int
+            # Normalize skills
             skills = data.get("skills", [])
             if not isinstance(skills, list):
                 skills = []
-            skills = [str(s) for s in skills]
+            skills = [str(s).strip() for s in skills if str(s).strip()]
             
+            # Normalize min_yoe
             try:
                 min_yoe = int(data.get("min_yoe", 0))
             except (ValueError, TypeError):
                 min_yoe = 0
+
+            # Normalize max_yoe
+            max_yoe = None
+            if data.get("max_yoe") is not None:
+                try:
+                    max_yoe = int(data.get("max_yoe"))
+                except (ValueError, TypeError):
+                    max_yoe = None
+
+            # Normalize salary
+            salary = str(data.get("salary") or "Not disclosed").strip()
+            if salary.lower() in ("null", "none", "n/a", "not specified", ""):
+                salary = "Not disclosed"
+
+            # Normalize workplace_type
+            raw_wpt = str(data.get("workplace_type") or "").strip().lower()
+            loc_lower = (location or "").lower()
+            title_lower = (job_title or "").lower()
+            if "remote" in raw_wpt or "remote" in loc_lower or "remote" in title_lower:
+                workplace_type = "Remote"
+            elif "hybrid" in raw_wpt or "hybrid" in loc_lower:
+                workplace_type = "Hybrid"
+            elif "site" in raw_wpt or "office" in raw_wpt:
+                workplace_type = "On-site"
+            else:
+                workplace_type = "On-site"
+
+            # Normalize category
+            raw_cat = str(data.get("role_category") or "").strip()
+            role_category = raw_cat if raw_cat else "Software Engineering"
+
+            role_summary = str(data.get("role_summary") or "").strip()
+            is_fresher_friendly = bool(data.get("is_fresher_friendly", min_yoe <= 2))
                 
             return {
                 "skills": skills,
-                "min_yoe": min_yoe
+                "min_yoe": min_yoe,
+                "max_yoe": max_yoe,
+                "salary": salary,
+                "workplace_type": workplace_type,
+                "role_category": role_category,
+                "role_summary": role_summary,
+                "is_fresher_friendly": is_fresher_friendly,
             }
         except Exception as e:
             err_str = str(e)
@@ -824,6 +897,16 @@ Do not include markdown formatting or backticks, just the raw JSON.
                 continue # Try the next key immediately
                 
             logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
-            
-    return {"skills": [], "min_yoe": 0}
+
+    loc_lower = (location or "").lower()
+    return {
+        "skills": [],
+        "min_yoe": 0,
+        "max_yoe": None,
+        "salary": "Not disclosed",
+        "workplace_type": "Remote" if "remote" in loc_lower else "On-site",
+        "role_category": "Software Engineering",
+        "role_summary": "",
+        "is_fresher_friendly": True,
+    }
 

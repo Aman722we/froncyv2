@@ -89,13 +89,22 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     if await job_already_exists(provider, external_id):
         return None
 
-    # Call LLM to extract skills and min_yoe
+    # Call LLM to extract skills, yoe, salary, workplace, role category, role summary
     from services.llm_service import extract_job_metadata
     description = normalized_job.get("description") or ""
-    metadata = await extract_job_metadata(description)
+    metadata = await extract_job_metadata(
+        job_description=description,
+        job_title=normalized_job.get("title", ""),
+        location=normalized_job.get("location", "")
+    )
     extracted_skills = metadata.get("skills", [])
     extracted_min_yoe = metadata.get("min_yoe", 0)
+    extracted_max_yoe = metadata.get("max_yoe")
     extracted_salary = metadata.get("salary") or "Not disclosed"
+    extracted_workplace = metadata.get("workplace_type") or "On-site"
+    extracted_role_category = metadata.get("role_category") or "Software Engineering"
+    extracted_role_summary = metadata.get("role_summary") or ""
+    extracted_fresher_friendly = metadata.get("is_fresher_friendly", extracted_min_yoe <= 2)
 
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -107,13 +116,15 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
                 job_type, skills, min_yoe, eligible_batches,
                 posted_at, is_active, added_by,
                 source_type, source_provider, source_external_id,
-                first_seen_at, description, salary
+                first_seen_at, description, salary,
+                max_yoe, role_category, role_summary, workplace_type, is_fresher_friendly
             ) VALUES (
                 $1, $2, $3, $4,
                 'fulltime', $10, $11, '{}',
                 $5, TRUE, NULL,
                 'CAREER_PAGE', $6, $7,
-                $8, $9, $12
+                $8, $9, $12,
+                $13, $14, $15, $16, $17
             )
             ON CONFLICT (source_provider, source_external_id) WHERE source_external_id IS NOT NULL DO NOTHING
             RETURNING id
@@ -129,7 +140,12 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             normalized_job.get("description"),
             extracted_skills,
             extracted_min_yoe,
-            extracted_salary
+            extracted_salary,
+            extracted_max_yoe,
+            extracted_role_category,
+            extracted_role_summary,
+            extracted_workplace,
+            extracted_fresher_friendly
         )
         if row:
             from db.manual_jobs import invalidate_jobs_cache
@@ -266,32 +282,88 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         freshness = "just now"
 
                     # Build message fields
-                    title    = escape_md(job.get("title", "New Job"))
-                    company  = escape_md(job.get("company", "Unknown"))
-                    location = escape_md(job.get("location") or "Remote")
-                    job_url  = job.get("url", "")
+                    title = escape_md(job.get("title", "New Job"))
+                    company = escape_md(job.get("company", "Unknown"))
+                    job_url = job.get("url", "")
 
-                    # Optional: salary and YOE lines
-                    salary_line = ""
+                    # 1. Experience Suitability Line
+                    min_yoe = job.get("min_yoe") or 0
+                    max_yoe = job.get("max_yoe")
+                    if max_yoe and max_yoe > min_yoe:
+                        yoe_label = f"{min_yoe}–{max_yoe} YOE"
+                    elif min_yoe == 0:
+                        yoe_label = "0–2 YOE"
+                    else:
+                        yoe_label = f"{min_yoe}+ YOE"
+
+                    # Dynamic profile suitability check
+                    user_exp_raw = str(user.get("experience_level", "0")).strip()
+                    u_map = {"0": 0, "1": 1, "2": 2, "2_plus": 3, "3_5": 4, "5_plus": 6, "5+": 6}
+                    u_exp = int(user_exp_raw) if user_exp_raw.isdigit() else u_map.get(user_exp_raw, 0)
+
+                    if u_exp >= min_yoe and score >= 50:
+                        suitability_escaped = escape_md(f"Suitable for your profile ({yoe_label})")
+                        suitability_line = f"🟢 *{suitability_escaped}*"
+                    elif min_yoe - u_exp <= 1 and score >= 50:
+                        suitability_escaped = escape_md(f"Reach Opportunity ({yoe_label})")
+                        suitability_line = f"🟡 *{suitability_escaped}*"
+                    else:
+                        suitability_escaped = escape_md(f"Requires {yoe_label} (Experience Gap)")
+                        suitability_line = f"🔴 *{suitability_escaped}*"
+
+                    # 2. Role Category
+                    role_category = job.get("role_category") or "Software Engineering"
+                    role_cat_escaped = escape_md(role_category)
+
+                    # 3. Location & Workplace Type (e.g. 📍 Bengaluru, India (On-site) or 📍 Dubai (Remote) or 📍 Bengaluru, India (Hybrid))
+                    raw_loc = (job.get("location") or "").strip()
+                    workplace = (job.get("workplace_type") or "").strip().title()
+                    if workplace.lower() in ("on-site", "onsite", "in-office"):
+                        workplace = "On-site"
+                    elif workplace.lower() in ("remote", "wfh"):
+                        workplace = "Remote"
+                    elif workplace.lower() in ("hybrid",):
+                        workplace = "Hybrid"
+
+                    if not raw_loc:
+                        formatted_loc = "Remote" if workplace == "Remote" else ("Remote / Global" if not workplace else f"Global ({workplace})")
+                    elif raw_loc.lower() in ("remote", "remote - us", "remote - global", "remote - india"):
+                        formatted_loc = "Remote"
+                    else:
+                        if any(w in raw_loc.lower() for w in ("(remote)", "(hybrid)", "(on-site)", "(onsite)")):
+                            formatted_loc = raw_loc
+                        elif workplace in ("Remote", "Hybrid", "On-site"):
+                            formatted_loc = f"{raw_loc} ({workplace})"
+                        else:
+                            formatted_loc = raw_loc
+
+                    location_escaped = escape_md(formatted_loc)
+
+                    # 4. Optional Salary Line
                     salary = job.get("salary")
-                    if salary and salary.lower() not in ("not disclosed", ""):
-                        salary_line = f"\n\U0001F4B0 {escape_md(salary)}"
+                    salary_line = ""
+                    if salary and str(salary).strip().lower() not in ("not disclosed", "none", "null", "not specified", ""):
+                        salary_line = f"💰 {escape_md(str(salary).strip())}\n"
 
-                    yoe = job.get("min_yoe")
-                    yoe_line = ""
-                    if yoe is not None and yoe > 0:
-                        yoe_line = f"\n\U0001F393 {yoe}\\+ YOE"
+                    # 5. Key Skills Line
+                    skills_list = job.get("skills") or []
+                    skills_line = ""
+                    if skills_list:
+                        top_skills = [str(s).strip() for s in skills_list[:5] if str(s).strip()]
+                        if top_skills:
+                            skills_line = f"🛠️ *Key Skills:* {escape_md(', '.join(top_skills))}\n"
 
                     msg = (
-                        f"\U0001F6A8 *NEW JOB ALERT*\n\n"
-                        f"*{title}*\n"
-                        f"\U0001F3E2 {company}\n"
-                        f"\U0001F4CD {location}"
+                        f"🚨 *NEW JOB ALERT*\n\n"
+                        f"*{title}* @ *{company}*\n"
+                        f"{suitability_line}\n"
+                        f"💡 *Role Category:* {role_cat_escaped}\n"
+                        f"📍 {location_escaped}\n"
                         f"{salary_line}"
-                        f"{yoe_line}\n"
-                        f"\U0001F3AF *{score}% match*\n\n"
-                        f"\u26A1\uFE0F Direct from company careers\n"
-                        f"\U0001F550 Posted {escape_md(freshness)}"
+                        f"{skills_line}"
+                        f"🎯 *{score}% Match*\n\n"
+                        f"⚡ Direct from company careers\n"
+                        f"🕐 Posted {escape_md(freshness)}"
                     )
 
                     # Inline buttons — HR Details is free for Pro, ₹49 for Free
