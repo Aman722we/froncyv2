@@ -22,7 +22,7 @@ def _strip_html(html: str) -> str:
     text = re.sub(r'&lt;', '<', text)
     text = re.sub(r'&gt;', '>', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    return text[:8000]  # Cap at 8000 chars for LLM safety
+    return text  # Return full text without capping so no requirements are missed
 
 
 async def fetch_greenhouse_jobs(board_token: str) -> list[dict]:
@@ -123,6 +123,13 @@ async def fetch_lever_jobs(site_slug: str) -> list[dict]:
             location = categories.get("location") or categories.get("allLocations", [None])[0]
             dept = categories.get("department", "")
 
+            hosted_url = (job.get("hostedUrl") or "").strip()
+            # Clean URL: ensure it points to the JD page, not /apply
+            if hosted_url.endswith("/apply"):
+                hosted_url = hosted_url[:-6]
+            elif hosted_url.endswith("/apply/"):
+                hosted_url = hosted_url[:-7]
+
             description = _strip_html(job.get("descriptionPlain") or job.get("description") or "")
 
             normalized.append({
@@ -132,8 +139,8 @@ async def fetch_lever_jobs(site_slug: str) -> list[dict]:
                 "department": dept,
                 "description": description,
                 "published_at": published_at,
-                "job_url": job.get("hostedUrl"),
-                "apply_url": job.get("applyUrl") or job.get("hostedUrl"),
+                "job_url": hosted_url,
+                "apply_url": hosted_url,  # Always open the JD page
                 "source_provider": "LEVER",
             })
         except Exception as e:
@@ -175,6 +182,13 @@ async def fetch_ashby_jobs(board_name: str) -> list[dict]:
             location = job.get("location") or job.get("locationName")
             description = _strip_html(job.get("descriptionHtml") or job.get("descriptionPlain") or "")
 
+            job_url = (job.get("jobUrl") or "").strip()
+            # Clean URL: ensure it points to the JD page, not /application
+            if job_url.endswith("/application"):
+                job_url = job_url[:-12]
+            elif job_url.endswith("/application/"):
+                job_url = job_url[:-13]
+
             normalized.append({
                 "external_id": job["id"],
                 "title": job.get("title", "Untitled"),
@@ -182,8 +196,8 @@ async def fetch_ashby_jobs(board_name: str) -> list[dict]:
                 "department": job.get("department") or job.get("team") or "",
                 "description": description,
                 "published_at": published_at,
-                "job_url": job.get("jobUrl"),
-                "apply_url": job.get("applyUrl") or job.get("jobUrl"),
+                "job_url": job_url,
+                "apply_url": job_url,  # Always open the JD page
                 "source_provider": "ASHBY",
             })
         except Exception as e:

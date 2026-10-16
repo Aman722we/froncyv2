@@ -99,6 +99,12 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
         location=normalized_job.get("location", "")
     )
     extracted_skills = metadata.get("skills", [])
+    if not extracted_skills:
+        from services.llm_service import _infer_fallback_skills
+        extracted_skills = _infer_fallback_skills(
+            normalized_job.get("title", ""),
+            description
+        )
     extracted_min_yoe = metadata.get("min_yoe", 0)
     extracted_max_yoe = metadata.get("max_yoe")
     extracted_salary = metadata.get("salary") or "Not disclosed"
@@ -106,6 +112,16 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     extracted_role_category = metadata.get("role_category") or "Software Engineering"
     extracted_role_summary = metadata.get("role_summary") or ""
     extracted_fresher_friendly = metadata.get("is_fresher_friendly", extracted_min_yoe <= 2)
+
+    clean_job_url = (normalized_job.get("job_url") or normalized_job.get("apply_url") or "").strip()
+    if clean_job_url.endswith("/apply"):
+        clean_job_url = clean_job_url[:-6]
+    elif clean_job_url.endswith("/apply/"):
+        clean_job_url = clean_job_url[:-7]
+    elif clean_job_url.endswith("/application"):
+        clean_job_url = clean_job_url[:-12]
+    elif clean_job_url.endswith("/application/"):
+        clean_job_url = clean_job_url[:-13]
 
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -132,7 +148,7 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             """,
             normalized_job["title"],
             source["company_name"],
-            normalized_job["apply_url"] or normalized_job["job_url"],
+            clean_job_url,
             normalized_job.get("location"),
             normalized_job.get("published_at") or now,
             provider,
@@ -153,22 +169,30 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             invalidate_jobs_cache()
             return row["id"]
         return None
+
+
 async def sync_one_source(source: dict) -> dict:
     """
     Sync a single career source.
-    Returns a summary dict: {fetched, new, duplicates, errors}.
+    Returns a summary dict: {fetched, new, duplicates, errors, deactivated}.
     """
     source_id = source["id"]
     company = source["company_name"]
-    summary = {"company": company, "fetched": 0, "new": 0, "duplicates": 0, "errors": 0}
+    provider = source["provider"].upper()
+    summary = {"company": company, "fetched": 0, "new": 0, "duplicates": 0, "errors": 0, "deactivated": 0}
 
     try:
         jobs = await fetch_jobs_for_source(source)
         summary["fetched"] = len(jobs)
 
         new_job_ids = []
+        active_ext_ids = []
         for job in jobs:
             try:
+                ext_id = str(job.get("external_id") or "")
+                if ext_id:
+                    active_ext_ids.append(ext_id)
+
                 new_id = await _save_career_job(job, source)
                 if new_id:
                     summary["new"] += 1
@@ -180,6 +204,49 @@ async def sync_one_source(source: dict) -> dict:
             except Exception as e:
                 logger.warning(f"Error saving job '{job.get('title')}' from {company}: {e}")
                 summary["errors"] += 1
+
+        # ── EXPIRED JOBS DEACTIVATION ──────────────────────────────────────────
+        # If the ATS returned a list of jobs, any job in our DB for this company
+        # that is NOT in the current ATS list has been closed/removed.
+        # Deactivate them immediately so users never see 404 dead links!
+        if active_ext_ids:
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                res = await conn.execute(
+                    """
+                    UPDATE manual_jobs
+                    SET is_active = FALSE
+                    WHERE source_provider = $1
+                      AND source_external_id IS NOT NULL
+                      AND company = $2
+                      AND is_active = TRUE
+                      AND NOT (source_external_id = ANY($3::text[]))
+                    """,
+                    provider,
+                    company,
+                    active_ext_ids
+                )
+                deactivated = int(res.split(" ")[1]) if "UPDATE" in res else 0
+                if deactivated > 0:
+                    logger.info(f"🗑️ Deactivated {deactivated} expired/closed jobs from {company}")
+                    summary["deactivated"] = deactivated
+                    from db.manual_jobs import invalidate_jobs_cache
+                    invalidate_jobs_cache()
+
+                # Reactivate any job that was reopened on the ATS
+                await conn.execute(
+                    """
+                    UPDATE manual_jobs
+                    SET is_active = TRUE
+                    WHERE source_provider = $1
+                      AND company = $2
+                      AND source_external_id = ANY($3::text[])
+                      AND is_active = FALSE
+                    """,
+                    provider,
+                    company,
+                    active_ext_ids
+                )
 
         await update_source_check(source_id, success=True)
         
@@ -435,5 +502,107 @@ async def run_career_sync() -> list[dict]:
 
         total_new = sum(s["new"] for s in summaries)
         logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
+
+        # Auto-heal existing database jobs that have empty skills
+        try:
+            repaired = await backfill_empty_skills_jobs(limit=30)
+            if repaired > 0:
+                logger.info(f"✨ Auto-healed {repaired} jobs with missing skills!")
+        except Exception as e:
+            logger.warning(f"Error during auto-heal backfill: {e}")
+
         return summaries
+
+
+async def backfill_empty_skills_jobs(limit: int = 50) -> int:
+    """
+    Find jobs in manual_jobs that have empty skills array and re-extract their metadata.
+    Returns the number of jobs repaired.
+    """
+    from services.llm_service import extract_job_metadata
+    pool = get_pool()
+    repaired = 0
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, description, location, url
+                FROM manual_jobs
+                WHERE skills = '{}' 
+                   OR array_length(skills, 1) IS NULL 
+                   OR array_length(skills, 1) = 0
+                   OR role_category IS NULL
+                ORDER BY id DESC
+                LIMIT $1
+                """,
+                limit
+            )
+
+        if not rows:
+            return 0
+
+        logger.info(f"🔄 Backfilling intelligence for {len(rows)} jobs needing enrichment...")
+        for row in rows:
+            try:
+                job_id = row["id"]
+                title = row["title"]
+                desc = row["description"] or ""
+                loc = row["location"] or ""
+                job_url = row.get("url") or ""
+
+                # If description is missing from DB, attempt fetching directly from the job URL
+                if len(desc) < 100 and job_url:
+                    try:
+                        import httpx
+                        from services.career_fetcher import _strip_html
+                        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                            resp = await client.get(job_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                            if resp.status_code == 200:
+                                fetched_desc = _strip_html(resp.text)
+                                if len(fetched_desc) > len(desc):
+                                    desc = fetched_desc
+                    except Exception:
+                        pass
+
+                metadata = await extract_job_metadata(
+                    job_description=desc,
+                    job_title=title,
+                    location=loc
+                )
+                skills = metadata.get("skills", [])
+                min_yoe = metadata.get("min_yoe", 0)
+                max_yoe = metadata.get("max_yoe")
+                salary = metadata.get("salary") or "Not disclosed"
+                wpt = metadata.get("workplace_type") or "On-site"
+                cat = metadata.get("role_category") or "Software Engineering"
+                summary = metadata.get("role_summary") or ""
+                fresher = metadata.get("is_fresher_friendly", min_yoe <= 2)
+
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE manual_jobs
+                        SET skills = $2, min_yoe = $3, max_yoe = $4, salary = $5,
+                            workplace_type = $6, role_category = $7, role_summary = $8,
+                            is_fresher_friendly = $9,
+                            description = CASE WHEN description IS NULL OR description = '' THEN $10 ELSE description END
+                        WHERE id = $1
+                        """,
+                        job_id, skills, min_yoe, max_yoe, salary, wpt, cat, summary, fresher, desc
+                    )
+                repaired += 1
+                logger.info(f"  ✓ Repaired job {job_id} ({title}): skills={skills}, cat={cat}, yoe={min_yoe}")
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                logger.warning(f"Failed to backfill job {row['id']}: {e}")
+
+        if repaired > 0:
+            from db.manual_jobs import invalidate_jobs_cache
+            invalidate_jobs_cache()
+
+    except Exception as e:
+        logger.error(f"Error in backfill_empty_skills_jobs: {e}")
+
+    return repaired
 

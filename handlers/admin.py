@@ -832,21 +832,23 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     total_new = sum(s.get("new", 0) for s in summaries)
     total_errors = sum(1 for s in summaries if s.get("errors", 0) > 0)
+    total_deactivated = sum(s.get("deactivated", 0) for s in summaries)
     
     lines = [f"<b>⚡ Sync Complete ({len(summaries)} sources)</b>\n"]
     
-    # Only show detailed logs for sources that actually had new jobs or errors if there are many sources
+    # Only show detailed logs for sources that had new jobs, errors, or closed jobs
     for s in summaries:
-        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0:
+        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0 and s.get("deactivated", 0) == 0:
             continue
             
+        deact_str = f" | Closed: {s['deactivated']}" if s.get("deactivated", 0) > 0 else ""
         lines.append(
             f"<b>{s['company']}</b>\n"
-            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']} | Errors: {s['errors']}"
+            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']}{deact_str} | Errors: {s['errors']}"
         )
     
-    lines.append(f"\n🎉 <b>Total new jobs discovered: {total_new}</b>")
-    if len(summaries) > 10 and total_new == 0 and total_errors == 0:
+    lines.append(f"\n🎉 <b>Total new: {total_new}</b> | 🗑️ <b>Closed/Expired: {total_deactivated}</b>")
+    if len(summaries) > 10 and total_new == 0 and total_errors == 0 and total_deactivated == 0:
         lines.append("<i>(All other sources fetched 0 new jobs without errors.)</i>")
         
     chunk = ""
@@ -867,6 +869,26 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.edit_text(chunk, parse_mode="HTML")
         else:
             await update.message.reply_text(chunk, parse_mode="HTML")
+
+
+async def backfillskills_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/backfillskills [limit] — Admin command to re-extract and fix skills for jobs with empty skills array."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    limit = int(args[0]) if args and args[0].isdigit() else 50
+
+    msg = await update.message.reply_text(f"🔄 Scanning and backfilling up to {limit} jobs with missing skills...")
+    
+    from services.career_sync import backfill_empty_skills_jobs
+    repaired = await backfill_empty_skills_jobs(limit=limit)
+
+    if repaired == 0:
+        await msg.edit_text("✅ All jobs in the database already have valid skills! Nothing to backfill.")
+    else:
+        await msg.edit_text(f"🎉 <b>Successfully backfilled and repaired {repaired} jobs!</b>\n\nAll empty skills rows have been updated with complete AI intelligence.", parse_mode="HTML")
 
 
 async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
