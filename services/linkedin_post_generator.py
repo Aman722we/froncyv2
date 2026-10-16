@@ -31,14 +31,7 @@ NICHE_CONFIGS = {
             "If you know HTML, CSS, JavaScript, React, or Next.js, here are 5 fresh frontend opportunities you can apply for today. 👇"
         ),
         "hashtags": "#FrontendDeveloper #ReactJS #JavaScript #TypeScript #NextJS #WebDevelopment #FrontendJobs #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%frontend%' OR
-                title ILIKE '%frontend%' OR title ILIKE '%front-end%' OR title ILIKE '%react%' OR 
-                title ILIKE '%next.js%' OR title ILIKE '%vue%' OR title ILIKE '%angular%' OR 
-                title ILIKE '%ui%' OR title ILIKE '%web%'
-            )
-        """
+        "sql_filter": ""
     },
     "backend": {
         "id": "backend",
@@ -52,14 +45,7 @@ NICHE_CONFIGS = {
             "Here are 5 verified backend developer opportunities hiring today. 👇"
         ),
         "hashtags": "#BackendDeveloper #Python #Java #NodeJS #Golang #SQL #APIs #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%backend%' OR
-                title ILIKE '%backend%' OR title ILIKE '%back-end%' OR title ILIKE '%python%' OR 
-                title ILIKE '%java%' OR title ILIKE '%node%' OR title ILIKE '%golang%' OR 
-                title ILIKE '%fastapi%' OR title ILIKE '%django%' OR title ILIKE '%spring%' OR title ILIKE '%api%'
-            )
-        """
+        "sql_filter": ""
     },
     "devops": {
         "id": "devops",
@@ -73,13 +59,7 @@ NICHE_CONFIGS = {
             "Here are 5 fresh DevOps and Cloud engineering opportunities hiring today. 👇"
         ),
         "hashtags": "#DevOps #CloudEngineer #AWS #Docker #Kubernetes #Linux #CICD #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%devops%' OR role_category ILIKE '%cloud%' OR
-                title ILIKE '%devops%' OR title ILIKE '%cloud%' OR title ILIKE '%sre%' OR 
-                title ILIKE '%infra%' OR title ILIKE '%platform%' OR title ILIKE '%reliability%'
-            )
-        """
+        "sql_filter": ""
     },
     "data": {
         "id": "data",
@@ -93,13 +73,7 @@ NICHE_CONFIGS = {
             "Here are 5 Data, AI, and Machine Learning opportunities worth checking out today. 👇"
         ),
         "hashtags": "#DataEngineer #MachineLearning #ArtificialIntelligence #Python #SQL #DataScience #TechJobs #SoftwareEngineer #Hiring #FreshersJobs #CareerGrowth",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%data%' OR role_category ILIKE '%ai%' OR role_category ILIKE '%ml%' OR
-                title ILIKE '%data%' OR title ILIKE '%ml%' OR title ILIKE '%ai%' OR 
-                title ILIKE '%machine learning%' OR title ILIKE '%analytics%'
-            )
-        """
+        "sql_filter": ""
     },
     "fullstack": {
         "id": "fullstack",
@@ -113,13 +87,7 @@ NICHE_CONFIGS = {
             "Here are 5 verified fullstack and software engineering opportunities to apply for today. 👇"
         ),
         "hashtags": "#FullStackDeveloper #SoftwareEngineer #ReactJS #NodeJS #Python #WebDevelopment #TechJobs #Hiring #FreshersJobs #CareerGrowth #Coding",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%fullstack%' OR role_category ILIKE '%software%' OR
-                title ILIKE '%fullstack%' OR title ILIKE '%full stack%' OR title ILIKE '%software%' OR 
-                title ILIKE '%sde%' OR title ILIKE '%developer%'
-            )
-        """
+        "sql_filter": ""
     },
     "mobile": {
         "id": "mobile",
@@ -133,13 +101,7 @@ NICHE_CONFIGS = {
             "Here are 5 fresh mobile developer opportunities hiring today. 👇"
         ),
         "hashtags": "#MobileDeveloper #ReactNative #Flutter #AndroidDev #iOSDev #MobileApps #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
-        "sql_filter": """
-            AND (
-                role_category ILIKE '%mobile%' OR
-                title ILIKE '%mobile%' OR title ILIKE '%android%' OR title ILIKE '%ios%' OR 
-                title ILIKE '%flutter%' OR title ILIKE '%react native%' OR title ILIKE '%swift%' OR title ILIKE '%kotlin%'
-            )
-        """
+        "sql_filter": ""
     },
     "mixed": {
         "id": "mixed",
@@ -169,6 +131,168 @@ WEEKLY_ROTATION = {
     5: {"morning": "data",      "evening": "devops"},     # Saturday
     6: {"morning": "mixed",     "evening": "frontend"},   # Sunday
 }
+
+
+# ── Comprehensive Non-Tech Blacklist & Mobile Separation ─────────────────────
+NON_TECH_EXCLUSIONS = (
+    # HR & Recruiting
+    "talent", "acquisition", "recruiter", "recruiting", "recruitment", "sourcer", "sourcing",
+    "human resources", "hr coordinator", "hr generalist", "hr manager", "people partner", "people operations",
+    "people systems", "hris", "workday",
+    
+    # Sales, BD & Account Management
+    "account executive", "business development", "bdr", "sdr", "sales representative", "sales manager", "account manager",
+    "inside sales", "sales enablement",
+    
+    # Customer Support & Helpdesk
+    "customer support", "customer success", "client success", "support specialist", "support representative",
+    "technical support specialist", "call center", "tier 1", "tier 2", "helpdesk", "service desk", "it support",
+    
+    # Marketing & Content
+    "marketing", "content writer", "copywriter", "social media", "seo specialist", "growth marketer", "communications",
+    "pr manager", "brand manager", "video editor",
+    
+    # Operations, Procurement & Administration
+    "operations coordinator", "office manager", "executive assistant", "administrative", "workplace coordinator",
+    "procurement", "purchasing", "buyer", "supply chain", "vendor management",
+    
+    # Finance, Accounting & Legal
+    "finance", "accountant", "accounting", "bookkeeper", "payroll", "legal", "counsel", "compliance", "tax", "billing",
+    "policy analyst", "regulatory", "government affairs", "public policy",
+    
+    # Healthcare, Teaching & Non-Tech AI Training
+    "medical", "nurse", "physician", "clinical", "intake", "trainer", "training", "instructional",
+    "voice actor", "language expert", "audio evaluation",
+    
+    # Management & Non-Tech Design
+    "product manager", "program manager", "scrum master", "project manager",
+    "graphic designer", "multimedia designer", "packaging designer", "fashion designer"
+)
+
+MOBILE_KEYWORDS = ("mobile", "react native", "flutter", "android", "ios", "maui", "xamarin", "swift developer", "kotlin developer")
+
+
+def is_valid_tech_job(job: dict) -> bool:
+    """Strictly ensures a job is a genuine software/data/cloud tech role, never non-tech."""
+    title = (job.get("title") or "").strip().lower()
+    if not title:
+        return False
+    if any(nt in title for nt in NON_TECH_EXCLUSIONS):
+        return False
+        
+    # Check for non-tech designer (unless UI/UX)
+    if "designer" in title and not any(u in title for u in ["ui", "ux", "product designer"]):
+        return False
+
+    # Must contain recognized developer/engineering keyword
+    tech_patterns = (
+        r'\bengineer\b', r'\bdeveloper\b', r'\bsde\b', r'\bprogrammer\b', r'\barchitect\b',
+        r'\bdata engineer\b', r'\bdata scientist\b', r'\bdata analyst\b', r'\bdatabase\b',
+        r'\bdevops\b', r'\bcloud\b', r'\bsre\b', r'\bml\b', r'\bai engineer\b', r'\bai developer\b',
+        r'\bfullstack\b', r'\bfull-stack\b', r'\bfrontend\b', r'\bfront-end\b', r'\bbackend\b', r'\bback-end\b',
+        r'\bsoftware\b', r'\bmobile\b', r'\bandroid\b', r'\bios\b', r'\bweb developer\b', r'\bqa engineer\b'
+    )
+    return any(re.search(pat, title) for pat in tech_patterns)
+
+
+def get_stream_relevance(job: dict, stream: str) -> int:
+    """
+    Returns relevance tier:
+      2 = Exact, unambiguous niche match (e.g. Frontend Developer, React for frontend)
+      1 = Broad/related engineering match (e.g. Fullstack with React for frontend)
+      0 = Not relevant to this stream
+    """
+    if not is_valid_tech_job(job):
+        return 0
+        
+    title = (job.get("title") or "").lower()
+    skills = [s.lower() for s in (job.get("skills") or [])]
+    cat = (job.get("role_category") or "").lower()
+    stream = stream.lower()
+    
+    if stream == "frontend":
+        # Strict exclusion of mobile / desktop app roles
+        if any(m in title for m in MOBILE_KEYWORDS):
+            return 0
+        if any(b in title for b in ["backend", "back-end", "database admin", "network engineer"]):
+            return 0
+        if any(w in title for w in ["frontend", "front-end", "front end", "angular", "vue", "next.js", "nextjs", "svelte", "ui developer", "ui engineer"]):
+            return 2
+        if "react" in title and "native" not in title:
+            return 2
+        if "web developer" in title or "web engineer" in title:
+            return 2
+        if "frontend" in cat and "designer" not in title:
+            return 1
+        if any(k in skills for k in ["react", "next.js", "vue", "angular", "frontend"]) and any(w in title for w in ["developer", "engineer", "software"]):
+            return 1
+        return 0
+
+    elif stream == "backend":
+        if any(w in title for w in ["frontend", "front-end", "ui/ux", "mobile", "ios", "android"]):
+            return 0
+        if any(w in title for w in ["backend", "back-end", "back end", "node.js", "nodejs", "fastapi", "django", "flask", "golang", "spring", "api developer"]):
+            return 2
+        if "python" in title and any(w in title for w in ["developer", "engineer"]):
+            return 2
+        if "java" in title and "javascript" not in title and any(w in title for w in ["developer", "engineer"]):
+            return 2
+        if ".net developer" in title or "c# developer" in title:
+            return 2
+        if "backend" in cat:
+            return 1
+        if any(k in skills for k in ["python", "java", "node.js", "django", "fastapi", "spring", "golang", "sql", "postgresql", "rest apis"]) and any(w in title for w in ["software engineer", "sde", "developer"]):
+            return 1
+        return 0
+
+    elif stream == "devops":
+        if any(w in title for w in ["devops", "dev-ops", "dev ops", "cloud engineer", "cloud developer", "infrastructure engineer", "infra engineer", "platform engineer"]):
+            return 2
+        if re.search(r'\bsre\b', title) or "site reliability" in title:
+            return 2
+        if any(w in title for w in ["systems engineer", "network engineer", "security engineer"]):
+            return 1
+        if ("devops" in cat or "cloud" in cat) and any(w in title for w in ["engineer", "developer"]):
+            return 1
+        return 0
+
+    elif stream == "data":
+        if any(w in title for w in ["data engineer", "data scientist", "data analyst", "analytics engineer", "bi engineer", "machine learning", "deep learning", "nlp engineer"]):
+            return 2
+        if re.search(r'\b(ai|ml)\b', title) and any(w in title for w in ["engineer", "developer", "scientist", "analyst"]):
+            return 2
+        if "data" in cat and any(w in title for w in ["engineer", "developer", "scientist", "analyst"]):
+            return 1
+        return 0
+
+    elif stream == "mobile":
+        if any(m in title for m in MOBILE_KEYWORDS):
+            return 2
+        if "mobile" in cat:
+            return 1
+        return 0
+
+    elif stream == "fullstack":
+        if any(w in title for w in ["fullstack", "full-stack", "full stack"]):
+            return 2
+        if any(w in title for w in ["software engineer", "software developer", "sde"]):
+            return 1
+        if "fullstack" in cat or "software" in cat:
+            return 1
+        return 0
+
+    elif stream == "mixed":
+        return 2
+
+    return 0
+
+
+def normalize_title(t: str) -> str:
+    """Normalize job title for company-level deduplication."""
+    cleaned = re.sub(r'[^a-z0-9]', '', (t or "").lower())
+    for noise in ["remote", "fulltime", "parttime", "shorttermproject", "contract", "india"]:
+        cleaned = cleaned.replace(noise, "")
+    return cleaned
 
 
 def compute_virality_score(job: dict) -> float:
@@ -249,78 +373,131 @@ def compute_virality_score(job: dict) -> float:
 async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> list[dict]:
     """
     Fetch high-quality, junior/fresher jobs from manual_jobs table for a specific stream.
-    Strictly prioritizes jobs with disclosed salary at the top using virality scoring.
-    Gracefully falls back to mixed high-salary jobs if the stream has fewer than 5.
+    Strictly filters out non-tech roles, isolates exact niche disciplines, prioritizes salary,
+    and intelligently deduplicates company/titles to guarantee exactly 5 high-converting cards.
     """
-    config = NICHE_CONFIGS.get(stream.lower(), NICHE_CONFIGS["mixed"])
-    stream_sql = config["sql_filter"]
-
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Step 1: Query matching jobs for this specific niche stream
-        niche_query = f"""
+        query = """
             SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
-                   workplace_type, source_provider, source_type, posted_at, url, role_category
+                   workplace_type, source_provider, source_type, posted_at, url, role_category, is_fresher_friendly
             FROM manual_jobs
             WHERE is_active = TRUE
-              AND (min_yoe <= 1 OR is_fresher_friendly = TRUE)
+              AND (min_yoe <= 2 OR is_fresher_friendly = TRUE)
               AND (
                   location ILIKE '%india%' OR location ILIKE '%bangalore%' OR location ILIKE '%bengaluru%' OR 
                   location ILIKE '%remote%' OR location ILIKE '%hyderabad%' OR location ILIKE '%pune%' OR 
                   location ILIKE '%mumbai%' OR location ILIKE '%delhi%' OR location ILIKE '%gurgaon%' OR 
                   location ILIKE '%noida%' OR location ILIKE '%chennai%' OR location IS NULL OR location = ''
               )
-              {stream_sql}
             ORDER BY 
               CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
               posted_at DESC
-            LIMIT 35;
+            LIMIT 150;
         """
-        rows = await conn.fetch(niche_query)
+        rows = await conn.fetch(query)
         candidates = [dict(r) for r in rows]
 
-        # Step 2: Graceful Fallback if niche has fewer than `limit` candidates
-        if len(candidates) < limit:
-            fallback_query = """
-                SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
-                       workplace_type, source_provider, source_type, posted_at, url, role_category
-                FROM manual_jobs
-                WHERE is_active = TRUE
-                  AND (min_yoe <= 2 OR is_fresher_friendly = TRUE)
-                  AND (
-                      location ILIKE '%india%' OR location ILIKE '%bangalore%' OR location ILIKE '%bengaluru%' OR 
-                      location ILIKE '%remote%' OR location ILIKE '%hyderabad%' OR location ILIKE '%pune%' OR 
-                      location ILIKE '%mumbai%' OR location ILIKE '%delhi%' OR location ILIKE '%gurgaon%' OR 
-                      location ILIKE '%noida%' OR location ILIKE '%chennai%' OR location IS NULL OR location = ''
-                  )
-                ORDER BY 
-                  CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
-                  posted_at DESC
-                LIMIT 40;
-            """
-            fallback_rows = await conn.fetch(fallback_query)
-            candidates.extend([dict(r) for r in fallback_rows])
-
-    # Score each candidate in-memory (< 0.1ms per candidate)
     now_utc = datetime.now(timezone.utc)
+    scored = []
     for j in candidates:
-        j["_virality_score"] = compute_virality_score(j)
+        rel = get_stream_relevance(j, stream)
+        if rel > 0:
+            v_score = compute_virality_score(j)
+            if rel == 2:
+                v_score += 25.0
+            item = dict(j)
+            item["_virality_score"] = v_score
+            item["_relevance"] = rel
+            scored.append(item)
 
-    # Sort strictly by virality score (DESC), then posted_at (DESC)
-    candidates.sort(key=lambda j: (j["_virality_score"], j.get("posted_at") or now_utc), reverse=True)
+    # Sort candidates by relevance DESC, virality score DESC, posted_at DESC
+    scored.sort(
+        key=lambda x: (x["_relevance"], x["_virality_score"], x.get("posted_at") or now_utc),
+        reverse=True
+    )
 
-    # Deduplicate by company (take best scoring job per company)
-    seen_companies = set()
     selected = []
-    for j in candidates:
-        comp = (j["company"] or "").strip().lower()
-        if comp and comp not in seen_companies:
-            seen_companies.add(comp)
-            selected.append(j)
-        if len(selected) >= limit:
-            break
+    seen_job_ids = set()
+    company_counts = {}
+    seen_comp_titles = set()
 
-    # Final guarantee: sort selected 5 so salary jobs are strictly at the top of the cards!
+    def _can_add(job, max_comp_allowed=2, check_title=True):
+        if job["id"] in seen_job_ids:
+            return False
+        comp = (job["company"] or "").strip().lower()
+        if check_title:
+            title_key = (comp, normalize_title(job["title"]))
+            if title_key in seen_comp_titles:
+                return False
+        if company_counts.get(comp, 0) >= max_comp_allowed:
+            return False
+        return True
+
+    def _add(job):
+        selected.append(job)
+        seen_job_ids.add(job["id"])
+        comp = (job["company"] or "").strip().lower()
+        company_counts[comp] = company_counts.get(comp, 0) + 1
+        title_key = (comp, normalize_title(job["title"]))
+        seen_comp_titles.add(title_key)
+
+    # Pass 1: Max 1 job per company from EXACT matches
+    for j in scored:
+        if j["_relevance"] == 2 and _can_add(j, max_comp_allowed=1, check_title=True):
+            _add(j)
+            if len(selected) >= limit:
+                break
+
+    # Pass 2: Allow up to 2 jobs per company from EXACT matches with different titles
+    if len(selected) < limit:
+        for j in scored:
+            if j["_relevance"] == 2 and _can_add(j, max_comp_allowed=2, check_title=True):
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Pass 3: Allow up to 4 jobs per company from EXACT matches with different titles
+    if len(selected) < limit:
+        for j in scored:
+            if j["_relevance"] == 2 and _can_add(j, max_comp_allowed=4, check_title=True):
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Pass 4: Allow BROAD matches (rel == 1) with max 2 per company
+    if len(selected) < limit:
+        for j in scored:
+            if j["_relevance"] == 1 and _can_add(j, max_comp_allowed=2, check_title=True):
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Pass 5: Broad matches allowing up to 4 per company
+    if len(selected) < limit:
+        for j in scored:
+            if j["_relevance"] == 1 and _can_add(j, max_comp_allowed=4, check_title=True):
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Pass 6: Fallback to valid tech candidates
+    if len(selected) < limit:
+        for j in candidates:
+            if is_valid_tech_job(j) and _can_add(j, max_comp_allowed=2, check_title=True):
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Pass 7: Absolute safety fallback (any valid tech job not yet seen)
+    if len(selected) < limit:
+        for j in candidates:
+            if is_valid_tech_job(j) and j["id"] not in seen_job_ids:
+                _add(j)
+                if len(selected) >= limit:
+                    break
+
+    # Final guarantee: Put salary jobs at the top of the cards
     def _has_salary(j):
         sal = (j.get("salary") or "").strip().lower()
         return 0 if sal and sal not in ("null", "none", "not disclosed", "n/a", "") else 1
