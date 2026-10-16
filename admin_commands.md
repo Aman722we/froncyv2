@@ -51,6 +51,14 @@
   /syncnow 12       (Syncs only source ID 12)
   ```
 
+### `/backfillskills [limit]`
+* **Description:** Scans `manual_jobs` for any jobs with empty `skills` arrays (`skills = '{}'`), re-reads their stored descriptions using the full LLM extraction pipeline, and updates them with structured skills, YOE, salary, and categories.
+* **Usage:**
+  ```text
+  /backfillskills       (Repairs up to 50 jobs with missing skills)
+  /backfillskills 100   (Repairs up to 100 jobs with missing skills)
+  ```
+
 ### `/addsource <provider> <board_token> <Company Name>`
 * **Description:** Adds a new company career board to the automated 15-minute polling engine.
 * **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`

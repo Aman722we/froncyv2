@@ -36,7 +36,8 @@ from handlers.admin import (
     fixresume_command, addbot_command, setcreator_command, addsource_command,
     delsource_command, listsources_command, bulkadd_command, syncnow_command,
     completerequest_command, admin_pingjob, pending_command, masstrial_command,
-    refundrequest_command, jobdashboard_command, jobdashboard_callback
+    refundrequest_command, jobdashboard_command, jobdashboard_callback,
+    backfillskills_command
 )
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
@@ -186,6 +187,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("bulkadd", bulkadd_command))
     app.add_handler(CommandHandler("listsources", listsources_command))
     app.add_handler(CommandHandler("syncnow", syncnow_command))
+    app.add_handler(CommandHandler("backfillskills", backfillskills_command))
     app.add_handler(CommandHandler("completerequest", completerequest_command))
     app.add_handler(CommandHandler("pending", pending_command))
     app.add_handler(CommandHandler("masstrial", masstrial_command))

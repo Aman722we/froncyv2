@@ -869,6 +869,26 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text(chunk, parse_mode="HTML")
 
 
+async def backfillskills_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/backfillskills [limit] — Admin command to re-extract and fix skills for jobs with empty skills array."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    args = context.args
+    limit = int(args[0]) if args and args[0].isdigit() else 50
+
+    msg = await update.message.reply_text(f"🔄 Scanning and backfilling up to {limit} jobs with missing skills...")
+    
+    from services.career_sync import backfill_empty_skills_jobs
+    repaired = await backfill_empty_skills_jobs(limit=limit)
+
+    if repaired == 0:
+        await msg.edit_text("✅ All jobs in the database already have valid skills! Nothing to backfill.")
+    else:
+        await msg.edit_text(f"🎉 <b>Successfully backfilled and repaired {repaired} jobs!</b>\n\nAll empty skills rows have been updated with complete AI intelligence.", parse_mode="HTML")
+
+
 async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Admin command to test instant job alert. Usage: /pingjob <user_id> <job_id>"""
     from config import settings

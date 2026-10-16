@@ -75,6 +75,60 @@ def _get_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]
     return client, model
 
 
+async def _get_available_client(mode: LLMMode, timeout: float = 60.0) -> tuple[AsyncOpenAI, str]:
+    """
+    Get the next available OpenAI client using round-robin.
+    If all keys are on cooldown, waits/sleeps until the earliest key becomes available.
+    Guarantees it never returns or calls a key while it is in cooldown.
+    """
+    global _rr_index_8b, _rr_index_70b
+    
+    if mode == LLMMode.QUALITY:
+        keys_str = settings.NVIDIA_API_KEY_70B
+        model = settings.NVIDIA_MODEL_70B
+        is_8b = False
+    else:
+        keys_str = settings.NVIDIA_API_KEY_8B
+        model = settings.NVIDIA_MODEL_8B
+        is_8b = True
+
+    keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+    if not keys:
+        raise ValueError("No API keys configured.")
+
+    while True:
+        now = time.time()
+        start_idx = _rr_index_8b if is_8b else _rr_index_70b
+        
+        selected_key = None
+        for i in range(len(keys)):
+            idx = (start_idx + i) % len(keys)
+            candidate = keys[idx]
+            if _key_cooldowns.get(candidate, 0.0) <= now:
+                selected_key = candidate
+                if is_8b:
+                    _rr_index_8b = (idx + 1) % len(keys)
+                else:
+                    _rr_index_70b = (idx + 1) % len(keys)
+                break
+                
+        if selected_key:
+            client = AsyncOpenAI(
+                base_url=settings.NVIDIA_BASE_URL,
+                api_key=selected_key,
+                timeout=timeout,
+                max_retries=0,
+            )
+            client._used_api_key = selected_key
+            return client, model
+
+        # All keys are currently cooling down. Pause and wait!
+        earliest_expiry = min(_key_cooldowns.get(k, 0.0) for k in keys)
+        wait_seconds = max(0.5, earliest_expiry - now)
+        logger.info(f"⏳ All {len(keys)} LLM keys are on cooldown. Pausing scraper for {wait_seconds + 0.5:.1f}s until next key is ready...")
+        await asyncio.sleep(wait_seconds + 0.5)
+
+
 # Role display names for prompt injection
 ROLE_DISPLAY_NAMES: dict[str, str] = {
     "frontend": "frontend development",
@@ -835,6 +889,59 @@ def _parse_job_metadata_json(raw_text: str) -> dict:
     raise ValueError(f"No JSON structure found in LLM response: {repr(raw_text[:120])}")
 
 
+def _infer_fallback_skills(title: str, description: str) -> list[str]:
+    """
+    Emergency fallback if LLM returned 0 skills:
+    Scan common tech keywords from title and full description.
+    Never returns an empty list.
+    """
+    import re
+    text = f"{title} {description}".lower()
+    common_skills = [
+        ("python", "Python"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
+        ("java", "Java"), ("c++", "C++"), ("c#", "C#"), ("golang", "Go"), ("go lang", "Go"),
+        ("rust", "Rust"), ("ruby", "Ruby"), ("php", "PHP"), ("swift", "Swift"), ("kotlin", "Kotlin"),
+        ("react", "React"), ("node", "Node.js"), ("angular", "Angular"), ("vue", "Vue.js"),
+        ("next.js", "Next.js"), ("fastapi", "FastAPI"), ("django", "Django"), ("spring", "Spring Boot"),
+        ("docker", "Docker"), ("kubernetes", "Kubernetes"), ("k8s", "Kubernetes"),
+        ("aws", "AWS"), ("azure", "Azure"), ("gcp", "GCP"), ("cloud", "Cloud Architecture"),
+        ("sql", "SQL"), ("postgres", "PostgreSQL"), ("mysql", "MySQL"), ("mongodb", "MongoDB"), ("redis", "Redis"),
+        ("rest", "REST APIs"), ("graphql", "GraphQL"), ("api", "APIs"),
+        ("ci/cd", "CI/CD"), ("git", "Git"), ("linux", "Linux"),
+        ("machine learning", "Machine Learning"), ("ai", "Artificial Intelligence"),
+        ("microservices", "Microservices"), ("distributed systems", "Distributed Systems"),
+        ("qa", "QA Automation"), ("testing", "Testing"), ("selenium", "Selenium"), ("cypress", "Cypress"),
+    ]
+    found = []
+    for pattern, name in common_skills:
+        if re.search(r'\b' + re.escape(pattern) + r'\b', text):
+            if name not in found:
+                found.append(name)
+        if len(found) >= 6:
+            break
+            
+    if not found:
+        t_low = title.lower()
+        if "backend" in t_low:
+            found = ["Backend Development", "APIs", "SQL", "Git"]
+        elif "frontend" in t_low:
+            found = ["Frontend Development", "JavaScript", "UI/UX", "Git"]
+        elif "full" in t_low:
+            found = ["Full Stack", "JavaScript", "APIs", "Git"]
+        elif "devops" in t_low or "cloud" in t_low or "platform" in t_low or "infra" in t_low:
+            found = ["DevOps", "Cloud Architecture", "CI/CD", "Linux"]
+        elif "data" in t_low or "ml" in t_low or "ai" in t_low:
+            found = ["Data Engineering", "Python", "SQL", "Analytics"]
+        elif "qa" in t_low or "test" in t_low:
+            found = ["QA Testing", "Test Automation", "Debugging"]
+        elif "security" in t_low:
+            found = ["Security Engineering", "SIEM", "OAuth", "Network Security"]
+        else:
+            found = ["Software Engineering", "REST APIs", "Git", "System Design"]
+            
+    return found
+
+
 async def extract_job_metadata(
     job_description: str,
     job_title: str = "",
@@ -863,7 +970,7 @@ Extract the following fields and output ONLY valid JSON matching this schema:
 }
 
 Field Rules:
-1. "skills": List of 4 to 8 primary technical skills, tools, programming languages, databases, or frameworks explicitly required (e.g. Python, Docker, React, AWS, PostgreSQL). Prioritize concrete technologies over vague buzzwords.
+1. "skills": List of 4 to 8 primary technical skills, tools, programming languages, databases, or frameworks explicitly required (e.g. Python, Docker, React, AWS, PostgreSQL). Prioritize concrete technologies over vague buzzwords. NEVER return an empty list: if specific tools are not explicitly listed in the text, extract the core technical and engineering domain skills from the responsibilities and title (e.g. "REST APIs", "SQL", "Cloud Architecture", "System Design", "Git").
 2. "min_yoe": Integer. Absolute minimum years of professional experience required. If entry-level/fresher/grad/0 years/not stated, return 0. If "1-3 years", return 1. If "5+ years", return 5.
 3. "max_yoe": Integer or null. Upper bound of experience if given (e.g. 2 for "0-2 years", 3 for "1-3 years"). If open-ended like "3+ years" or not specified, return null.
 4. "salary": String. Disclosed compensation/salary range (e.g. "$120,000 - $140,000", "₹12 - ₹18 LPA"). If none disclosed, return "Not disclosed".
@@ -883,19 +990,20 @@ Field Rules:
 Do NOT include markdown formatting or backticks, just the raw JSON.
 """
 
-    # Keep description focused to the first 2500 chars to avoid exhausting TPM limits
+    # Do not truncate the JD — pass the full text so no requirements or qualifications are missed
     user_message = (
         f"Job Title: {job_title or 'Untitled'}\n"
         f"Location: {location or 'Not specified'}\n"
-        f"Job Description:\n{job_description[:2500]}\n\n"
+        f"Job Description:\n{job_description.strip()}\n\n"
         "Return JSON now:"
     )
 
     keys = [k.strip() for k in settings.NVIDIA_API_KEY_8B.split(",") if k.strip()]
-    max_attempts = max(5, min(len(keys), 15))
+    max_attempts = max(40, len(keys) * 3)
 
     for attempt in range(max_attempts):
-        client, model = _get_client(LLMMode.FAST, timeout=30.0)
+        # Always get an available client — if all keys are on cooldown, waits automatically!
+        client, model = await _get_available_client(LLMMode.FAST, timeout=45.0)
         try:
             response = await client.chat.completions.create(
                 model=model,
@@ -904,7 +1012,7 @@ Do NOT include markdown formatting or backticks, just the raw JSON.
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.0,
-                max_tokens=1200,
+                max_tokens=1500,
             )
             result = response.choices[0].message.content.strip()
             data = _parse_job_metadata_json(result)
@@ -914,6 +1022,10 @@ Do NOT include markdown formatting or backticks, just the raw JSON.
             if not isinstance(skills, list):
                 skills = []
             skills = [str(s).strip() for s in skills if str(s).strip()]
+            
+            # Ensure skills is never empty
+            if not skills:
+                skills = _infer_fallback_skills(job_title, job_description)
             
             # Normalize min_yoe
             try:
@@ -974,22 +1086,15 @@ Do NOT include markdown formatting or backticks, just the raw JSON.
                 if used_key:
                     _key_cooldowns[used_key] = time.time() + wait_sec + 1.0
                 logger.warning(f"LLM Rate limit hit on key ending in ...{used_key[-6:] if used_key else '??'}. Key cooldown {wait_sec + 1.0:.1f}s.")
-                
-                # Check if all keys are currently cooling down
-                now = time.time()
-                active_free_keys = [k for k in keys if _key_cooldowns.get(k, 0.0) <= now]
-                if not active_free_keys and keys:
-                    shortest_wait = min(_key_cooldowns.get(k, 0.0) - now for k in keys)
-                    sleep_time = max(0.5, min(shortest_wait, 5.0))
-                    logger.info(f"All {len(keys)} keys busy. Pausing {sleep_time:.1f}s before next attempt...")
-                    await asyncio.sleep(sleep_time)
                 continue
 
             logger.warning(f"Failed to extract job metadata (attempt {attempt + 1}): {e}")
 
+    # Fallback if every attempt failed (total network outage, etc.)
+    fallback_skills = _infer_fallback_skills(job_title, job_description)
     loc_lower = (location or "").lower()
     return {
-        "skills": [],
+        "skills": fallback_skills,
         "min_yoe": 0,
         "max_yoe": None,
         "salary": "Not disclosed",

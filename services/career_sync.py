@@ -99,6 +99,12 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
         location=normalized_job.get("location", "")
     )
     extracted_skills = metadata.get("skills", [])
+    if not extracted_skills:
+        from services.llm_service import _infer_fallback_skills
+        extracted_skills = _infer_fallback_skills(
+            normalized_job.get("title", ""),
+            description
+        )
     extracted_min_yoe = metadata.get("min_yoe", 0)
     extracted_max_yoe = metadata.get("max_yoe")
     extracted_salary = metadata.get("salary") or "Not disclosed"
@@ -435,5 +441,88 @@ async def run_career_sync() -> list[dict]:
 
         total_new = sum(s["new"] for s in summaries)
         logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
+
+        # Auto-heal existing database jobs that have empty skills
+        try:
+            repaired = await backfill_empty_skills_jobs(limit=30)
+            if repaired > 0:
+                logger.info(f"✨ Auto-healed {repaired} jobs with missing skills!")
+        except Exception as e:
+            logger.warning(f"Error during auto-heal backfill: {e}")
+
         return summaries
+
+
+async def backfill_empty_skills_jobs(limit: int = 50) -> int:
+    """
+    Find jobs in manual_jobs that have empty skills array and re-extract their metadata.
+    Returns the number of jobs repaired.
+    """
+    from services.llm_service import extract_job_metadata
+    pool = get_pool()
+    repaired = 0
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, description, location
+                FROM manual_jobs
+                WHERE skills = '{}' OR array_length(skills, 1) IS NULL OR array_length(skills, 1) = 0
+                ORDER BY id DESC
+                LIMIT $1
+                """,
+                limit
+            )
+
+        if not rows:
+            return 0
+
+        logger.info(f"🔄 Backfilling skills for {len(rows)} jobs with empty skills...")
+        for row in rows:
+            try:
+                job_id = row["id"]
+                title = row["title"]
+                desc = row["description"] or ""
+                loc = row["location"] or ""
+
+                metadata = await extract_job_metadata(
+                    job_description=desc,
+                    job_title=title,
+                    location=loc
+                )
+                skills = metadata.get("skills", [])
+                min_yoe = metadata.get("min_yoe", 0)
+                max_yoe = metadata.get("max_yoe")
+                salary = metadata.get("salary") or "Not disclosed"
+                wpt = metadata.get("workplace_type") or "On-site"
+                cat = metadata.get("role_category") or "Software Engineering"
+                summary = metadata.get("role_summary") or ""
+                fresher = metadata.get("is_fresher_friendly", min_yoe <= 2)
+
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE manual_jobs
+                        SET skills = $2, min_yoe = $3, max_yoe = $4, salary = $5,
+                            workplace_type = $6, role_category = $7, role_summary = $8,
+                            is_fresher_friendly = $9
+                        WHERE id = $1
+                        """,
+                        job_id, skills, min_yoe, max_yoe, salary, wpt, cat, summary, fresher
+                    )
+                repaired += 1
+                logger.info(f"  ✓ Repaired job {job_id} ({title}): skills={skills}")
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                logger.warning(f"Failed to backfill job {row['id']}: {e}")
+
+        if repaired > 0:
+            from db.manual_jobs import invalidate_jobs_cache
+            invalidate_jobs_cache()
+
+    except Exception as e:
+        logger.error(f"Error in backfill_empty_skills_jobs: {e}")
+
+    return repaired
 

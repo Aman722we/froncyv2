@@ -22,7 +22,7 @@ def _strip_html(html: str) -> str:
     text = re.sub(r'&lt;', '<', text)
     text = re.sub(r'&gt;', '>', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    return text[:8000]  # Cap at 8000 chars for LLM safety
+    return text  # Return full text without capping so no requirements are missed
 
 
 async def fetch_greenhouse_jobs(board_token: str) -> list[dict]:
