@@ -4,6 +4,7 @@ Polls active career sources, detects new jobs, stores them,
 and triggers the existing notification pipeline.
 """
 import asyncio
+import re
 from datetime import datetime, timezone
 from loguru import logger
 from db.career_sources import (
@@ -16,6 +17,8 @@ from db.connection import get_pool
 def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
     """
     Gatekeeper function to filter out non-tech roles and non-India/non-Global jobs.
+    Uses strict word boundaries so abbreviations like 'ai', 'ui', 'qa' don't match
+    words like 'paid', 'campaign', 'acquisition', 'detail', etc.
     Saves LLM tokens and DB space.
     """
     title = (title or "").lower()
@@ -24,8 +27,10 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
     # 1. Location Filter (Must be India or Global Remote, drop explicitly foreign)
     if loc:
-        india_cities = ["india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", 
-"noida", "chennai", "kolkata", "remote - ind", "apac", "asia", "global", "anywhere"]
+        india_cities = [
+            "india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi", "gurgaon", 
+            "noida", "chennai", "kolkata", "remote - ind", "apac", "asia", "global", "anywhere"
+        ]
         is_india = any(c in loc for c in india_cities)
         
         # If it doesn't explicitly mention India/Global AND doesn't mention Remote, it's a local foreign job
@@ -34,7 +39,6 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
         # Even if it says "Remote", drop it if it specifically locks to a foreign region and NOT India
         if not is_india:
-            import re
             foreign_terms = [
                 "us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", 
                 "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", 
@@ -46,28 +50,32 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
                 if re.search(r'\b' + re.escape(term) + r'\b', loc):
                     return False  # Drop explicitly foreign jobs
 
-    # 2. Department / Title Hard Veto (Non-Tech)
+    # 2. Department / Title Hard Veto (Non-Tech, Marketing, HR, Partnerships, Events)
     junk_keywords = [
-        "sales", "marketing", "account executive", "hr ", "human resources", "recruiter", 
+        "sales", "marketing", "account executive", "hr", "human resources", "recruiter", "recruiting",
         "finance", "accounting", "legal", "counsel", "customer success", "advocacy", 
         "content", "copywriter", "business development", "payroll", "tax",
-        "workplace", "facilities", "executive assistant", "vp ", "chief ",
-        "solutions", "solution", "sales engineer", "support", "technical support", "manager", "director"
+        "workplace", "facilities", "executive assistant", "vp", "chief",
+        "solutions", "solution", "sales engineer", "support", "technical support",
+        "partner", "partnerships", "activation", "activations", "brand", "event", "events",
+        "buyer", "merchandising", "growth partner", "client partner", "pr", "public relations"
     ]
     for junk in junk_keywords:
-        if junk in title or junk in dept:
+        if re.search(r'\b' + re.escape(junk) + r'\b', title) or re.search(r'\b' + re.escape(junk) + r'\b', dept):
             return False
 
-    # 3. Tech Whitelist (Must have at least one)
+    # 3. Tech Whitelist (Must match at least one with word boundaries)
     tech_keywords = [
         "engineer", "developer", "sde", "programmer", "software", "coder", "architect",
         "data", "ml", "ai", "machine learning", "product", "designer", "ui", "ux",
         "security", "cloud", "sre", "devops", "platform", "backend", "frontend",
         "fullstack", "ios", "android", "mobile", "qa", "test", "systems", "research", "mle"
     ]
-    is_tech = any(tech in title for tech in tech_keywords) or any(tech in dept for tech in tech_keywords)
+    for tech in tech_keywords:
+        if re.search(r'\b' + re.escape(tech) + r'\b', title) or re.search(r'\b' + re.escape(tech) + r'\b', dept):
+            return True
     
-    return is_tech
+    return False
 
 
 async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
@@ -533,6 +541,8 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
                    OR array_length(skills, 1) IS NULL 
                    OR array_length(skills, 1) = 0
                    OR role_category IS NULL
+                   OR description LIKE '%<%'
+                   OR description LIKE '%&quot;%'
                 ORDER BY id DESC
                 LIMIT $1
                 """,
@@ -542,12 +552,14 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
         if not rows:
             return 0
 
+        from services.career_fetcher import _strip_html
         logger.info(f"🔄 Backfilling intelligence for {len(rows)} jobs needing enrichment...")
         for row in rows:
             try:
                 job_id = row["id"]
                 title = row["title"]
-                desc = row["description"] or ""
+                raw_desc = row["description"] or ""
+                desc = _strip_html(raw_desc)
                 loc = row["location"] or ""
                 job_url = row.get("url") or ""
 
@@ -555,7 +567,6 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
                 if len(desc) < 100 and job_url:
                     try:
                         import httpx
-                        from services.career_fetcher import _strip_html
                         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                             resp = await client.get(job_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
                             if resp.status_code == 200:
@@ -586,7 +597,7 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
                         SET skills = $2, min_yoe = $3, max_yoe = $4, salary = $5,
                             workplace_type = $6, role_category = $7, role_summary = $8,
                             is_fresher_friendly = $9,
-                            description = CASE WHEN description IS NULL OR description = '' THEN $10 ELSE description END
+                            description = $10
                         WHERE id = $1
                         """,
                         job_id, skills, min_yoe, max_yoe, salary, wpt, cat, summary, fresher, desc
