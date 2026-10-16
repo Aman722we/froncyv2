@@ -393,6 +393,21 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply monetization_v2 migrations: {e}")
 
+        # LinkedIn Posts tracking to prevent cross-post duplicate jobs
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS linkedin_featured_jobs (
+                    id           SERIAL PRIMARY KEY,
+                    job_id       INT REFERENCES manual_jobs(id) ON DELETE CASCADE,
+                    stream       TEXT NOT NULL,
+                    slot         TEXT,
+                    featured_at  TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_linkedin_featured_jobs_job ON linkedin_featured_jobs (job_id, featured_at DESC);
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply linkedin_featured_jobs migration: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

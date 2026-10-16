@@ -378,12 +378,17 @@ async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> l
     """
     pool = get_pool()
     async with pool.acquire() as conn:
+        # Step 1: Fetch fresh active jobs that have NOT been featured on LinkedIn in the last 14 days
         query = """
             SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
                    workplace_type, source_provider, source_type, posted_at, url, role_category, is_fresher_friendly
             FROM manual_jobs
             WHERE is_active = TRUE
               AND (min_yoe <= 2 OR is_fresher_friendly = TRUE)
+              AND id NOT IN (
+                  SELECT job_id FROM linkedin_featured_jobs 
+                  WHERE featured_at >= NOW() - INTERVAL '14 days'
+              )
               AND (
                   location ILIKE '%india%' OR location ILIKE '%bangalore%' OR location ILIKE '%bengaluru%' OR 
                   location ILIKE '%remote%' OR location ILIKE '%hyderabad%' OR location ILIKE '%pune%' OR 
@@ -397,6 +402,30 @@ async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> l
         """
         rows = await conn.fetch(query)
         candidates = [dict(r) for r in rows]
+
+        # Step 2: Safety buffer - if unfeatured candidates are low (< 15), supplement with broader pool
+        if len(candidates) < 15:
+            fallback_rows = await conn.fetch("""
+                SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
+                       workplace_type, source_provider, source_type, posted_at, url, role_category, is_fresher_friendly
+                FROM manual_jobs
+                WHERE is_active = TRUE
+                  AND (min_yoe <= 2 OR is_fresher_friendly = TRUE)
+                  AND (
+                      location ILIKE '%india%' OR location ILIKE '%bangalore%' OR location ILIKE '%bengaluru%' OR 
+                      location ILIKE '%remote%' OR location ILIKE '%hyderabad%' OR location ILIKE '%pune%' OR 
+                      location ILIKE '%mumbai%' OR location ILIKE '%delhi%' OR location ILIKE '%gurgaon%' OR 
+                      location ILIKE '%noida%' OR location ILIKE '%chennai%' OR location IS NULL OR location = ''
+                  )
+                ORDER BY 
+                  CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
+                  posted_at DESC
+                LIMIT 50;
+            """)
+            seen_cand_ids = {c["id"] for c in candidates}
+            for r in fallback_rows:
+                if r["id"] not in seen_cand_ids:
+                    candidates.append(dict(r))
 
     now_utc = datetime.now(timezone.utc)
     scored = []
@@ -586,6 +615,18 @@ async def generate_linkedin_post(slot: str = "morning", stream: str | None = Non
             "post_text": "",
             "first_comment": ""
         }
+
+    # Record featured jobs into tracking table so they are NEVER repeated in future drops
+    try:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            for j in jobs:
+                await conn.execute("""
+                    INSERT INTO linkedin_featured_jobs (job_id, stream, slot, featured_at)
+                    VALUES ($1, $2, $3, NOW())
+                """, j["id"], chosen_stream, slot)
+    except Exception as e:
+        logger.warning(f"Failed to record featured jobs to linkedin_featured_jobs: {e}")
 
     # Format the 5 job cards (compact separator)
     cards = [_format_job_card(j) for j in jobs]
