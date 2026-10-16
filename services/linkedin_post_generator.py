@@ -206,7 +206,7 @@ def _format_job_card(job: dict) -> str:
 
     if min_yoe == 0 or is_fresher:
         if max_yoe and max_yoe > 0:
-            exp_display = f"Freshers Welcome (0–{max_yoe} YOE)"
+            exp_display = f"Freshers Welcome (0-{max_yoe} YOE)"
         else:
             exp_display = "Freshers Welcome (0 YOE)"
     elif min_yoe == 1:
@@ -224,7 +224,7 @@ def _format_job_card(job: dict) -> str:
     skills_display = ", ".join(clean_skills)
 
     card = (
-        f"🚀 {title} — {company}\n"
+        f"🚀 {title} - {company}\n"
         f"📍 {loc_display}\n"
         f"💰 {salary_display}\n"
         f"🎯 {exp_display}\n"
@@ -275,17 +275,17 @@ Very few spend the same energy ensuring their resume actually matches the JD bef
 
 Before submitting your application, ask yourself:
 ✅ Does my resume contain the exact keywords mentioned in the JD?
-✅ Am I applying to roles that match at least 70–80% of my stack?
+✅ Am I applying to roles that match at least 70-80% of my stack?
 ✅ Is my resume ATS-friendly and easy for recruiters to scan?
-✅ Am I applying early—before 200 other people crowd the portal?
+✅ Am I applying early, before 200 other people crowd the portal?
 
 That's exactly why we built FroncyBot.
 These 5 jobs are just a tiny preview of today's openings.
 Froncy monitors 525+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
-When a company quietly publishes a fresh opening on their internal careers board, you catch it in the very first wave—so you can apply within the first hour, long before the role gets reposted and flooded on LinkedIn.
+When a company quietly publishes a fresh opening on their internal careers board, you catch it in the very first wave, so you can apply within the first hour, long before the role gets reposted and flooded on LinkedIn.
 
 🛡️ Why Telegram?
-Direct, first-wave alerts right where you chat—zero email clutter, no clunky apps to download, and 100% verified direct ATS links (no third-party middlemen).
+Direct, first-wave alerts right where you chat: zero email clutter, no clunky apps to download, and 100% verified direct ATS links (no third-party middlemen).
 
 ⚡ What you get in seconds:
 1️⃣ Upload your resume
@@ -310,6 +310,11 @@ Just smarter applications.
 
 {hook['hashtags']}"""
 
+    # ── Remove all em-dashes (—) and en-dashes (–) to eliminate AI-generated perception ──
+    post_text = post_text.replace("—", " - ").replace("–", "-")
+    import re
+    post_text = re.sub(r' +', ' ', post_text)
+
     # Companion First Comment (Guarantees zero-penalty, 1-click conversion)
     first_comment = (
         "🚀 Here is the direct 1-tap link to launch FroncyBot on Telegram:\n"
@@ -317,6 +322,8 @@ Just smarter applications.
         "⚡ First-wave direct alerts for fresh junior/entry-level tech jobs from 525+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
         "🎯 Upload your resume to see your live ATS match score in 10 seconds!"
     )
+    first_comment = first_comment.replace("—", " - ").replace("–", "-")
+    first_comment = re.sub(r' +', ' ', first_comment)
 
     return {
         "slot": slot,
