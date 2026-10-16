@@ -3,6 +3,7 @@ Admin handlers for FroncyBot.
 Includes the /addjob command to manually curate jobs,
 and /send + /broadcast to message individual or all users.
 """
+import html
 import telegram
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (

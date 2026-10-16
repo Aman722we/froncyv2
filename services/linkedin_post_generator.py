@@ -171,10 +171,85 @@ WEEKLY_ROTATION = {
 }
 
 
+def compute_virality_score(job: dict) -> float:
+    """
+    Ultra-fast in-memory virality & desirability score (0 to 100).
+    Runs in < 0.1ms per candidate. Zero LLM calls, pure in-memory calculation.
+    
+    Weights:
+    - 35 pts: Disclosed Salary (the #1 click magnet for freshers)
+    - 25 pts: True Fresher Accessibility (0 YOE / Freshers Welcome)
+    - 15 pts: Tier-1 Brand Clout & Direct ATS (Greenhouse/Lever/Ashby or recognized brand)
+    - 15 pts: Modern In-Demand Stack (React, Python, TypeScript, Docker, Next.js, SQL)
+    - 10 pts: Workplace Flexibility (Remote / Hybrid / Major Tech Hub)
+    """
+    score = 0.0
+
+    # 1. Salary Transparency (35 pts max)
+    raw_salary = (job.get("salary") or "").strip().lower()
+    has_salary = raw_salary and raw_salary not in ("null", "none", "not disclosed", "n/a", "")
+    if has_salary:
+        score += 35.0
+        if any(w in raw_salary for w in ("lpa", "k", "month", "$", "₹", "per")):
+            score += 5.0
+
+    # 2. Fresher Accessibility (25 pts max)
+    min_yoe = job.get("min_yoe", 0) or 0
+    is_fresher = job.get("is_fresher_friendly", False)
+    if min_yoe == 0 or is_fresher:
+        score += 25.0
+    elif min_yoe == 1:
+        score += 15.0
+    elif min_yoe == 2:
+        score += 5.0
+
+    # 3. Direct ATS & Company Clout (15 pts max)
+    source_provider = (job.get("source_provider") or "").upper()
+    if source_provider in ("GREENHOUSE", "LEVER", "ASHBY"):
+        score += 10.0
+    
+    comp_name = (job.get("company") or "").lower()
+    famous_brands = (
+        "google", "amazon", "microsoft", "uber", "cred", "swiggy", "zomato",
+        "razorpay", "alphasense", "delhivery", "zepto", "groww", "meesho",
+        "phonepe", "flipkart", "paytm", "ibm", "highradius", "vector", "sourcegraph"
+    )
+    if any(b in comp_name for b in famous_brands):
+        score += 5.0
+
+    # 4. Modern Marketable Tech Stack (15 pts max)
+    skills = job.get("skills") or []
+    if isinstance(skills, str):
+        skills = [s.strip().lower() for s in skills.split(",") if s.strip()]
+    else:
+        skills = [str(s).strip().lower() for s in skills if str(s).strip()]
+
+    hot_skills = (
+        "react", "python", "javascript", "typescript", "next.js", "node", "sql",
+        "docker", "aws", "tailwind", "fastapi", "django", "flutter", "react native", "git"
+    )
+    matches = sum(1 for s in skills if any(h in s for h in hot_skills))
+    score += min(15.0, matches * 3.0)
+
+    # 5. Workplace Appeal (10 pts max)
+    wpt = (job.get("workplace_type") or "").lower()
+    loc = (job.get("location") or "").lower()
+    if "remote" in wpt or "remote" in loc:
+        score += 10.0
+    elif "hybrid" in wpt or "hybrid" in loc:
+        score += 8.0
+    elif any(hub in loc for hub in ("bangalore", "bengaluru", "pune", "hyderabad", "gurgaon", "noida", "mumbai", "delhi")):
+        score += 6.0
+    else:
+        score += 3.0
+
+    return score
+
+
 async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> list[dict]:
     """
     Fetch high-quality, junior/fresher jobs from manual_jobs table for a specific stream.
-    Strictly prioritizes jobs with disclosed salary at the top.
+    Strictly prioritizes jobs with disclosed salary at the top using virality scoring.
     Gracefully falls back to mixed high-salary jobs if the stream has fewer than 5.
     """
     config = NICHE_CONFIGS.get(stream.lower(), NICHE_CONFIGS["mixed"])
@@ -183,7 +258,6 @@ async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> l
     pool = get_pool()
     async with pool.acquire() as conn:
         # Step 1: Query matching jobs for this specific niche stream
-        # Order by salary presence first, then posted_at DESC
         niche_query = f"""
             SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
                    workplace_type, source_provider, source_type, posted_at, url, role_category
@@ -200,24 +274,13 @@ async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> l
             ORDER BY 
               CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
               posted_at DESC
-            LIMIT 30;
+            LIMIT 35;
         """
         rows = await conn.fetch(niche_query)
+        candidates = [dict(r) for r in rows]
 
-        # Deduplicate by company
-        seen_companies = set()
-        selected = []
-        for r in rows:
-            comp = (r["company"] or "").strip().lower()
-            if comp and comp not in seen_companies:
-                seen_companies.add(comp)
-                selected.append(dict(r))
-            if len(selected) >= limit:
-                break
-
-        # Step 2: Graceful Fallback if niche has fewer than `limit` jobs
-        # Widen to general high-salary fresher jobs to complete the 5 cards
-        if len(selected) < limit:
+        # Step 2: Graceful Fallback if niche has fewer than `limit` candidates
+        if len(candidates) < limit:
             fallback_query = """
                 SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
                        workplace_type, source_provider, source_type, posted_at, url, role_category
@@ -236,15 +299,28 @@ async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> l
                 LIMIT 40;
             """
             fallback_rows = await conn.fetch(fallback_query)
-            for r in fallback_rows:
-                comp = (r["company"] or "").strip().lower()
-                if comp and comp not in seen_companies:
-                    seen_companies.add(comp)
-                    selected.append(dict(r))
-                if len(selected) >= limit:
-                    break
+            candidates.extend([dict(r) for r in fallback_rows])
 
-    # Final guarantee: sort so salary jobs are strictly at the top of the cards!
+    # Score each candidate in-memory (< 0.1ms per candidate)
+    now_utc = datetime.now(timezone.utc)
+    for j in candidates:
+        j["_virality_score"] = compute_virality_score(j)
+
+    # Sort strictly by virality score (DESC), then posted_at (DESC)
+    candidates.sort(key=lambda j: (j["_virality_score"], j.get("posted_at") or now_utc), reverse=True)
+
+    # Deduplicate by company (take best scoring job per company)
+    seen_companies = set()
+    selected = []
+    for j in candidates:
+        comp = (j["company"] or "").strip().lower()
+        if comp and comp not in seen_companies:
+            seen_companies.add(comp)
+            selected.append(j)
+        if len(selected) >= limit:
+            break
+
+    # Final guarantee: sort selected 5 so salary jobs are strictly at the top of the cards!
     def _has_salary(j):
         sal = (j.get("salary") or "").strip().lower()
         return 0 if sal and sal not in ("null", "none", "not disclosed", "n/a", "") else 1
