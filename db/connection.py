@@ -203,13 +203,14 @@ async def init_db() -> asyncpg.Pool:
                     id           SERIAL PRIMARY KEY,
                     telegram_id  BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
                     feature_type TEXT NOT NULL,
-                    used_at      TIMESTAMPTZ DEFAULT NOW()
+                    created_at   TIMESTAMPTZ DEFAULT NOW()
                 );
+                ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+                ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ DEFAULT NOW();
+                UPDATE ai_usage_logs SET used_at = created_at WHERE used_at IS NULL AND created_at IS NOT NULL;
+                UPDATE ai_usage_logs SET created_at = used_at WHERE created_at IS NULL AND used_at IS NOT NULL;
+                CREATE INDEX IF NOT EXISTS idx_ai_usage_logs_user ON ai_usage_logs(telegram_id);
             """)
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_ai_usage_logs_user ON ai_usage_logs(telegram_id, used_at DESC);"
-            )
-            await conn.execute("ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();")
         except Exception as e:
             logger.warning(f"Failed to apply ai_usage_logs migrations: {e}")
 
