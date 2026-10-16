@@ -462,7 +462,28 @@ async def _run_career_sync_job():
                 pass
 
 
+async def _send_morning_linkedin_post_job():
+    """Background scheduled job: send 8:00 AM IST LinkedIn post draft to Admin."""
+    try:
+        from services.linkedin_post_generator import send_scheduled_linkedin_post
+        if _bot_app:
+            await send_scheduled_linkedin_post(_bot_app.bot, slot="morning")
+    except Exception as e:
+        logger.error(f"❌ Morning LinkedIn post generator failed: {e}")
+
+
+async def _send_evening_linkedin_post_job():
+    """Background scheduled job: send 5:00 PM IST LinkedIn post draft to Admin."""
+    try:
+        from services.linkedin_post_generator import send_scheduled_linkedin_post
+        if _bot_app:
+            await send_scheduled_linkedin_post(_bot_app.bot, slot="evening")
+    except Exception as e:
+        logger.error(f"❌ Evening LinkedIn post generator failed: {e}")
+
+
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 def start_scheduler():
     """Start all scheduled jobs."""
@@ -519,6 +540,26 @@ def start_scheduler():
         name="Sync career pages every 60 min",
         max_instances=1,
         coalesce=True,
+        replace_existing=True,
+    )
+
+    ist = ZoneInfo("Asia/Kolkata")
+
+    # LinkedIn Viral Post Delivery (Morning) — 8:00 AM IST daily (for 9:00 AM post)
+    scheduler.add_job(
+        _send_morning_linkedin_post_job,
+        CronTrigger(hour=8, minute=0, timezone=ist),
+        id="linkedin_post_morning",
+        name="Generate morning LinkedIn post at 8:00 AM IST",
+        replace_existing=True,
+    )
+
+    # LinkedIn Viral Post Delivery (Evening) — 5:00 PM IST daily (for 6:00 PM post)
+    scheduler.add_job(
+        _send_evening_linkedin_post_job,
+        CronTrigger(hour=17, minute=0, timezone=ist),
+        id="linkedin_post_evening",
+        name="Generate evening LinkedIn post at 5:00 PM IST",
         replace_existing=True,
     )
 

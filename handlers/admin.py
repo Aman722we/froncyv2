@@ -1525,3 +1525,58 @@ async def jobdashboard_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
     except Exception:
         pass
+
+
+async def genpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/genpost [morning|evening] — Manually generate a viral LinkedIn post right now."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    slot = "morning"
+    if context.args and context.args[0].lower() in ("evening", "night", "pm", "6pm"):
+        slot = "evening"
+
+    status_msg = await update.message.reply_text("⚡ Generating your viral LinkedIn post from active career-page jobs...")
+
+    try:
+        from services.linkedin_post_generator import generate_linkedin_post
+        post_data = await generate_linkedin_post(slot=slot)
+
+        if "error" in post_data:
+            await status_msg.edit_text(f"❌ <b>Error:</b> {html.escape(post_data['error'])}", parse_mode="HTML")
+            return
+
+        slot_title = "Morning Post (9:00 AM style)" if slot == "morning" else "Evening Post (6:00 PM style)"
+        companies_str = ", ".join(filter(None, post_data.get("companies", [])))
+
+        await status_msg.edit_text(
+            f"📢 <b>LinkedIn Viral Post Ready! ({slot_title})</b>\n\n"
+            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n"
+            f"🎯 <b>Hook Style:</b> <code>{post_data['hook_id']}</code>\n\n"
+            f"👇 <b>1. Copy and paste the post text below on LinkedIn:</b>",
+            parse_mode="HTML"
+        )
+
+        # Send post body
+        await update.message.reply_text(
+            post_data["post_text"],
+            disable_web_page_preview=True
+        )
+
+        # Send first comment
+        await update.message.reply_text(
+            "💬 <b>2. Copy and paste this as the FIRST COMMENT on your post:</b>\n"
+            "<i>(This bypasses LinkedIn's link penalty and gives readers an instant 1-tap link!)</i>",
+            parse_mode="HTML"
+        )
+
+        await update.message.reply_text(
+            post_data["first_comment"],
+            disable_web_page_preview=True
+        )
+
+    except Exception as e:
+        logger.error(f"Error in genpost_command: {e}")
+        await status_msg.edit_text(f"❌ <b>Failed to generate post:</b> {html.escape(str(e))}", parse_mode="HTML")
+
