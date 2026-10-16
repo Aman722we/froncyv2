@@ -946,9 +946,9 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     min_yoe = job.get("min_yoe") or 0
     max_yoe = job.get("max_yoe")
     if max_yoe and max_yoe > min_yoe:
-        yoe_label = f"{min_yoe}–{max_yoe} YOE"
+        yoe_label = f"{min_yoe}-{max_yoe} YOE"
     elif min_yoe == 0:
-        yoe_label = "0–2 YOE"
+        yoe_label = "0-2 YOE"
     else:
         yoe_label = f"{min_yoe}+ YOE"
 
@@ -1017,10 +1017,17 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🕐 Posted 2h ago"
     )
 
+    from utils.helpers import get_base_url
+    base = get_base_url()
+    if base and target_id:
+        apply_btn_url = f"{base}/r/{job_id}?uid={target_id}&src=instant_alert"
+    else:
+        apply_btn_url = job_url or "https://t.me/FroncyJobsBot"
+
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔗 Apply Now", url=job_url),
-            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job_id}"),
+            InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url),
+            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_alert_{job_id}"),
         ],
     ])
     
@@ -1032,6 +1039,8 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             reply_markup=kb,
             disable_web_page_preview=True
         )
+        from db.tracker import log_instant_alert_sent
+        await log_instant_alert_sent(target_id, job_id)
         await update.message.reply_text("Pinged successfully!")
     except Exception as e:
         await update.message.reply_text(f"Error pinging: {e}")

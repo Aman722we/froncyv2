@@ -445,15 +445,8 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     )
 
                     # Build tracking redirect URL for Apply Now button
-                    from config import settings
-                    from urllib.parse import urlparse
-                    webhook_raw = settings.WEBHOOK_URL or ""
-                    if webhook_raw:
-                        parsed = urlparse(webhook_raw if webhook_raw.startswith("http") else f"https://{webhook_raw}")
-                        base = f"{parsed.scheme}://{parsed.netloc}"
-                    else:
-                        base = ""
-
+                    from utils.helpers import get_base_url
+                    base = get_base_url()
                     u_id = user.get("telegram_id")
                     if base and u_id:
                         apply_btn_url = f"{base}/r/{job_id}?uid={u_id}&src=instant_alert"
