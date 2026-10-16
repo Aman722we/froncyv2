@@ -51,7 +51,7 @@ from handlers.submissions import (
 from handlers.feedback import get_feedback_handler
 from handlers.analytics import (
     analytics_command, analytics_page_callback, users_command, user_detail_command, users_page_callback,
-    deleted_users_command, deleted_users_page_callback
+    deleted_users_command, deleted_users_page_callback, alertstats_command
 )
 from handlers.refer import refer_command, refer_callback
 from handlers.requests import (
@@ -194,6 +194,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("refundrequest", refundrequest_command))
     app.add_handler(CommandHandler("pingjob", admin_pingjob))
     app.add_handler(CommandHandler("analytics", analytics_command))
+    app.add_handler(CommandHandler("alertstats", alertstats_command))
     app.add_handler(CommandHandler("users",     users_command))
     app.add_handler(CommandHandler("user",      user_detail_command))
     app.add_handler(CommandHandler("deletedusers", deleted_users_command))
@@ -326,7 +327,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(checkout_handler, pattern="^upgrade_(pro|proplus|premium)$"))
 
     # HR Contact & Resume Review Requests (Monetization V2)
-    app.add_handler(CallbackQueryHandler(request_hr_callback, pattern=r"^req_hr_\d+$"))
+    app.add_handler(CallbackQueryHandler(request_hr_callback, pattern=r"^req_hr_(alert_)?\d+$"))
     app.add_handler(CallbackQueryHandler(buy_hr_callback, pattern=r"^buy_hr_\d+$"))
     app.add_handler(CallbackQueryHandler(request_resume_review_callback, pattern="^req_resume_review$"))
     app.add_handler(CallbackQueryHandler(buy_resume_review_callback, pattern="^buy_resume_review$"))

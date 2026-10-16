@@ -408,6 +408,43 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply linkedin_featured_jobs migration: {e}")
 
+        # Engagement & Click Tracking migrations (Instant Alerts, Apply Intent, HR Details)
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS link_clicks (
+                    id          SERIAL PRIMARY KEY,
+                    telegram_id BIGINT NOT NULL,
+                    job_id      INT,
+                    source      TEXT DEFAULT 'other',
+                    clicked_at  TIMESTAMPTZ DEFAULT NOW()
+                );
+                ALTER TABLE link_clicks ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'other';
+                CREATE INDEX IF NOT EXISTS idx_link_clicks_source_time ON link_clicks (source, clicked_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_link_clicks_time ON link_clicks (clicked_at DESC);
+
+                CREATE TABLE IF NOT EXISTS instant_alerts_sent (
+                    id          SERIAL PRIMARY KEY,
+                    telegram_id BIGINT NOT NULL,
+                    job_id      INT NOT NULL,
+                    sent_at     TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_instant_alerts_sent_time ON instant_alerts_sent (sent_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_instant_alerts_sent_user ON instant_alerts_sent (telegram_id, sent_at DESC);
+
+                CREATE TABLE IF NOT EXISTS hr_request_clicks (
+                    id          SERIAL PRIMARY KEY,
+                    telegram_id BIGINT NOT NULL,
+                    job_id      INT,
+                    source      TEXT DEFAULT 'instant_alert',
+                    clicked_at  TIMESTAMPTZ DEFAULT NOW()
+                );
+                ALTER TABLE hr_request_clicks ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'instant_alert';
+                CREATE INDEX IF NOT EXISTS idx_hr_request_clicks_source_time ON hr_request_clicks (source, clicked_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_hr_request_clicks_time ON hr_request_clicks (clicked_at DESC);
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply engagement tracking migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

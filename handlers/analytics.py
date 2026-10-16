@@ -1,8 +1,9 @@
 """
 Admin analytics handlers.
-/analytics  — multi-page dashboard stats (3 pages, Next/Prev buttons)
-/users      — paginated list of all users (name + ID)
-/user <id>  — full profile of a specific user
+/analytics  - multi-page dashboard stats (5 pages, Next/Prev buttons)
+/alertstats - direct 1-tap view of Page 5 (Instant Alerts & Apply Intent)
+/users      - paginated list of all users (name + ID)
+/user <id>  - full profile of a specific user
 All commands are admin-only.
 """
 import html
@@ -14,7 +15,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from loguru import logger
 from config import settings
 from db.connection import get_pool
-from db.tracker import get_ai_usage_stats, get_application_funnel_stats, get_retention_stats, get_click_stats
+from db.tracker import get_ai_usage_stats, get_application_funnel_stats, get_retention_stats, get_click_stats, get_engagement_analytics
 
 
 # ─────────────────────────────────────────────
@@ -52,7 +53,7 @@ async def _build_page_1(pool) -> str:
         total_jobs = await conn.fetchval("SELECT COUNT(*) FROM manual_jobs WHERE is_active = TRUE")
 
     return (
-        "📊 <b>FroncyBot Analytics</b>  <i>— Page 1 of 3</i>\n"
+        "📊 <b>FroncyBot Analytics</b>  <i>- Page 1 of 5</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "👥 <b>Users</b>\n"
         f"  • Total registered : <b>{total_users}</b>\n"
@@ -79,7 +80,7 @@ async def _build_page_2() -> str:
     aps = stats["apply_smart"]
 
     return (
-        "🤖 <b>AI Engine Analytics</b>  <i>— Page 2 of 3</i>\n"
+        "🤖 <b>AI Engine Analytics</b>  <i>- Page 2 of 5</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "🚀 <b>Apply Smart Kits Generated</b>\n"
         f"  • Today            : <b>{aps['today']}</b>\n"
@@ -104,10 +105,10 @@ async def _build_page_3() -> str:
     stats = await get_application_funnel_stats()
 
     tracker_active = stats["total"] > 0
-    usage_line = "✅ <b>Yes — users are actively tracking applications!</b>" if tracker_active else "❌ Not yet — no applications tracked."
+    usage_line = "✅ <b>Yes - users are actively tracking applications!</b>" if tracker_active else "❌ Not yet - no applications tracked."
 
     return (
-        "📋 <b>Application Tracker</b>  <i>— Page 3 of 4</i>\n"
+        "📋 <b>Application Tracker</b>  <i>- Page 3 of 5</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🔍 <b>Tracker Being Used?</b>  {usage_line}\n\n"
         "📈 <b>Application Funnel</b>\n"
@@ -136,7 +137,7 @@ async def _build_page_4() -> str:
     copy_rate = f"{round((cl_copied / cl_generated) * 100)}%" if cl_generated else "N/A"
 
     return (
-        "🔄 <b>Retention &amp; Intent</b>  <i>— Page 4 of 4</i>\n"
+        "🔄 <b>Retention &amp; Intent</b>  <i>- Page 4 of 5</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "📅 <b>Activity &amp; Retention</b>\n"
         f"  • DAU (today)        : <b>{retention['dau']}</b>\n"
@@ -156,18 +157,59 @@ async def _build_page_4() -> str:
     )
 
 
+async def _build_page_5() -> str:
+    """Page 5: Instant Alerts & Apply Intent Analytics."""
+    stats = await get_engagement_analytics()
+
+    alerts = stats["instant_alerts_sent"]
+    alert_apply = stats["instant_alert_apply"]
+    alert_hr = stats["instant_alert_hr"]
+    daily_apply = stats["daily_feed_apply"]
+    browse_apply = stats["browse_jobs_apply"]
+
+    return (
+        "⚡ <b>Alerts &amp; Apply Intent</b>  <i>- Page 5 of 5</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🚨 <b>Instant Job Alerts Sent</b>\n"
+        f"  • Last 24 Hours      : <b>{alerts['24h']}</b>\n"
+        f"  • Last 7 Days        : <b>{alerts['7d']}</b>\n"
+        f"  • Last 30 Days       : <b>{alerts['30d']}</b>\n"
+        f"  • All Time Total     : <b>{alerts['total']}</b>\n\n"
+        "⚡ <b>Instant Alert: 'Apply Now' Clicks</b>\n"
+        f"  • Last 24 Hours      : <b>{alert_apply['24h']}</b>\n"
+        f"  • Last 7 Days        : <b>{alert_apply['7d']}</b>\n"
+        f"  • Last 30 Days       : <b>{alert_apply['30d']}</b>\n"
+        f"  • All Time Total     : <b>{alert_apply['total']}</b>\n\n"
+        "👤 <b>Instant Alert: 'Request HR Details' Clicks</b>\n"
+        f"  • Last 24 Hours      : <b>{alert_hr['24h']}</b>\n"
+        f"  • Last 7 Days        : <b>{alert_hr['7d']}</b>\n"
+        f"  • Last 30 Days       : <b>{alert_hr['30d']}</b>\n"
+        f"  • All Time Total     : <b>{alert_hr['total']}</b>\n\n"
+        "📰 <b>Daily Feed: 'Apply Now' Clicks</b>\n"
+        f"  • Last 24 Hours      : <b>{daily_apply['24h']}</b>\n"
+        f"  • Last 7 Days        : <b>{daily_apply['7d']}</b>\n"
+        f"  • Last 30 Days       : <b>{daily_apply['30d']}</b>\n"
+        f"  • All Time Total     : <b>{daily_apply['total']}</b>\n\n"
+        "🔍 <b>Browse Jobs: 'Apply Now' Clicks</b>\n"
+        f"  • Last 24 Hours      : <b>{browse_apply['24h']}</b>\n"
+        f"  • Last 7 Days        : <b>{browse_apply['7d']}</b>\n"
+        f"  • Last 30 Days       : <b>{browse_apply['30d']}</b>\n"
+        f"  • All Time Total     : <b>{browse_apply['total']}</b>\n"
+    )
+
+
 def _analytics_keyboard(page: int) -> InlineKeyboardMarkup:
-    """Build Next/Prev navigation for analytics pages (1 through 4)."""
+    """Build Next/Prev navigation for analytics pages (1 through 5)."""
     row = []
     if page > 1:
         row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"analytics_page_{page - 1}"))
-    if page < 4:
+    if page < 5:
         row.append(InlineKeyboardButton("Next ▶️", callback_data=f"analytics_page_{page + 1}"))
     return InlineKeyboardMarkup([row]) if row else None
 
 
 # ─────────────────────────────────────────────
-# /analytics
+# /analytics & /alertstats
 # ─────────────────────────────────────────────
 
 async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,6 +220,16 @@ async def analytics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pool = get_pool()
     msg = await _build_page_1(pool)
     kb  = _analytics_keyboard(1)
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
+
+
+async def alertstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Direct shortcut command to view Alerts & Apply Intent analytics."""
+    if not _is_admin(update):
+        return
+
+    msg = await _build_page_5()
+    kb = _analytics_keyboard(5)
     await update.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
 
 
@@ -200,6 +252,8 @@ async def analytics_page_callback(update: Update, context: ContextTypes.DEFAULT_
         msg = await _build_page_3()
     elif page == 4:
         msg = await _build_page_4()
+    elif page == 5:
+        msg = await _build_page_5()
     else:
         return
 

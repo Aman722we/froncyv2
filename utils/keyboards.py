@@ -338,8 +338,16 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
         base = f"{parsed.scheme}://{parsed.netloc}"
     else:
         base = ""
+
+    if from_daily:
+        src = "daily_feed"
+    elif from_saved:
+        src = "saved_jobs"
+    else:
+        src = "browse_jobs"
+
     if base and user_id:
-        apply_url = f"{base}/r/{job['id']}?uid={user_id}"
+        apply_url = f"{base}/r/{job['id']}?uid={user_id}&src={src}"
     else:
         apply_url = raw_url
 

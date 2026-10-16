@@ -236,17 +236,43 @@ async def log_daily_active(telegram_id: int) -> None:
         logger.warning(f"Could not log daily active (non-critical): {e}")
 
 
-async def log_link_click(telegram_id: int, job_id: int | None) -> None:
-    """Log an Apply/Open Link click for a job."""
+async def log_link_click(telegram_id: int, job_id: int | None, source: str = "other") -> None:
+    """Log an Apply/Open Link click for a job with source attribution."""
     pool = get_pool()
     try:
         async with pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO link_clicks (telegram_id, job_id) VALUES ($1, $2)",
-                telegram_id, job_id
+                "INSERT INTO link_clicks (telegram_id, job_id, source) VALUES ($1, $2, $3)",
+                telegram_id, job_id, source
             )
     except Exception as e:
         logger.warning(f"Could not log link click (non-critical): {e}")
+
+
+async def log_instant_alert_sent(telegram_id: int, job_id: int) -> None:
+    """Log an instant alert sent to a user."""
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO instant_alerts_sent (telegram_id, job_id) VALUES ($1, $2)",
+                telegram_id, job_id
+            )
+    except Exception as e:
+        logger.warning(f"Could not log instant alert sent (non-critical): {e}")
+
+
+async def log_hr_request_click(telegram_id: int, job_id: int | None, source: str = "other") -> None:
+    """Log a 'Request HR Details' button click with source attribution."""
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO hr_request_clicks (telegram_id, job_id, source) VALUES ($1, $2, $3)",
+                telegram_id, job_id, source
+            )
+    except Exception as e:
+        logger.warning(f"Could not log HR request click (non-critical): {e}")
 
 
 async def get_retention_stats() -> dict:
@@ -335,6 +361,108 @@ async def get_click_stats() -> dict:
         "month": month or 0,
         "total": total or 0,
     }
+
+
+async def get_engagement_analytics() -> dict:
+    """
+    Get engagement metrics across rolling 24h, 7d, 30d, and total windows for:
+    1. Instant Alerts Sent
+    2. Instant Alert "Apply" clicks
+    3. Instant Alert "Request HR Details" clicks
+    4. Daily Feed "Apply Now" clicks
+    5. Browse Jobs "Apply Now" clicks
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # 1. Instant Alerts Sent
+        alerts_row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE sent_at >= NOW() - INTERVAL '24 hours') AS sent_24h,
+                COUNT(*) FILTER (WHERE sent_at >= NOW() - INTERVAL '7 days')   AS sent_7d,
+                COUNT(*) FILTER (WHERE sent_at >= NOW() - INTERVAL '30 days')  AS sent_30d,
+                COUNT(*)                                                       AS sent_total
+            FROM instant_alerts_sent
+            """
+        )
+
+        # 2. Link Clicks grouped by source
+        clicks_rows = await conn.fetch(
+            """
+            SELECT
+                COALESCE(source, 'other') AS source,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '24 hours') AS c_24h,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '7 days')   AS c_7d,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '30 days')  AS c_30d,
+                COUNT(*)                                                          AS c_total
+            FROM link_clicks
+            GROUP BY source
+            """
+        )
+
+        # 3. HR Request Clicks grouped by source
+        hr_rows = await conn.fetch(
+            """
+            SELECT
+                COALESCE(source, 'other') AS source,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '24 hours') AS c_24h,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '7 days')   AS c_7d,
+                COUNT(*) FILTER (WHERE clicked_at >= NOW() - INTERVAL '30 days')  AS c_30d,
+                COUNT(*)                                                          AS c_total
+            FROM hr_request_clicks
+            GROUP BY source
+            """
+        )
+
+    # Process link clicks
+    clicks_map = {}
+    total_clicks = {"24h": 0, "7d": 0, "30d": 0, "total": 0}
+    for r in clicks_rows:
+        src = r["source"]
+        c_24h = r["c_24h"] or 0
+        c_7d = r["c_7d"] or 0
+        c_30d = r["c_30d"] or 0
+        c_tot = r["c_total"] or 0
+        clicks_map[src] = {"24h": c_24h, "7d": c_7d, "30d": c_30d, "total": c_tot}
+        total_clicks["24h"] += c_24h
+        total_clicks["7d"] += c_7d
+        total_clicks["30d"] += c_30d
+        total_clicks["total"] += c_tot
+
+    # Process HR request clicks
+    hr_map = {}
+    total_hr = {"24h": 0, "7d": 0, "30d": 0, "total": 0}
+    for r in hr_rows:
+        src = r["source"]
+        c_24h = r["c_24h"] or 0
+        c_7d = r["c_7d"] or 0
+        c_30d = r["c_30d"] or 0
+        c_tot = r["c_total"] or 0
+        hr_map[src] = {"24h": c_24h, "7d": c_7d, "30d": c_30d, "total": c_tot}
+        total_hr["24h"] += c_24h
+        total_hr["7d"] += c_7d
+        total_hr["30d"] += c_30d
+        total_hr["total"] += c_tot
+
+    def _get_metric(m: dict, key: str) -> dict:
+        return m.get(key, {"24h": 0, "7d": 0, "30d": 0, "total": 0})
+
+    return {
+        "instant_alerts_sent": {
+            "24h": (alerts_row["sent_24h"] or 0) if alerts_row else 0,
+            "7d": (alerts_row["sent_7d"] or 0) if alerts_row else 0,
+            "30d": (alerts_row["sent_30d"] or 0) if alerts_row else 0,
+            "total": (alerts_row["sent_total"] or 0) if alerts_row else 0,
+        },
+        "instant_alert_apply": _get_metric(clicks_map, "instant_alert"),
+        "instant_alert_hr": _get_metric(hr_map, "instant_alert"),
+        "daily_feed_apply": _get_metric(clicks_map, "daily_feed"),
+        "browse_jobs_apply": _get_metric(clicks_map, "browse_jobs"),
+        "saved_jobs_apply": _get_metric(clicks_map, "saved_jobs"),
+        "total_link_clicks": total_clicks,
+        "total_hr_clicks": total_hr,
+    }
+
 
 
 async def get_weekly_scorecard(telegram_id: int, bot_id: int = 1) -> dict:
