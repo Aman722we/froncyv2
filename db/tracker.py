@@ -142,11 +142,10 @@ async def get_ai_usage_stats() -> dict:
             """
             SELECT
                 feature_type,
-                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '1 day' 
-                                  AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC'))
+                COUNT(*) FILTER (WHERE used_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC'))
                     AS today,
-                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '7 days') AS week,
-                COUNT(*) FILTER (WHERE created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '30 days') AS month,
+                COUNT(*) FILTER (WHERE used_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '7 days') AS week,
+                COUNT(*) FILTER (WHERE used_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '30 days') AS month,
                 COUNT(*) AS total
             FROM ai_usage_logs
             GROUP BY feature_type

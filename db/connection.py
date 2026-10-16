@@ -209,6 +209,7 @@ async def init_db() -> asyncpg.Pool:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_ai_usage_logs_user ON ai_usage_logs(telegram_id, used_at DESC);"
             )
+            await conn.execute("ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();")
         except Exception as e:
             logger.warning(f"Failed to apply ai_usage_logs migrations: {e}")
 
