@@ -541,11 +541,11 @@ def _format_job_card(job: dict) -> str:
     else:
         exp_display = f"{min_yoe} YOE"
 
-    # Skills formatting
+    # Skills formatting (top 5 skills to stay concise and impactful)
     skills = job.get("skills") or []
     if isinstance(skills, str):
         skills = [s.strip() for s in skills.split(",") if s.strip()]
-    clean_skills = [str(s).strip() for s in skills if str(s).strip()][:7]
+    clean_skills = [str(s).strip() for s in skills if str(s).strip()][:5]
     if not clean_skills:
         clean_skills = ["Python", "JavaScript", "SQL", "Git", "APIs"]
     skills_display = ", ".join(clean_skills)
@@ -566,6 +566,7 @@ async def generate_linkedin_post(slot: str = "morning", stream: str | None = Non
     `slot`: 'morning' (for 9:00 AM post) or 'evening' (for 6:00 PM post).
     `stream`: Optional override ('frontend', 'backend', 'devops', 'data', 'fullstack', 'mobile', 'mixed').
               If None, automatically picks the scheduled stream for today/slot.
+    Guaranteed strictly under LinkedIn's 3,000 character limit (typically ~2,200 to 2,400 chars).
     """
     now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
     weekday = now_ist.weekday()  # 0=Monday ... 6=Sunday
@@ -586,67 +587,55 @@ async def generate_linkedin_post(slot: str = "morning", stream: str | None = Non
             "first_comment": ""
         }
 
-    # Format the 5 job cards
+    # Format the 5 job cards (compact separator)
     cards = [_format_job_card(j) for j in jobs]
-    cards_section = "\n━━━━━━━━━━━━━━━\n".join(cards)
+    cards_section = "\n━━━━━━━\n".join(cards)
 
     # Evening context tease
     evening_tease = ""
     if slot == "morning":
         evening_stream_name = NICHE_CONFIGS.get(WEEKLY_ROTATION[weekday]["evening"], {}).get("name", "tech")
-        evening_tease = f"In the evening I'll drop 5 more verified {evening_stream_name} openings."
+        evening_tease = f"In the evening I'll drop 5 more verified {evening_stream_name} openings.\n\n"
 
-    # Build the full post body (Zero em-dashes)
+    # Build the full post body (Punchy, viral, strictly under 3000 chars, zero em-dashes)
     post_text = f"""{config['hook_intro']}
 
-━━━━━━━━━━━━━━━
+━━━━━━━
 {cards_section}
-━━━━━━━━━━━━━━━
+━━━━━━━
 
-One pattern we've noticed after tracking thousands of career-page applications:
+One pattern we notice tracking thousands of career applications:
 A lot of candidates spend months improving their skills...
-Very few spend the same energy ensuring their resume actually matches the JD before hitting apply.
+Very few spend the same energy applying early before 500+ people flood the portal.
 
-Before submitting your application, ask yourself:
-✅ Does my resume contain the exact keywords mentioned in the JD?
-✅ Am I applying to roles that match at least 70-80% of my stack?
-✅ Is my resume ATS-friendly and easy for recruiters to scan?
-✅ Am I applying early, before 200 other people crowd the portal?
+That is why we built FroncyBot.
+We monitor 525+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
+When a company publishes a fresh opening, you catch it in the first wave, hours before it hits public job boards.
 
-That's exactly why we built FroncyBot.
-These 5 jobs are just a tiny preview of today's openings.
-Froncy monitors 525+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
-When a company quietly publishes a fresh opening on their internal careers board, you catch it in the very first wave, so you can apply within the first hour, long before the role gets reposted and flooded on LinkedIn.
-
-🛡️ Why Telegram?
-Direct, first-wave alerts right where you chat: zero email clutter, no clunky apps to download, and 100% verified direct ATS links (no third-party middlemen).
-
-⚡ What you get in seconds:
-1️⃣ Upload your resume
+⚡ What you get on Telegram:
+1️⃣ Upload your resume once
 2️⃣ Live ATS match score & keyword breakdown for your stack
-3️⃣ Direct official application links before the crowd arrives
+3️⃣ Direct official career-page links before the crowd arrives
 
 🔗 Direct 1-tap FroncyBot access link is pinned in the FIRST COMMENT below 👇
 (Or check the link at the top of my profile featured section)
 
 💬 Or simply comment "BOT" or "LINK" and we'll send you the direct access link.
 
-No endless searching.
-No mass applying.
-No guessing if you're qualified.
-Just smarter applications.
-
 📌 Save this post before you apply.
-📌 Repost this to help a fellow developer land an interview.
-📌 Follow for daily direct career-page tech jobs & fresher openings.
+📌 Repost to help a fellow developer land an interview.
+📌 Follow for daily direct career-page drops.
 
-{evening_tease}
-
-{config['hashtags']}"""
+{evening_tease}{config['hashtags']}"""
 
     # ── Strict Sanitizer: Remove any em-dash (—) and en-dash (–) ──
     post_text = post_text.replace("—", " - ").replace("–", "-")
     post_text = re.sub(r' +', ' ', post_text)
+
+    # ── Hard Cap Safety Guard for LinkedIn (3,000 char maximum) ──
+    if len(post_text) > 2900:
+        # If ever pushing near the limit due to long job titles, trim cleanly
+        post_text = post_text[:2850].rstrip() + "\n\n" + config['hashtags']
 
     # Companion First Comment (Zero penalty + 1-click conversion)
     first_comment = (
