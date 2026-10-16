@@ -1567,7 +1567,7 @@ async def genpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Send first comment
         await update.message.reply_text(
             "💬 <b>2. Copy and paste this as the FIRST COMMENT on your post:</b>\n"
-            "<i>(This bypasses LinkedIn's link penalty and gives readers an instant 1-tap link!)</i>",
+            "<i>(This bypasses LinkedIn's link penalty and gives readers a direct 1-tap link!)</i>",
             parse_mode="HTML"
         )
 

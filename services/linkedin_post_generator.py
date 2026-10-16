@@ -281,16 +281,16 @@ Before submitting your application, ask yourself:
 
 That's exactly why we built FroncyBot.
 These 5 jobs are just a tiny preview of today's openings.
-Froncy monitors 525+ direct company career pages (Greenhouse, Lever, Ashby) 24/7.
-The exact minute a company lists an engineering opening on their internal careers board, Froncy notifies you instantly—so you can apply within 15 minutes, long before the role gets posted on LinkedIn.
+Froncy monitors 525+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
+When a company quietly publishes a fresh opening on their internal careers board, you catch it in the very first wave—so you can apply within the first hour, long before the role gets reposted and flooded on LinkedIn.
 
 🛡️ Why Telegram?
-Instant, real-time alerts right where you chat—zero spam emails, no clunky apps to download, and 100% official direct ATS career links.
+Direct, first-wave alerts right where you chat—zero email clutter, no clunky apps to download, and 100% verified direct ATS links (no third-party middlemen).
 
-⚡ What you get in 10 seconds:
+⚡ What you get in seconds:
 1️⃣ Upload your resume
-2️⃣ Instant ATS match score for every opening
-3️⃣ Direct official application links (no middleman)
+2️⃣ Live ATS match score & keyword breakdown for your stack
+3️⃣ Direct official application links before the crowd arrives
 
 🔗 Direct 1-tap FroncyBot access link is pinned in the FIRST COMMENT below 👇
 (Or check the link at the top of my profile featured section)
@@ -314,8 +314,8 @@ Just smarter applications.
     first_comment = (
         "🚀 Here is the direct 1-tap link to launch FroncyBot on Telegram:\n"
         "👉 https://t.me/FroncyJobsBot\n\n"
-        "⚡ Instant notifications for fresh junior/entry-level tech jobs from 525+ direct company career pages (Greenhouse, Lever, Ashby) before they hit LinkedIn.\n"
-        "🎯 Upload your resume to see your ATS match score in 10 seconds!"
+        "⚡ First-wave direct alerts for fresh junior/entry-level tech jobs from 525+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
+        "🎯 Upload your resume to see your live ATS match score in 10 seconds!"
     )
 
     return {
@@ -375,7 +375,7 @@ async def send_scheduled_linkedin_post(bot, slot: str = "morning") -> bool:
         # First comment message
         comment_header = (
             "💬 <b>2. Copy and paste this as the FIRST COMMENT on your post:</b>\n"
-            "<i>(This bypasses LinkedIn's link penalty and gives readers an instant 1-tap link!)</i>"
+            "<i>(This bypasses LinkedIn's link penalty and gives readers a direct 1-tap link!)</i>"
         )
         await bot.send_message(
             chat_id=admin_id,
