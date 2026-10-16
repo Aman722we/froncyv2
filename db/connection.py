@@ -355,6 +355,18 @@ async def init_db() -> asyncpg.Pool:
             # Clean up existing Lever and Ashby URLs so they open the JD page instead of the apply page
             await conn.execute("UPDATE manual_jobs SET url = regexp_replace(url, '/apply/?$', '') WHERE url LIKE '%/apply%' OR url LIKE '%/apply/';")
             await conn.execute("UPDATE manual_jobs SET url = regexp_replace(url, '/application/?$', '') WHERE url LIKE '%/application%' OR url LIKE '%/application/';")
+            # Clean up raw HTML tags and escaped entities from job descriptions in DB
+            await conn.execute("""
+                UPDATE manual_jobs 
+                SET description = regexp_replace(
+                    regexp_replace(
+                        replace(replace(replace(replace(replace(description, '&quot;', '"'), '&#39;', ''''), '&amp;', '&'), '&nbsp;', ' '), '&gt;', '>'),
+                        '<[^>]+>', ' ', 'g'
+                    ),
+                    '\\s+', ' ', 'g'
+                )
+                WHERE description LIKE '%<%' OR description LIKE '%&quot;%' OR description LIKE '%&amp;%';
+            """)
         except Exception as e:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 
