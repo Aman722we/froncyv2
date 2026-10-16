@@ -352,6 +352,9 @@ async def init_db() -> asyncpg.Pool:
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS role_summary TEXT;")
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS workplace_type TEXT;")
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS is_fresher_friendly BOOLEAN DEFAULT FALSE;")
+            # Clean up existing Lever and Ashby URLs so they open the JD page instead of the apply page
+            await conn.execute("UPDATE manual_jobs SET url = regexp_replace(url, '/apply/?$', '') WHERE url LIKE '%/apply%' OR url LIKE '%/apply/';")
+            await conn.execute("UPDATE manual_jobs SET url = regexp_replace(url, '/application/?$', '') WHERE url LIKE '%/application%' OR url LIKE '%/application/';")
         except Exception as e:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 

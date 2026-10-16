@@ -832,21 +832,23 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     total_new = sum(s.get("new", 0) for s in summaries)
     total_errors = sum(1 for s in summaries if s.get("errors", 0) > 0)
+    total_deactivated = sum(s.get("deactivated", 0) for s in summaries)
     
     lines = [f"<b>⚡ Sync Complete ({len(summaries)} sources)</b>\n"]
     
-    # Only show detailed logs for sources that actually had new jobs or errors if there are many sources
+    # Only show detailed logs for sources that had new jobs, errors, or closed jobs
     for s in summaries:
-        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0:
+        if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0 and s.get("deactivated", 0) == 0:
             continue
             
+        deact_str = f" | Closed: {s['deactivated']}" if s.get("deactivated", 0) > 0 else ""
         lines.append(
             f"<b>{s['company']}</b>\n"
-            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']} | Errors: {s['errors']}"
+            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']}{deact_str} | Errors: {s['errors']}"
         )
     
-    lines.append(f"\n🎉 <b>Total new jobs discovered: {total_new}</b>")
-    if len(summaries) > 10 and total_new == 0 and total_errors == 0:
+    lines.append(f"\n🎉 <b>Total new: {total_new}</b> | 🗑️ <b>Closed/Expired: {total_deactivated}</b>")
+    if len(summaries) > 10 and total_new == 0 and total_errors == 0 and total_deactivated == 0:
         lines.append("<i>(All other sources fetched 0 new jobs without errors.)</i>")
         
     chunk = ""

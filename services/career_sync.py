@@ -113,6 +113,16 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
     extracted_role_summary = metadata.get("role_summary") or ""
     extracted_fresher_friendly = metadata.get("is_fresher_friendly", extracted_min_yoe <= 2)
 
+    clean_job_url = (normalized_job.get("job_url") or normalized_job.get("apply_url") or "").strip()
+    if clean_job_url.endswith("/apply"):
+        clean_job_url = clean_job_url[:-6]
+    elif clean_job_url.endswith("/apply/"):
+        clean_job_url = clean_job_url[:-7]
+    elif clean_job_url.endswith("/application"):
+        clean_job_url = clean_job_url[:-12]
+    elif clean_job_url.endswith("/application/"):
+        clean_job_url = clean_job_url[:-13]
+
     pool = get_pool()
     async with pool.acquire() as conn:
         now = datetime.now(timezone.utc)
@@ -138,7 +148,7 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             """,
             normalized_job["title"],
             source["company_name"],
-            normalized_job["apply_url"] or normalized_job["job_url"],
+            clean_job_url,
             normalized_job.get("location"),
             normalized_job.get("published_at") or now,
             provider,
@@ -159,22 +169,30 @@ async def _save_career_job(normalized_job: dict, source: dict) -> int | None:
             invalidate_jobs_cache()
             return row["id"]
         return None
+
+
 async def sync_one_source(source: dict) -> dict:
     """
     Sync a single career source.
-    Returns a summary dict: {fetched, new, duplicates, errors}.
+    Returns a summary dict: {fetched, new, duplicates, errors, deactivated}.
     """
     source_id = source["id"]
     company = source["company_name"]
-    summary = {"company": company, "fetched": 0, "new": 0, "duplicates": 0, "errors": 0}
+    provider = source["provider"].upper()
+    summary = {"company": company, "fetched": 0, "new": 0, "duplicates": 0, "errors": 0, "deactivated": 0}
 
     try:
         jobs = await fetch_jobs_for_source(source)
         summary["fetched"] = len(jobs)
 
         new_job_ids = []
+        active_ext_ids = []
         for job in jobs:
             try:
+                ext_id = str(job.get("external_id") or "")
+                if ext_id:
+                    active_ext_ids.append(ext_id)
+
                 new_id = await _save_career_job(job, source)
                 if new_id:
                     summary["new"] += 1
@@ -186,6 +204,49 @@ async def sync_one_source(source: dict) -> dict:
             except Exception as e:
                 logger.warning(f"Error saving job '{job.get('title')}' from {company}: {e}")
                 summary["errors"] += 1
+
+        # ── EXPIRED JOBS DEACTIVATION ──────────────────────────────────────────
+        # If the ATS returned a list of jobs, any job in our DB for this company
+        # that is NOT in the current ATS list has been closed/removed.
+        # Deactivate them immediately so users never see 404 dead links!
+        if active_ext_ids:
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                res = await conn.execute(
+                    """
+                    UPDATE manual_jobs
+                    SET is_active = FALSE
+                    WHERE source_provider = $1
+                      AND source_external_id IS NOT NULL
+                      AND company = $2
+                      AND is_active = TRUE
+                      AND NOT (source_external_id = ANY($3::text[]))
+                    """,
+                    provider,
+                    company,
+                    active_ext_ids
+                )
+                deactivated = int(res.split(" ")[1]) if "UPDATE" in res else 0
+                if deactivated > 0:
+                    logger.info(f"🗑️ Deactivated {deactivated} expired/closed jobs from {company}")
+                    summary["deactivated"] = deactivated
+                    from db.manual_jobs import invalidate_jobs_cache
+                    invalidate_jobs_cache()
+
+                # Reactivate any job that was reopened on the ATS
+                await conn.execute(
+                    """
+                    UPDATE manual_jobs
+                    SET is_active = TRUE
+                    WHERE source_provider = $1
+                      AND company = $2
+                      AND source_external_id = ANY($3::text[])
+                      AND is_active = FALSE
+                    """,
+                    provider,
+                    company,
+                    active_ext_ids
+                )
 
         await update_source_check(source_id, success=True)
         
