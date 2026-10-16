@@ -466,9 +466,12 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, title, description, location
+                SELECT id, title, description, location, url
                 FROM manual_jobs
-                WHERE skills = '{}' OR array_length(skills, 1) IS NULL OR array_length(skills, 1) = 0
+                WHERE skills = '{}' 
+                   OR array_length(skills, 1) IS NULL 
+                   OR array_length(skills, 1) = 0
+                   OR role_category IS NULL
                 ORDER BY id DESC
                 LIMIT $1
                 """,
@@ -478,13 +481,28 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
         if not rows:
             return 0
 
-        logger.info(f"🔄 Backfilling skills for {len(rows)} jobs with empty skills...")
+        logger.info(f"🔄 Backfilling intelligence for {len(rows)} jobs needing enrichment...")
         for row in rows:
             try:
                 job_id = row["id"]
                 title = row["title"]
                 desc = row["description"] or ""
                 loc = row["location"] or ""
+                job_url = row.get("url") or ""
+
+                # If description is missing from DB, attempt fetching directly from the job URL
+                if len(desc) < 100 and job_url:
+                    try:
+                        import httpx
+                        from services.career_fetcher import _strip_html
+                        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                            resp = await client.get(job_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                            if resp.status_code == 200:
+                                fetched_desc = _strip_html(resp.text)
+                                if len(fetched_desc) > len(desc):
+                                    desc = fetched_desc
+                    except Exception:
+                        pass
 
                 metadata = await extract_job_metadata(
                     job_description=desc,
@@ -506,13 +524,14 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
                         UPDATE manual_jobs
                         SET skills = $2, min_yoe = $3, max_yoe = $4, salary = $5,
                             workplace_type = $6, role_category = $7, role_summary = $8,
-                            is_fresher_friendly = $9
+                            is_fresher_friendly = $9,
+                            description = CASE WHEN description IS NULL OR description = '' THEN $10 ELSE description END
                         WHERE id = $1
                         """,
-                        job_id, skills, min_yoe, max_yoe, salary, wpt, cat, summary, fresher
+                        job_id, skills, min_yoe, max_yoe, salary, wpt, cat, summary, fresher, desc
                     )
                 repaired += 1
-                logger.info(f"  ✓ Repaired job {job_id} ({title}): skills={skills}")
+                logger.info(f"  ✓ Repaired job {job_id} ({title}): skills={skills}, cat={cat}, yoe={min_yoe}")
                 await asyncio.sleep(1.0)
             except Exception as e:
                 logger.warning(f"Failed to backfill job {row['id']}: {e}")
