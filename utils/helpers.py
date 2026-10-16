@@ -210,3 +210,18 @@ def normalize_skills(skills: list[str]) -> list[str]:
 
     # Return unique normalized skills
     return list(dict.fromkeys(normalized))
+
+
+def get_base_url() -> str:
+    """Get the public base URL of the bot app (supports settings.WEBHOOK_URL and Railway env vars)."""
+    import os
+    from urllib.parse import urlparse
+    from config import settings
+
+    raw = settings.WEBHOOK_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("RAILWAY_STATIC_URL") or ""
+    if not raw:
+        return ""
+    if not raw.startswith("http://") and not raw.startswith("https://"):
+        raw = f"https://{raw}"
+    parsed = urlparse(raw.rstrip("/"))
+    return f"{parsed.scheme}://{parsed.netloc}"

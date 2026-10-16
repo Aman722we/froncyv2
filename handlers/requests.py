@@ -28,12 +28,17 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("Please /start the bot first.", show_alert=True)
         return
 
-    # Parse job_id from callback_data: req_hr_{job_id}
+    # Parse source and job_id from callback_data: req_hr_{job_id} or req_hr_alert_{job_id}
     job_id = None
+    source = "instant_alert" if (query.data and query.data.startswith("req_hr_alert_")) else "browse_jobs"
     try:
         job_id = int(query.data.split("_")[-1])
     except (ValueError, IndexError):
         pass
+
+    # Log HR request click for analytics (non-blocking)
+    from db.tracker import log_hr_request_click
+    await log_hr_request_click(user_id, job_id, source=source)
 
     plan = user.get("plan", "free")
     is_pro = plan in ("pro", "proplus", "premium")

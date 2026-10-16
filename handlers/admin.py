@@ -3,6 +3,7 @@ Admin handlers for FroncyBot.
 Includes the /addjob command to manually curate jobs,
 and /send + /broadcast to message individual or all users.
 """
+import html
 import telegram
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -945,9 +946,9 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     min_yoe = job.get("min_yoe") or 0
     max_yoe = job.get("max_yoe")
     if max_yoe and max_yoe > min_yoe:
-        yoe_label = f"{min_yoe}–{max_yoe} YOE"
+        yoe_label = f"{min_yoe}-{max_yoe} YOE"
     elif min_yoe == 0:
-        yoe_label = "0–2 YOE"
+        yoe_label = "0-2 YOE"
     else:
         yoe_label = f"{min_yoe}+ YOE"
 
@@ -1016,10 +1017,17 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🕐 Posted 2h ago"
     )
 
+    from utils.helpers import get_base_url
+    base = get_base_url()
+    if base and target_id:
+        apply_btn_url = f"{base}/r/{job_id}?uid={target_id}&src=instant_alert"
+    else:
+        apply_btn_url = job_url or "https://t.me/FroncyJobsBot"
+
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔗 Apply Now", url=job_url),
-            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job_id}"),
+            InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url),
+            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_alert_{job_id}"),
         ],
     ])
     
@@ -1031,6 +1039,8 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             reply_markup=kb,
             disable_web_page_preview=True
         )
+        from db.tracker import log_instant_alert_sent
+        await log_instant_alert_sent(target_id, job_id)
         await update.message.reply_text("Pinged successfully!")
     except Exception as e:
         await update.message.reply_text(f"Error pinging: {e}")
@@ -1525,3 +1535,71 @@ async def jobdashboard_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
     except Exception:
         pass
+
+
+async def genpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/genpost [frontend|backend|devops|data|fullstack|mobile|mixed] [morning|evening] — Manually generate a niche LinkedIn post."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    slot = "morning"
+    stream = None
+
+    if context.args:
+        for arg in context.args:
+            arg_low = arg.lower()
+            if arg_low in ("evening", "night", "pm", "6pm"):
+                slot = "evening"
+            elif arg_low in ("morning", "am", "9am"):
+                slot = "morning"
+            elif arg_low in ("frontend", "backend", "devops", "data", "ml", "ai", "fullstack", "mobile", "mixed"):
+                if arg_low in ("ml", "ai"):
+                    stream = "data"
+                else:
+                    stream = arg_low
+
+    status_msg = await update.message.reply_text("⚡ Generating your viral LinkedIn post from active career-page jobs...")
+
+    try:
+        from services.linkedin_post_generator import generate_linkedin_post
+        post_data = await generate_linkedin_post(slot=slot, stream=stream)
+
+        if "error" in post_data:
+            await status_msg.edit_text(f"❌ <b>Error:</b> {html.escape(post_data['error'])}", parse_mode="HTML")
+            return
+
+        slot_title = "Morning Drop (9:00 AM style)" if slot == "morning" else "Evening Drop (6:00 PM style)"
+        stream_name = post_data.get("stream_name", "Tech")
+        companies_str = ", ".join(filter(None, post_data.get("companies", [])))
+
+        await status_msg.edit_text(
+            f"📢 <b>LinkedIn Viral Post Ready! ({slot_title})</b>\n\n"
+            f"🎯 <b>Niche Stream:</b> <b>{stream_name}</b>\n"
+            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n\n"
+            f"👇 <b>1. Copy and paste the post text below on LinkedIn:</b>",
+            parse_mode="HTML"
+        )
+
+        # Send post body
+        await update.message.reply_text(
+            post_data["post_text"],
+            disable_web_page_preview=True
+        )
+
+        # Send first comment
+        await update.message.reply_text(
+            "💬 <b>2. Copy and paste this as the FIRST COMMENT on your post:</b>\n"
+            "<i>(This bypasses LinkedIn's link penalty and gives readers a direct 1-tap link!)</i>",
+            parse_mode="HTML"
+        )
+
+        await update.message.reply_text(
+            post_data["first_comment"],
+            disable_web_page_preview=True
+        )
+
+    except Exception as e:
+        logger.error(f"Error in genpost_command: {e}")
+        await status_msg.edit_text(f"❌ <b>Failed to generate post:</b> {html.escape(str(e))}", parse_mode="HTML")
+

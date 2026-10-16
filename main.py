@@ -122,7 +122,7 @@ async def health_check():
 from fastapi.responses import RedirectResponse
 
 @app.get("/r/{job_id}")
-async def apply_redirector(job_id: int, uid: int | None = None):
+async def apply_redirector(job_id: int, uid: int | None = None, src: str = "other"):
     """
     Job application link tracker + redirector.
     When a user clicks 'Open Link', they hit this endpoint first.
@@ -134,7 +134,7 @@ async def apply_redirector(job_id: int, uid: int | None = None):
 
     # Log the click (completely non-blocking for the user)
     if uid:
-        await log_link_click(uid, job_id)
+        await log_link_click(uid, job_id, source=src)
 
     # Fetch the real URL from the database
     job = await get_manual_job_by_id(job_id)

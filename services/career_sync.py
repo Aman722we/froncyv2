@@ -368,9 +368,9 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     min_yoe = job.get("min_yoe") or 0
                     max_yoe = job.get("max_yoe")
                     if max_yoe and max_yoe > min_yoe:
-                        yoe_label = f"{min_yoe}–{max_yoe} YOE"
+                        yoe_label = f"{min_yoe}-{max_yoe} YOE"
                     elif min_yoe == 0:
-                        yoe_label = "0–2 YOE"
+                        yoe_label = "0-2 YOE"
                     else:
                         yoe_label = f"{min_yoe}+ YOE"
 
@@ -444,11 +444,20 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         f"🕐 Posted {escape_md(freshness)}"
                     )
 
+                    # Build tracking redirect URL for Apply Now button
+                    from utils.helpers import get_base_url
+                    base = get_base_url()
+                    u_id = user.get("telegram_id")
+                    if base and u_id:
+                        apply_btn_url = f"{base}/r/{job_id}?uid={u_id}&src=instant_alert"
+                    else:
+                        apply_btn_url = job_url or "https://t.me/FroncyJobsBot"
+
                     # Inline buttons — HR Details is free for Pro, ₹49 for Free
                     kb = InlineKeyboardMarkup([
                         [
-                            InlineKeyboardButton("\U0001F517 Apply Now", url=job_url),
-                            InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}"),
+                            InlineKeyboardButton("\U0001F517 Apply Now", url=apply_btn_url),
+                            InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_alert_{job_id}"),
                         ],
                     ])
 
@@ -463,6 +472,10 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                         reply_markup=kb,
                         disable_web_page_preview=True,
                     )
+
+                    # Log sent instant alert for engagement analytics
+                    from db.tracker import log_instant_alert_sent
+                    await log_instant_alert_sent(user["telegram_id"], job_id)
 
                 except Exception as e:
                     logger.warning(f"Failed to notify user {user_row.get('telegram_id')} for job {job_id}: {e}")

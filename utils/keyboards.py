@@ -332,14 +332,18 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 
     # Build the apply URL
     raw_url = job.get("url", "https://t.me/FroncyJobsBot")
-    webhook_raw = settings.WEBHOOK_URL or ""
-    if webhook_raw:
-        parsed = urlparse(webhook_raw if webhook_raw.startswith("http") else f"https://{webhook_raw}")
-        base = f"{parsed.scheme}://{parsed.netloc}"
+    from utils.helpers import get_base_url
+    base = get_base_url()
+
+    if from_daily:
+        src = "daily_feed"
+    elif from_saved:
+        src = "saved_jobs"
     else:
-        base = ""
+        src = "browse_jobs"
+
     if base and user_id:
-        apply_url = f"{base}/r/{job['id']}?uid={user_id}"
+        apply_url = f"{base}/r/{job['id']}?uid={user_id}&src={src}"
     else:
         apply_url = raw_url
 
