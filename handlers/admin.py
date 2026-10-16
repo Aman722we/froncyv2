@@ -1528,32 +1528,45 @@ async def jobdashboard_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def genpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/genpost [morning|evening] — Manually generate a viral LinkedIn post right now."""
+    """/genpost [frontend|backend|devops|data|fullstack|mobile|mixed] [morning|evening] — Manually generate a niche LinkedIn post."""
     user_id = update.effective_user.id
     if user_id != settings.ADMIN_TELEGRAM_ID:
         return
 
     slot = "morning"
-    if context.args and context.args[0].lower() in ("evening", "night", "pm", "6pm"):
-        slot = "evening"
+    stream = None
+
+    if context.args:
+        for arg in context.args:
+            arg_low = arg.lower()
+            if arg_low in ("evening", "night", "pm", "6pm"):
+                slot = "evening"
+            elif arg_low in ("morning", "am", "9am"):
+                slot = "morning"
+            elif arg_low in ("frontend", "backend", "devops", "data", "ml", "ai", "fullstack", "mobile", "mixed"):
+                if arg_low in ("ml", "ai"):
+                    stream = "data"
+                else:
+                    stream = arg_low
 
     status_msg = await update.message.reply_text("⚡ Generating your viral LinkedIn post from active career-page jobs...")
 
     try:
         from services.linkedin_post_generator import generate_linkedin_post
-        post_data = await generate_linkedin_post(slot=slot)
+        post_data = await generate_linkedin_post(slot=slot, stream=stream)
 
         if "error" in post_data:
             await status_msg.edit_text(f"❌ <b>Error:</b> {html.escape(post_data['error'])}", parse_mode="HTML")
             return
 
-        slot_title = "Morning Post (9:00 AM style)" if slot == "morning" else "Evening Post (6:00 PM style)"
+        slot_title = "Morning Drop (9:00 AM style)" if slot == "morning" else "Evening Drop (6:00 PM style)"
+        stream_name = post_data.get("stream_name", "Tech")
         companies_str = ", ".join(filter(None, post_data.get("companies", [])))
 
         await status_msg.edit_text(
             f"📢 <b>LinkedIn Viral Post Ready! ({slot_title})</b>\n\n"
-            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n"
-            f"🎯 <b>Hook Style:</b> <code>{post_data['hook_id']}</code>\n\n"
+            f"🎯 <b>Niche Stream:</b> <b>{stream_name}</b>\n"
+            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n\n"
             f"👇 <b>1. Copy and paste the post text below on LinkedIn:</b>",
             parse_mode="HTML"
         )

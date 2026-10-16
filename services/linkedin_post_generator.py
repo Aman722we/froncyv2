@@ -1,13 +1,15 @@
 """
 LinkedIn Viral Post Generator for Froncy V2.
 
-Generates high-converting LinkedIn job posts following the proven 55k+ impression viral structure.
-Emphasizes Froncy V2's direct career-page intelligence (525+ company career pages), solves
-the conversion rate drop-off by eliminating friction (pinned first comment + clear trust signals),
-and delivers copy-paste-ready posts twice daily (8:00 AM IST & 5:00 PM IST) to the Admin on Telegram.
+Features:
+- Rotates niche job categories across days and morning/evening slots (Frontend, Backend, DevOps, Data/AI/ML, Mobile, Fullstack, Mixed).
+- Puts disclosed salary jobs at the top of the post for maximum click-through.
+- Gracefully falls back to high-salary fresh jobs if a niche has fewer than 5 openings.
+- Zero em-dashes or en-dashes to eliminate the AI-generated perception.
+- Proven viral structure, zero-penalty companion first comment, and direct Froncy V2 career-page value proposition.
 """
 import html
-import random
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from loguru import logger
@@ -15,113 +17,174 @@ from db.connection import get_pool
 from config import settings
 
 
-VIRAL_HOOKS = [
-    # Hook 1: Framework Trap / Impostor Syndrome
-    {
-        "id": "framework_trap",
-        "intro": (
-            "Most frontend and junior developers think they need to learn one more framework before applying.\n"
+# ── Niche Stream Configurations ──────────────────────────────────────────────
+NICHE_CONFIGS = {
+    "frontend": {
+        "id": "frontend",
+        "name": "Frontend Development",
+        "lead_in": "If you know HTML, CSS, JavaScript, React, or Next.js, here are 5 fresh frontend opportunities you can apply for today. 👇",
+        "hook_intro": (
+            "Most frontend developers think they need to learn one more framework before applying.\n"
             "The truth?\n\n"
             "Many companies are hiring developers who already have the skills they need.\n"
             "While you're waiting to feel \"100% ready,\" someone with a simpler portfolio has already submitted their application and is scheduling interviews.\n\n"
-            "If you know JavaScript, React, Python, or core web development, these 5 opportunities are worth checking out today. 👇"
+            "If you know HTML, CSS, JavaScript, React, or Next.js, here are 5 fresh frontend opportunities you can apply for today. 👇"
         ),
-        "hashtags": "#FrontendDeveloper #ReactJS #JavaScript #TypeScript #NextJS #WebDevelopment #FrontendJobs #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth"
+        "hashtags": "#FrontendDeveloper #ReactJS #JavaScript #TypeScript #NextJS #WebDevelopment #FrontendJobs #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%frontend%' OR
+                title ILIKE '%frontend%' OR title ILIKE '%front-end%' OR title ILIKE '%react%' OR 
+                title ILIKE '%next.js%' OR title ILIKE '%vue%' OR title ILIKE '%angular%' OR 
+                title ILIKE '%ui%' OR title ILIKE '%web%'
+            )
+        """
     },
-    # Hook 2: Speed / Being Too Late (Ghosting)
-    {
-        "id": "speed_advantage",
-        "intro": (
-            "Most developers think they're getting ghosted because of competition.\n"
-            "In reality? They're getting ghosted because they're applying too late.\n\n"
-            "By the time a tech opening gets reposted across public job boards, 300+ people have already applied and HR has stopped opening new resumes.\n"
-            "Companies don't always hire the \"best\" candidate. They hire the qualified candidate who applied first.\n\n"
-            "Here are 5 brand new openings detected directly from company career pages today. 👇"
+    "backend": {
+        "id": "backend",
+        "name": "Backend & API Development",
+        "lead_in": "If you know Python, Java, Node.js, or SQL, here are 5 fresh backend developer openings you can apply for today. 👇",
+        "hook_intro": (
+            "Most backend developers think they need to master distributed systems and Kubernetes before applying.\n"
+            "The truth?\n\n"
+            "Companies hiring junior backend engineers are looking for developers who understand clean REST APIs, solid SQL queries, and basic Git workflows.\n"
+            "You don't need 10 complex microservices to get an interview. You need solid fundamentals and early applications.\n\n"
+            "Here are 5 verified backend developer opportunities hiring today. 👇"
         ),
-        "hashtags": "#TechJobs #FrontendDeveloper #SoftwareEngineer #WebDevelopment #ReactJS #FullStack #Python #Coding #Hiring #JobSearch #FreshersJobs #CareerGrowth"
+        "hashtags": "#BackendDeveloper #Python #Java #NodeJS #Golang #SQL #APIs #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%backend%' OR
+                title ILIKE '%backend%' OR title ILIKE '%back-end%' OR title ILIKE '%python%' OR 
+                title ILIKE '%java%' OR title ILIKE '%node%' OR title ILIKE '%golang%' OR 
+                title ILIKE '%fastapi%' OR title ILIKE '%django%' OR title ILIKE '%spring%' OR title ILIKE '%api%'
+            )
+        """
     },
-    # Hook 3: The Hidden Career Page Secret
-    {
-        "id": "career_page_secret",
-        "intro": (
-            "90% of job seekers only check LinkedIn and Naukri.\n"
-            "That is exactly where 90% of the competition is fighting for the same 10 roles.\n\n"
-            "What top candidates do differently:\n"
-            "They apply directly on company career pages (Greenhouse, Lever, Ashby) days before the opening is ever posted on job boards.\n\n"
-            "We tracked today's top direct career-page drops. Here are 5 junior & fresher opportunities you should check out right now. 👇"
+    "devops": {
+        "id": "devops",
+        "name": "DevOps & Cloud Engineering",
+        "lead_in": "If you know Linux, Docker, Git, or basic Cloud concepts, here are 5 DevOps and Cloud opportunities you can apply for today. 👇",
+        "hook_intro": (
+            "Most junior engineers think DevOps and Cloud roles are strictly reserved for 5+ YOE seniors.\n"
+            "In reality?\n\n"
+            "Fast-growing engineering teams are actively looking for entry-level developers who know Linux fundamentals, Docker containerization, Git, and basic AWS or CI/CD concepts.\n"
+            "You don't need to be a Kubernetes architect to get hired. You need clean fundamentals and early applications.\n\n"
+            "Here are 5 fresh DevOps and Cloud engineering opportunities hiring today. 👇"
         ),
-        "hashtags": "#TechJobs #SoftwareEngineer #FrontendDeveloper #WebDevelopment #ReactJS #JavaScript #RemoteJobs #Hiring #FreshersJobs #CareerAdvice #DeveloperJobs"
+        "hashtags": "#DevOps #CloudEngineer #AWS #Docker #Kubernetes #Linux #CICD #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%devops%' OR role_category ILIKE '%cloud%' OR
+                title ILIKE '%devops%' OR title ILIKE '%cloud%' OR title ILIKE '%sre%' OR 
+                title ILIKE '%infra%' OR title ILIKE '%platform%' OR title ILIKE '%reliability%'
+            )
+        """
     },
-    # Hook 4: 100 Random Applications vs 10 Targeted Matches
-    {
-        "id": "targeted_applications",
-        "intro": (
-            "The biggest mistake job seekers make is sending 100 identical applications.\n"
-            "A developer with a well-targeted resume gets more interviews from 10 applications than someone spamming \"Easy Apply\" 100 times.\n\n"
-            "If your skills match at least 70% of a job description, you should apply.\n"
-            "Here are 5 handpicked junior developer opportunities hiring today. 👇"
+    "data": {
+        "id": "data",
+        "name": "Data, AI & Machine Learning",
+        "lead_in": "If you have solid Python, SQL, and data basics, here are 5 Data, AI, and Machine Learning opportunities hiring today. 👇",
+        "hook_intro": (
+            "Most aspiring data and machine learning developers think they need a research paper or complex neural network to get an interview.\n"
+            "The truth?\n\n"
+            "Companies want junior developers who can write clean Python, write optimized SQL queries, and clean real-world datasets.\n"
+            "Practical skills and early applications beat theoretical perfection every single time.\n\n"
+            "Here are 5 Data, AI, and Machine Learning opportunities worth checking out today. 👇"
         ),
-        "hashtags": "#JobSearch #TechJobs #SoftwareEngineer #FrontendDeveloper #ReactJS #FullStack #WebDevelopment #Hiring #FreshersJobs #ResumeTips #CareerGrowth"
+        "hashtags": "#DataEngineer #MachineLearning #ArtificialIntelligence #Python #SQL #DataScience #TechJobs #SoftwareEngineer #Hiring #FreshersJobs #CareerGrowth",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%data%' OR role_category ILIKE '%ai%' OR role_category ILIKE '%ml%' OR
+                title ILIKE '%data%' OR title ILIKE '%ml%' OR title ILIKE '%ai%' OR 
+                title ILIKE '%machine learning%' OR title ILIKE '%analytics%'
+            )
+        """
     },
-    # Hook 5: Waiting for the Perfect Time
-    {
-        "id": "perfect_time_myth",
-        "intro": (
+    "fullstack": {
+        "id": "fullstack",
+        "name": "Fullstack & Software Engineering",
+        "lead_in": "Here are 5 fresh fullstack and software engineering opportunities hiring today. 👇",
+        "hook_intro": (
             "The biggest mistake junior developers make isn't having the wrong skills.\n"
             "It's waiting for the \"perfect time\" to start applying.\n\n"
             "Meanwhile, candidates with the exact same skills are already interviewing because they didn't wait.\n"
-            "If you know core programming, web basics, and Git, companies are looking for you right now.\n\n"
-            "Here are 5 verified junior opportunities to apply for today. 👇"
+            "If you know web fundamentals, Git, and at least one core backend language, companies are looking for you right now.\n\n"
+            "Here are 5 verified fullstack and software engineering opportunities to apply for today. 👇"
         ),
-        "hashtags": "#FrontendDeveloper #SoftwareEngineer #ReactJS #JavaScript #TypeScript #WebDevelopment #FreshersJobs #TechJobs #Hiring #CareerGrowth #DeveloperJobs"
+        "hashtags": "#FullStackDeveloper #SoftwareEngineer #ReactJS #NodeJS #Python #WebDevelopment #TechJobs #Hiring #FreshersJobs #CareerGrowth #Coding",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%fullstack%' OR role_category ILIKE '%software%' OR
+                title ILIKE '%fullstack%' OR title ILIKE '%full stack%' OR title ILIKE '%software%' OR 
+                title ILIKE '%sde%' OR title ILIKE '%developer%'
+            )
+        """
     },
-    # Hook 6: The ATS Keyword Filter Trap
-    {
-        "id": "ats_keyword_trap",
-        "intro": (
-            "Most developers think their resume gets rejected by human recruiters.\n"
-            "In reality, over 70% of resumes are filtered out by ATS parsers before an engineer ever reads them.\n\n"
-            "The reason? Simple missing keywords and poor skill alignment with the JD.\n"
-            "Before you send another application, check out these 5 fresh roles hiring juniors today. 👇"
+    "mobile": {
+        "id": "mobile",
+        "name": "Mobile Development",
+        "lead_in": "If you know React Native, Flutter, Android, or iOS basics, here are 5 mobile developer opportunities hiring today. 👇",
+        "hook_intro": (
+            "Most mobile developers think they need 5 published production apps before sending an application.\n"
+            "In reality?\n\n"
+            "Teams hiring junior mobile developers care about clean component architecture, API integration, and responsive UI.\n"
+            "If you can build performant mobile screens and connect backend APIs, you are already qualified for junior roles.\n\n"
+            "Here are 5 fresh mobile developer opportunities hiring today. 👇"
         ),
-        "hashtags": "#ResumeTips #ATSResume #FrontendDeveloper #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #ReactJS #WebDevelopment #CareerAdvice #Developer"
+        "hashtags": "#MobileDeveloper #ReactNative #Flutter #AndroidDev #iOSDev #MobileApps #SoftwareEngineer #TechJobs #Hiring #FreshersJobs #CareerGrowth",
+        "sql_filter": """
+            AND (
+                role_category ILIKE '%mobile%' OR
+                title ILIKE '%mobile%' OR title ILIKE '%android%' OR title ILIKE '%ios%' OR 
+                title ILIKE '%flutter%' OR title ILIKE '%react native%' OR title ILIKE '%swift%' OR title ILIKE '%kotlin%'
+            )
+        """
     },
-    # Hook 7: The First 25 Applicants Rule
-    {
-        "id": "first_25_rule",
-        "intro": (
-            "Want to know the single highest-ROI hack in tech hiring?\n"
-            "Be in the first 25 applicants on the company's official career portal.\n\n"
-            "Recruiters review the earliest qualified submissions first. If they find 5 solid candidates in the first 30 applications, they pause the pipeline.\n"
-            "Here are 5 fresh junior roles dropped on direct career boards today. 👇"
+    "mixed": {
+        "id": "mixed",
+        "name": "All-Rounder Fresh Tech Drops",
+        "lead_in": "Here are 5 handpicked junior developer opportunities across tech hiring today. 👇",
+        "hook_intro": (
+            "90% of job seekers only check LinkedIn and Naukri.\n"
+            "That is exactly where 90% of the competition is fighting for the same 10 roles.\n\n"
+            "What top candidates do differently:\n"
+            "They apply directly on company career pages (Greenhouse, Lever, Ashby) days before the opening is ever posted on public job boards.\n\n"
+            "We tracked today's top direct career-page drops. Here are 5 fresh junior opportunities you should check out right now. 👇"
         ),
-        "hashtags": "#JobSearch #TechJobs #Hiring #SoftwareEngineer #FrontendDeveloper #ReactJS #WebDevelopment #FreshersJobs #CareerTips #DeveloperJobs"
-    },
-    # Hook 8: Not Enough React Myth
-    {
-        "id": "not_enough_react",
-        "intro": (
-            "Most developers think they're getting rejected because they don't know enough advanced frameworks.\n"
-            "That's usually not the problem.\n\n"
-            "The real problem? They're applying to jobs that don't match their current skills, days after the listing went viral.\n"
-            "A developer applying early to matching roles will consistently beat someone mass-applying late.\n\n"
-            "Here are 5 fresh junior opportunities hiring right now. 👇"
-        ),
-        "hashtags": "#FrontendDeveloper #ReactJS #NextJS #TypeScript #JavaScript #FrontendJobs #WebDevelopment #SoftwareEngineer #TechJobs #Hiring #CareerGrowth"
+        "hashtags": "#TechJobs #SoftwareEngineer #FrontendDeveloper #BackendDeveloper #FullStack #Python #Coding #Hiring #JobSearch #FreshersJobs #CareerGrowth",
+        "sql_filter": ""
     }
-]
+}
 
 
-async def fetch_curated_fresher_jobs(limit: int = 5) -> list[dict]:
+# ── 14-Slot Weekly Niche Rotation (IST) ───────────────────────────────────────
+# Monday = 0, Sunday = 6
+WEEKLY_ROTATION = {
+    0: {"morning": "frontend",  "evening": "backend"},    # Monday
+    1: {"morning": "fullstack", "evening": "data"},       # Tuesday
+    2: {"morning": "devops",    "evening": "frontend"},   # Wednesday
+    3: {"morning": "backend",   "evening": "mobile"},     # Thursday
+    4: {"morning": "frontend",  "evening": "fullstack"},  # Friday
+    5: {"morning": "data",      "evening": "devops"},     # Saturday
+    6: {"morning": "mixed",     "evening": "frontend"},   # Sunday
+}
+
+
+async def fetch_curated_fresher_jobs(stream: str = "mixed", limit: int = 5) -> list[dict]:
     """
-    Fetch 5 high-quality, junior/fresher jobs from manual_jobs table.
-    Prioritizes jobs with disclosed salary, fresher-friendly tags, and unique companies.
+    Fetch high-quality, junior/fresher jobs from manual_jobs table for a specific stream.
+    Strictly prioritizes jobs with disclosed salary at the top.
+    Gracefully falls back to mixed high-salary jobs if the stream has fewer than 5.
     """
+    config = NICHE_CONFIGS.get(stream.lower(), NICHE_CONFIGS["mixed"])
+    stream_sql = config["sql_filter"]
+
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Step 1: Look for fresher friendly jobs (min_yoe <= 1 or is_fresher_friendly)
-        rows = await conn.fetch(
-            """
+        # Step 1: Query matching jobs for this specific niche stream
+        # Order by salary presence first, then posted_at DESC
+        niche_query = f"""
             SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
                    workplace_type, source_provider, source_type, posted_at, url, role_category
             FROM manual_jobs
@@ -133,54 +196,65 @@ async def fetch_curated_fresher_jobs(limit: int = 5) -> list[dict]:
                   location ILIKE '%mumbai%' OR location ILIKE '%delhi%' OR location ILIKE '%gurgaon%' OR 
                   location ILIKE '%noida%' OR location ILIKE '%chennai%' OR location IS NULL OR location = ''
               )
+              {stream_sql}
             ORDER BY 
               CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
               posted_at DESC
-            LIMIT 40;
-            """
-        )
+            LIMIT 30;
+        """
+        rows = await conn.fetch(niche_query)
 
-        # Step 2: Fallback to min_yoe <= 2 if we don't have enough rows
-        if len(rows) < limit:
-            fallback_rows = await conn.fetch(
-                """
-                SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
-                       workplace_type, source_provider, source_type, posted_at, url, role_category
-                FROM manual_jobs
-                WHERE is_active = TRUE
-                  AND min_yoe <= 2
-                ORDER BY 
-                  CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
-                  posted_at DESC
-                LIMIT 40;
-                """
-            )
-            rows = fallback_rows
-
-    # Deduplicate by company so we don't feature multiple jobs from the same company
-    seen_companies = set()
-    selected = []
-    for r in rows:
-        comp = (r["company"] or "").strip().lower()
-        if comp and comp not in seen_companies:
-            seen_companies.add(comp)
-            selected.append(dict(r))
-        if len(selected) >= limit:
-            break
-
-    # If still fewer than limit, just take top available
-    if len(selected) < limit and rows:
+        # Deduplicate by company
+        seen_companies = set()
+        selected = []
         for r in rows:
-            if dict(r) not in selected:
+            comp = (r["company"] or "").strip().lower()
+            if comp and comp not in seen_companies:
+                seen_companies.add(comp)
                 selected.append(dict(r))
             if len(selected) >= limit:
                 break
 
+        # Step 2: Graceful Fallback if niche has fewer than `limit` jobs
+        # Widen to general high-salary fresher jobs to complete the 5 cards
+        if len(selected) < limit:
+            fallback_query = """
+                SELECT id, title, company, location, salary, skills, min_yoe, max_yoe,
+                       workplace_type, source_provider, source_type, posted_at, url, role_category
+                FROM manual_jobs
+                WHERE is_active = TRUE
+                  AND (min_yoe <= 2 OR is_fresher_friendly = TRUE)
+                  AND (
+                      location ILIKE '%india%' OR location ILIKE '%bangalore%' OR location ILIKE '%bengaluru%' OR 
+                      location ILIKE '%remote%' OR location ILIKE '%hyderabad%' OR location ILIKE '%pune%' OR 
+                      location ILIKE '%mumbai%' OR location ILIKE '%delhi%' OR location ILIKE '%gurgaon%' OR 
+                      location ILIKE '%noida%' OR location ILIKE '%chennai%' OR location IS NULL OR location = ''
+                  )
+                ORDER BY 
+                  CASE WHEN salary IS NOT NULL AND salary != 'Not disclosed' AND salary != '' THEN 0 ELSE 1 END,
+                  posted_at DESC
+                LIMIT 40;
+            """
+            fallback_rows = await conn.fetch(fallback_query)
+            for r in fallback_rows:
+                comp = (r["company"] or "").strip().lower()
+                if comp and comp not in seen_companies:
+                    seen_companies.add(comp)
+                    selected.append(dict(r))
+                if len(selected) >= limit:
+                    break
+
+    # Final guarantee: sort so salary jobs are strictly at the top of the cards!
+    def _has_salary(j):
+        sal = (j.get("salary") or "").strip().lower()
+        return 0 if sal and sal not in ("null", "none", "not disclosed", "n/a", "") else 1
+
+    selected.sort(key=_has_salary)
     return selected[:limit]
 
 
 def _format_job_card(job: dict) -> str:
-    """Format a single job into the viral micro-card structure."""
+    """Format a single job into the viral micro-card structure (Zero em-dashes)."""
     title = (job.get("title") or "Software Engineer").strip()
     company = (job.get("company") or "Tech Company").strip()
     
@@ -192,14 +266,14 @@ def _format_job_card(job: dict) -> str:
     else:
         loc_display = raw_loc
 
-    # Salary
+    # Salary (Use simple standard hyphen)
     raw_salary = (job.get("salary") or "").strip()
     if not raw_salary or raw_salary.lower() in ("null", "none", "not disclosed", "n/a"):
         salary_display = "Salary Not Disclosed"
     else:
-        salary_display = raw_salary
+        salary_display = raw_salary.replace("—", " - ").replace("–", "-")
 
-    # Experience Display
+    # Experience Display (Use standard hyphen)
     min_yoe = job.get("min_yoe", 0) or 0
     max_yoe = job.get("max_yoe")
     is_fresher = job.get("is_fresher_friendly", False)
@@ -220,7 +294,7 @@ def _format_job_card(job: dict) -> str:
         skills = [s.strip() for s in skills.split(",") if s.strip()]
     clean_skills = [str(s).strip() for s in skills if str(s).strip()][:7]
     if not clean_skills:
-        clean_skills = ["React", "JavaScript", "HTML", "CSS", "Git", "APIs"]
+        clean_skills = ["Python", "JavaScript", "SQL", "Git", "APIs"]
     skills_display = ", ".join(clean_skills)
 
     card = (
@@ -233,37 +307,44 @@ def _format_job_card(job: dict) -> str:
     return card
 
 
-async def generate_linkedin_post(slot: str = "morning") -> dict:
+async def generate_linkedin_post(slot: str = "morning", stream: str | None = None) -> dict:
     """
     Generate a complete, copy-paste-ready LinkedIn post + companion First Comment.
     `slot`: 'morning' (for 9:00 AM post) or 'evening' (for 6:00 PM post).
+    `stream`: Optional override ('frontend', 'backend', 'devops', 'data', 'fullstack', 'mobile', 'mixed').
+              If None, automatically picks the scheduled stream for today/slot.
     """
-    jobs = await fetch_curated_fresher_jobs(limit=5)
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    weekday = now_ist.weekday()  # 0=Monday ... 6=Sunday
+
+    # Auto-pick stream from rotation if not explicitly specified
+    if not stream or stream.lower() not in NICHE_CONFIGS:
+        slot_clean = "evening" if "even" in slot.lower() or "pm" in slot.lower() else "morning"
+        chosen_stream = WEEKLY_ROTATION.get(weekday, {}).get(slot_clean, "mixed")
+    else:
+        chosen_stream = stream.lower()
+
+    config = NICHE_CONFIGS[chosen_stream]
+    jobs = await fetch_curated_fresher_jobs(stream=chosen_stream, limit=5)
     if not jobs:
         return {
-            "error": "No active jobs found in database to generate post.",
+            "error": f"No active jobs found in database for stream '{chosen_stream}'.",
             "post_text": "",
             "first_comment": ""
         }
-
-    # Rotate hooks based on day of year + slot
-    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
-    day_of_year = now_ist.timetuple().tm_yday
-    slot_offset = 0 if slot == "morning" else 4
-    hook_index = (day_of_year * 2 + slot_offset) % len(VIRAL_HOOKS)
-    hook = VIRAL_HOOKS[hook_index]
 
     # Format the 5 job cards
     cards = [_format_job_card(j) for j in jobs]
     cards_section = "\n━━━━━━━━━━━━━━━\n".join(cards)
 
-    # Slot greeting / context note
+    # Evening context tease
     evening_tease = ""
     if slot == "morning":
-        evening_tease = "In the evening I'll drop 5 more verified career-page openings."
+        evening_stream_name = NICHE_CONFIGS.get(WEEKLY_ROTATION[weekday]["evening"], {}).get("name", "tech")
+        evening_tease = f"In the evening I'll drop 5 more verified {evening_stream_name} openings."
 
-    # Build the full post body
-    post_text = f"""{hook['intro']}
+    # Build the full post body (Zero em-dashes)
+    post_text = f"""{config['hook_intro']}
 
 ━━━━━━━━━━━━━━━
 {cards_section}
@@ -308,26 +389,26 @@ Just smarter applications.
 
 {evening_tease}
 
-{hook['hashtags']}"""
+{config['hashtags']}"""
 
-    # ── Remove all em-dashes (—) and en-dashes (–) to eliminate AI-generated perception ──
+    # ── Strict Sanitizer: Remove any em-dash (—) and en-dash (–) ──
     post_text = post_text.replace("—", " - ").replace("–", "-")
-    import re
     post_text = re.sub(r' +', ' ', post_text)
 
-    # Companion First Comment (Guarantees zero-penalty, 1-click conversion)
+    # Companion First Comment (Zero penalty + 1-click conversion)
     first_comment = (
-        "🚀 Here is the direct 1-tap link to launch FroncyBot on Telegram:\n"
-        "👉 https://t.me/FroncyJobsBot\n\n"
-        "⚡ First-wave direct alerts for fresh junior/entry-level tech jobs from 525+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
-        "🎯 Upload your resume to see your live ATS match score in 10 seconds!"
+        f"🚀 Here is the direct 1-tap link to launch FroncyBot on Telegram:\n"
+        f"👉 https://t.me/FroncyJobsBot\n\n"
+        f"⚡ First-wave direct alerts for fresh junior {config['name']} jobs from 525+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
+        f"🎯 Upload your resume to see your live ATS match score in 10 seconds!"
     )
     first_comment = first_comment.replace("—", " - ").replace("–", "-")
     first_comment = re.sub(r' +', ' ', first_comment)
 
     return {
         "slot": slot,
-        "hook_id": hook["id"],
+        "stream": chosen_stream,
+        "stream_name": config["name"],
         "post_text": post_text.strip(),
         "first_comment": first_comment.strip(),
         "job_count": len(jobs),
@@ -338,7 +419,7 @@ Just smarter applications.
 async def send_scheduled_linkedin_post(bot, slot: str = "morning") -> bool:
     """
     Called by APScheduler at 8:00 AM IST and 5:00 PM IST.
-    Generates the LinkedIn post and sends it directly to the Admin on Telegram.
+    Generates the LinkedIn post using the scheduled niche stream and delivers it to Admin.
     """
     admin_id = settings.ADMIN_TELEGRAM_ID
     if not admin_id:
@@ -355,14 +436,14 @@ async def send_scheduled_linkedin_post(bot, slot: str = "morning") -> bool:
             )
             return False
 
-        slot_title = "Morning Post (for 9:00 AM)" if slot == "morning" else "Evening Post (for 6:00 PM)"
+        slot_title = "Morning Drop (for 9:00 AM)" if slot == "morning" else "Evening Drop (for 6:00 PM)"
+        stream_name = post_data.get("stream_name", "Tech")
         companies_str = ", ".join(filter(None, post_data.get("companies", [])))
 
-        # Header intro message
         header_text = (
             f"📢 <b>LinkedIn Viral Post Ready! ({slot_title})</b>\n\n"
-            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n"
-            f"🎯 <b>Hook Style:</b> <code>{post_data['hook_id']}</code>\n\n"
+            f"🎯 <b>Niche Stream:</b> <b>{stream_name}</b>\n"
+            f"🏢 <b>Featured Companies:</b> {html.escape(companies_str)}\n\n"
             f"👇 <b>1. Copy and paste the post text below on LinkedIn:</b>"
         )
         await bot.send_message(
@@ -372,7 +453,6 @@ async def send_scheduled_linkedin_post(bot, slot: str = "morning") -> bool:
         )
 
         # Post body message
-        # Send as clean plain text so admin can copy the entire message easily on mobile
         await bot.send_message(
             chat_id=admin_id,
             text=post_data["post_text"],
@@ -396,7 +476,7 @@ async def send_scheduled_linkedin_post(bot, slot: str = "morning") -> bool:
             disable_web_page_preview=True
         )
 
-        logger.info(f"✅ Successfully sent scheduled LinkedIn {slot} post to admin {admin_id}")
+        logger.info(f"✅ Successfully sent scheduled LinkedIn {slot} post ({stream_name}) to admin {admin_id}")
         return True
 
     except Exception as e:
