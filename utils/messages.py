@@ -717,27 +717,32 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
     if applied:
         line += "     ✅ *Applied*\n"
         
-    job_type = job.get("job_type", "full-time")
+    job_type = job.get("job_type", "full-time") or "full-time"
     duration = job.get("duration")
     
     subtitle_parts = [f"📍 {location}"]
-    if job_type.lower() == "internship":
+    norm_job_type = str(job_type).lower().replace("-", "").replace(" ", "")
+    if norm_job_type == "internship":
         if duration:
             subtitle_parts.append(escape_md(f"🎓 Internship ({duration})"))
         else:
             subtitle_parts.append("🎓 Internship")
-    elif job_type.lower() != "full-time":
+    elif norm_job_type and norm_job_type not in ("fulltime", ""):
         subtitle_parts.append(escape_md(f"💼 {job_type.title()}"))
         
-    if salary:
-        subtitle_parts.append(f"💰 {salary}")
+    raw_salary = (job.get("salary") or "").strip()
+    if raw_salary and raw_salary.lower() not in ("not disclosed", "not specified", "undisclosed", "n/a", "none", "-"):
+        subtitle_parts.append(f"💰 {escape_md(raw_salary)}")
         
-    subtitle_joined = " \\| ".join(subtitle_parts)
+    if posted:
+        subtitle_parts.append(escape_md(posted))
+        
+    subtitle_joined = " • ".join(subtitle_parts)
     line += f"     {subtitle_joined}\n"
 
     role_category = job.get("role_category")
     if role_category:
-        line += f"     💡 Role Category: {escape_md(role_category)}\n"
+        line += f"     💡 *Role Category:* {escape_md(role_category)}\n"
 
     if skills_text:
         line += f"     🏷 {skills_text}\n"
@@ -752,47 +757,45 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
         
         if plan in ("pro", "trial"):
             if score >= 70:
-                match_text = f"🟢 High match \\({score}%\\)"
+                match_text = f"🟢 *High Match* \\({score}%\\)"
             elif score >= 40:
-                match_text = f"🟡 Medium match \\({score}%\\)"
+                match_text = f"🟡 *Medium Match* \\({score}%\\)"
             else:
-                match_text = f"🔴 Low match \\({score}%\\)"
+                match_text = f"🔴 *Low Match* \\({score}%\\)"
             
             line += f"     {match_text}\n"
             
             if matched_skills:
                 m_text = ", ".join(s.title() for s in matched_skills[:4])
-                line += f"     ✅ Match: {escape_md(m_text)}\n"
+                line += f"     ✅ *Match:* {escape_md(m_text)}\n"
             if missing_skills:
                 ms_text = ", ".join(s.title() for s in missing_skills[:3])
-                line += f"     ⚠️ Missing: {escape_md(ms_text)}\n"
+                line += f"     ⚠️ *Missing:* {escape_md(ms_text)}\n"
             
             if exp_note:
                 if "gap" in exp_note.lower():
                     if "partial" in exp_note.lower():
-                        line += f"     💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
+                        line += f"     💡 *Experience:* Slight gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
                     else:
-                        line += f"     💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
+                        line += f"     💡 *Experience:* Gap \\({escape_md(str(job_exp))}\\+ yrs req\\)\n"
                 else:
-                    line += f"     ✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
+                    line += f"     ✅ *Experience:* Matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
                     
             batch_req = job.get("batch_required")
             if batch_req and str(batch_req).lower() != "any":
-                line += f"     🎓 Batch: {escape_md(str(batch_req))}\n"
+                line += f"     🎓 *Batch:* {escape_md(str(batch_req))}\n"
                 
         elif plan == "free":
             if score >= 70:
-                line += "     🟢 High match  🔒\n"
+                line += "     🟢 *High Match*  🔒\n"
                 line += "     \\[Upgrade to see breakdown\\]\n"
             elif score >= 40:
-                line += "     🟡 Partial match  🔒\n"
+                line += "     🟡 *Partial Match*  🔒\n"
                 line += "     \\[See which skills you're missing → Pro\\]\n"
             else:
-                line += "     🔴 Low match  🔒\n"
+                line += "     🔴 *Low Match*  🔒\n"
                 line += "     \\[See what you're missing → Pro\\]\n"
 
-    if posted:
-        line += f"     {escape_md(posted)}\n"
     line += "\n"
     return line
 
@@ -965,29 +968,29 @@ def job_detail_message(job: dict, plan: str = "free", user: dict = None, hr_repl
 
         if plan in ("pro", "trial"):
             if score >= 70:
-                badge = f"🟢 High match \\({score}%\\)"
+                badge = f"🟢 *High Match* \\({score}%\\)"
             elif score >= 40:
-                badge = f"🟡 Medium match \\({score}%\\)"
+                badge = f"🟡 *Medium Match* \\({score}%\\)"
             else:
-                badge = f"🔴 Low match \\({score}%\\)"
+                badge = f"🔴 *Low Match* \\({score}%\\)"
             
             match_section += f"\n\n🎯 *Match Insight*\n\n{badge}\n"
             
             if matched_skills:
                 m_text = ", ".join(s.title() for s in matched_skills)
-                match_section += f"✅ You match: {escape_md(m_text)}\n"
+                match_section += f"✅ *Match:* {escape_md(m_text)}\n"
             if missing_skills:
                 ms_text = ", ".join(s.title() for s in missing_skills)
-                match_section += f"⚠️ Missing: {escape_md(ms_text)}\n"
+                match_section += f"⚠️ *Missing:* {escape_md(ms_text)}\n"
                 
             if exp_note:
                 if "gap" in exp_note.lower():
                     if "partial" in exp_note.lower():
-                       match_section += f"\n💡 Slight experience gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
+                        match_section += f"\n💡 *Experience:* Slight gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
                     else:
-                        match_section += f"\n💡 Experience gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
+                        match_section += f"\n💡 *Experience:* Gap \\({escape_md(str(job_exp))}\\+ yrs required\\)\n"
                 else:
-                    match_section += f"\n✅ Experience matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
+                    match_section += f"\n✅ *Experience:* Matches \\({escape_md(str(job_exp))}\\+ yrs\\)\n"
         else:
             if score >= 70:
                 match_section = (
