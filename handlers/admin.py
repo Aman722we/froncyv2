@@ -1302,14 +1302,13 @@ async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await update.message.reply_text("❌ No eligible free users found.")
             return
 
-        # 2. Update their plan to trial and ensure at least 1 HR credit
+        # 2. Update their plan to trial (no free HR or resume review credits)
         await conn.execute(
             f"""
             UPDATE users 
             SET plan = 'trial',
                 is_trial = TRUE,
                 trial_expires_at = NOW() + INTERVAL '{days} days',
-                hr_requests_left = GREATEST(COALESCE(hr_requests_left, 0), 1),
                 updated_at = NOW()
             WHERE bot_id = $1 
               AND is_onboarded = TRUE 
