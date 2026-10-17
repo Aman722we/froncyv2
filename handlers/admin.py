@@ -1238,41 +1238,62 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(current_chunk, parse_mode="HTML", disable_web_page_preview=True)
 
 async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/masstrial <days> <message> - Grant a trial to all free users and message them."""
+    """/masstrial <days> [message] - Grant a trial to all free users.
+    If message is omitted or set to 'silent', grants the trial silently without broadcasting to users."""
     user_id = update.effective_user.id
     if user_id != settings.ADMIN_TELEGRAM_ID:
         return
 
-    if not context.args or len(context.args) < 2:
+    if not context.args or len(context.args) < 1:
         await update.message.reply_text(
-            "⚠️ <b>Usage:</b> /masstrial &lt;days&gt; &lt;message&gt;\n\n"
-            "Example:\n<code>/masstrial 3 🎉 Happy Navratri! Enjoy 3 days of Pro for free!</code>",
+            "⚠️ <b>Usage:</b>\n"
+            "• <b>Silent (no message to users):</b> <code>/masstrial &lt;days&gt;</code>\n"
+            "• <b>With Announcement:</b> <code>/masstrial &lt;days&gt; &lt;message&gt;</code>\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/masstrial 7</code> (Quietly grants 7-day trial to all free users)\n"
+            "<code>/masstrial 7 silent</code> (Explicit silent mode)\n"
+            "<code>/masstrial 3 🎉 Happy Navratri! Enjoy 3 days of Pro for free!</code>",
             parse_mode="HTML"
         )
         return
 
     try:
         days = int(context.args[0])
+        if days <= 0 or days > 365:
+            await update.message.reply_text("❌ Days must be between 1 and 365.")
+            return
     except ValueError:
         await update.message.reply_text("❌ Days must be a number.")
         return
 
-    message = " ".join(context.args[1:])
+    # Check for silent mode
+    is_silent = False
+    if len(context.args) == 1:
+        is_silent = True
+    else:
+        first_arg = context.args[1].strip().lower()
+        if first_arg in ("silent", "--silent", "-s", "quiet", "none", "noannounce", "false"):
+            is_silent = True
+
+    message = " ".join(context.args[1:]) if not is_silent else None
     bot_id = context.bot_data.get('bot_id', 1)
 
     from db.connection import get_pool
     pool = get_pool()
     
-    # 1. Fetch eligible users
+    # 1. Fetch eligible users (non-paying users: free users + trial users)
     async with pool.acquire() as conn:
         users = await conn.fetch(
             """
             SELECT telegram_id 
             FROM users 
             WHERE bot_id = $1 
-              AND (plan = 'free' OR plan IS NULL) 
               AND is_onboarded = TRUE 
               AND (is_deleted IS NULL OR is_deleted = FALSE)
+              AND (
+                  plan NOT IN ('pro', 'proplus', 'premium')
+                  OR is_trial = TRUE
+              )
             """,
             bot_id
         )
@@ -1281,21 +1302,36 @@ async def masstrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await update.message.reply_text("❌ No eligible free users found.")
             return
 
-        # 2. Update their plan to trial
+        # 2. Update their plan to trial and ensure at least 1 HR credit
         await conn.execute(
             f"""
             UPDATE users 
             SET plan = 'trial',
                 is_trial = TRUE,
                 trial_expires_at = NOW() + INTERVAL '{days} days',
+                hr_requests_left = GREATEST(COALESCE(hr_requests_left, 0), 1),
                 updated_at = NOW()
             WHERE bot_id = $1 
-              AND (plan = 'free' OR plan IS NULL) 
               AND is_onboarded = TRUE 
               AND (is_deleted IS NULL OR is_deleted = FALSE)
+              AND (
+                  plan NOT IN ('pro', 'proplus', 'premium')
+                  OR is_trial = TRUE
+              )
             """,
             bot_id
         )
+
+    if is_silent:
+        await update.message.reply_text(
+            f"🤫 <b>Silent Mass Trial Activated!</b>\n\n"
+            f"✅ Granted a <b>{days}-day Pro Trial</b> to <b>{len(users)}</b> users.\n"
+            f"🔒 <b>0 messages sent to users.</b>\n"
+            f"⚡ These users will now automatically receive instant career-page alerts whenever new matching jobs are detected.",
+            parse_mode="HTML"
+        )
+        logger.info(f"Admin applied silent mass trial: {days} days to {len(users)} users (bot_id={bot_id})")
+        return
 
     await update.message.reply_text(f"✅ Upgraded {len(users)} users to {days}-day Trial! Now sending messages...")
 
