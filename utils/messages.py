@@ -678,11 +678,11 @@ def format_job_list_message(
 
 def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:
     """Helper to render a single job for list/feed views."""
-    nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+    nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     if i <= len(nums):
         num = nums[i - 1]
     else:
-        num = f"[{i}]"
+        num = f"\\[{i}\\]"
         
     title = escape_md(job.get("title", "Untitled"))
     company = escape_md(job.get("company") or "Unknown Company")
@@ -713,7 +713,7 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
         except Exception:
             pass
 
-    line = f"{num}  *{title}* - {company}\n"
+    line = f"{num}  *{title}* \\- {company}\n"
     if applied:
         line += "     ✅ *Applied*\n"
         
@@ -737,7 +737,7 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
 
     role_category = job.get("role_category")
     if role_category:
-        line += f"     💡 Role: {escape_md(role_category)}\n"
+        line += f"     💡 Role Category: {escape_md(role_category)}\n"
 
     if skills_text:
         line += f"     🏷 {skills_text}\n"
