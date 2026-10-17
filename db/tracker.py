@@ -138,14 +138,24 @@ async def get_ai_usage_stats() -> dict:
     """Get cover letter, ATS check, and Apply Smart counts: today, this week, this month, total."""
     pool = get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
+        # Dynamically detect timestamp column (production uses created_at, dev may have used_at)
+        time_col = await conn.fetchval(
             """
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'ai_usage_logs' AND column_name IN ('used_at', 'created_at')
+            ORDER BY (column_name = 'created_at') DESC
+            LIMIT 1
+            """
+        ) or "created_at"
+
+        rows = await conn.fetch(
+            f"""
             SELECT
                 feature_type,
-                COUNT(*) FILTER (WHERE used_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC'))
+                COUNT(*) FILTER (WHERE {time_col} >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC'))
                     AS today,
-                COUNT(*) FILTER (WHERE used_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '7 days') AS week,
-                COUNT(*) FILTER (WHERE used_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '30 days') AS month,
+                COUNT(*) FILTER (WHERE {time_col} >= NOW() AT TIME ZONE 'UTC' - INTERVAL '7 days') AS week,
+                COUNT(*) FILTER (WHERE {time_col} >= NOW() AT TIME ZONE 'UTC' - INTERVAL '30 days') AS month,
                 COUNT(*) AS total
             FROM ai_usage_logs
             GROUP BY feature_type
