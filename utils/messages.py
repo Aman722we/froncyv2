@@ -713,7 +713,7 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
         except Exception:
             pass
 
-    line = f"{num}  *{title}* — {company}\n"
+    line = f"{num}  *{title}* - {company}\n"
     if applied:
         line += "     ✅ *Applied*\n"
         
@@ -734,6 +734,11 @@ def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = F
         
     subtitle_joined = " \\| ".join(subtitle_parts)
     line += f"     {subtitle_joined}\n"
+
+    role_category = job.get("role_category")
+    if role_category:
+        line += f"     💡 Role: {escape_md(role_category)}\n"
+
     if skills_text:
         line += f"     🏷 {skills_text}\n"
     
