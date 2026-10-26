@@ -127,12 +127,16 @@
   /refundrequest 7963303313
   ```
 
-### `/masstrial <days> [all|active|expired]`
-* **Description:** Extends trial days for multiple users simultaneously (great for marketing campaigns or service compensation).
+### `/masstrial <days> [message|silent]`
+* **Description:** Grants a Pro Trial to all eligible free and trial users for the specified number of days.
+  - **Silent Mode (Default):** If the message is omitted or set to `silent`, it quietly upgrades all eligible users with **0 notification messages sent**. Perfect for observing user reactions to instant alerts without broadcast fatigue.
+  - **Broadcast Mode:** If a custom message is provided, upgrades the users and broadcasts your custom announcement to all of them.
+  - **Credit Protection:** Only grants automated Pro access (Instant Alerts, full match breakdown, uncapped feed). Does *not* grant free HR request or resume review credits.
 * **Usage:**
   ```text
-  /masstrial 3 all       (Gives 3 extra trial days to all onboarded users)
-  /masstrial 7 expired   (Re-engages expired trial users with 7 more days)
+  /masstrial 7                  (Quietly grants 7-day trial to all free users)
+  /masstrial 7 silent           (Explicit silent mode)
+  /masstrial 3 🎉 Happy Diwali! Enjoy 3 days of Pro for free!
   ```
 
 ---
@@ -204,14 +208,29 @@
 ## 📈 5. SaaS Analytics & Growth
 
 ### `/analytics`
-* **Description:** Comprehensive SaaS health metrics:
-  - Total users, active users, churn rate
-  - Free vs Trial vs Pro plan breakdown
-  - Daily active users (DAU) & weekly engagement
-  - Application conversion funnel
+* **Description:** Comprehensive 5-page interactive SaaS dashboard:
+  - **Page 1:** Users, Plans (Free / Trial / Pro), Daily/Weekly Growth, Active Listings.
+  - **Page 2:** AI usage stats, Cover Letter tokens, and prompt breakdowns.
+  - **Page 3:** External job link click tracking.
+  - **Page 4:** Instant Career Alert metrics (24h, 7d, 30d alerts sent, Apply clicks, HR requests, feed clicks).
+  - **Page 5:** Retention cohorts (Day-1, Day-7, Day-30 retention rates).
 * **Usage:**
   ```text
   /analytics
+  ```
+
+### `/alertstats`
+* **Description:** Fast shortcut directly jumping to **Page 4** of Analytics to inspect 24-hour, 7-day, and 30-day Instant Job Alert performance, Apply clicks, HR request clicks, and Daily Feed clicks.
+* **Usage:**
+  ```text
+  /alertstats
+  ```
+
+### `/genpost`
+* **Description:** Generates a viral, high-converting LinkedIn post curated from the freshest jobs published on company career portals in the last 24 hours. Formatted with hooks, role categories, skills, and direct application calls to action.
+* **Usage:**
+  ```text
+  /genpost
   ```
 
 ### `/dashboard`

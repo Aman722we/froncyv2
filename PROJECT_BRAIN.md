@@ -1,65 +1,101 @@
-# 🧠 FroncyBot Project Brain & Handoff
+# 🧠 FroncyBot Project Brain & Master Architecture Handoff
 
-**IMPORTANT INSTRUCTION FOR AI AGENTS:** 
-If you are reading this, you are a new AI agent (or a new chat session) working on FroncyBot. **Read this entire document before writing any code.** It contains the project's history, architectural decisions, and critical lessons learned from failed experiments that are not visible in the source code.
+> **CRITICAL INSTRUCTION FOR ALL AI AGENTS & COLLABORATORS:**  
+> Read this entire document before making modifications or writing code. It captures the complete project evolution, architectural blueprints, live monetization models, database schema invariants, and hard-earned lessons from failed experiments that are not apparent from code alone.
 
 ---
 
 ## 1. Project Vision & Identity
-*   **Name:** FroncyBot (`@FroncyJobsBot` / `getfroncy.com`)
-*   **Target Audience:** Frontend Developers (specifically Freshers / 0-1 Years Experience).
-*   **Core Value Proposition:** A Telegram bot that curates highly relevant frontend jobs, calculates ATS match scores against the user's resume, and generates tailored cover letters to help them land interviews, not just apply to more jobs.
-*   **Monetization:** Freemium model. 3-Day Pro Trial (no card required). Pro gives unlimited jobs, 10 cover letters/day, and full ATS breakdowns.
+
+* **Product Name:** Froncy / Applixy (`@FroncyJobsBot` / `getfroncy.com`).
+* **Platform:** Python 3.11/3.12 Telegram Bot (`python-telegram-bot` v21 async) + FastAPI microservice (`main.py`) + Next.js web portal (`applixy-web`).
+* **Target Audience:** Software engineers across **all experience tiers (0 to 5+ YOE)**, from freshers to mid-level and senior engineers looking to switch into product companies.
+* **Core Value Proposition:**
+  1. **Sub-15 Minute Career-Page Alerts:** Ingests jobs directly from 525+ official company ATS portals (Greenhouse, Lever, Ashby) before they are syndicated to public job boards like LinkedIn or Naukri.
+  2. **100-Point Smart Matching:** Replaces spam with a transparent matching score (Skills + Taxonomy Expansion + YOE Gap + Role Preference).
+  3. **Multi-Tenant White-Labeling:** Allows creators, communities, and tech influencers to launch their own branded career bot (`bot_id`) sharing the underlying 525+ company ingestion pipeline.
 
 ---
 
-## 2. Core Architectural Decisions
-*   **Platform:** Telegram Bot (Python / `python-telegram-bot` v20+ async).
-*   **Database:** PostgreSQL (hosted on Railway). We use `asyncpg` for high-performance connection pooling.
-*   **AI Models:** NVIDIA NIM (Llama 3.1 70B) for high-quality cover letters and ATS resume diff generation. We prioritize quality over speed for generation.
-*   **PDF Generation:** `pdflatex` (TeX Live) is used for rendering dynamic, ATS-parseable resumes to guarantee perfect layout matching without hallucinations.
-*   **Data Independence:** The database uses `telegram_id` as the primary key. User data is strictly isolated from the bot instance. If the Telegram bot is banned, user data is perfectly preserved.
+## 2. Core Architectural Pillars
+
+### A. Career Page Sync Engine (`services/career_sync.py`, `services/career_fetcher.py`)
+* Monitors **525+ verified company career sources** via direct REST endpoints (Greenhouse, Lever, Ashby).
+* **Strict Gatekeeper (`is_relevant_tech_job`)**: Filters out sales, marketing, HR, support, and foreign non-remote roles *before* invoking any LLM, saving database storage and AI token costs.
+* **LLM Metadata Enrichment (`extract_job_metadata`)**: Normalizes raw job descriptions into structured arrays: required skills, minimum YOE, salary ranges, workplace types (Remote/Hybrid/On-site), and normalized role categories.
+
+### B. Unified 100-Point Matching Engine (`utils/messages.py`)
+All surfaces (**Instant Alerts**, **Daily Morning Feed**, and **Browse Jobs**) share the exact same scoring logic (`compute_manual_job_match`):
+* **40% Skills:** Taxonomy & synonym graph expansion (e.g., matching React to Next.js/Redux).
+* **25% Experience:** Candidate YOE compared against minimum job requirement (rewards exact/fresher-friendly matches; scores slight/major experience gaps).
+* **15% Recency:** Rewards newer job drops ($< 24\text{h}$).
+* **10% Role Category:** Evaluates candidate role preference against title and `role_category`.
+* **10% Salary Quality:** Rewards disclosed and competitive compensation.
+
+**Surface Behavior:**
+* **Instant Alerts (Real-Time):** Ingestion triggers evaluations across all Pro/Trial users; sends immediate alerts if score $\ge 50\%$.
+* **Daily Feed (Scheduled Morning Drop):** Evaluates all active jobs, ranks descending by score, deduplicates against cooldowns (`jobs_sent_log`), and delivers top picks.
+* **Browse Jobs (Interactive Pagination):** Evaluates pool against the user, displaying bold badges (`🟢 *High Match* (75%)`, `✅ *Match:* ...`, `⚠️ *Missing:* ...`, `✅ *Experience:* Matches`).
+
+### C. Multi-Tenant Bot Network (`db/bots.py`, `bot_registry.py`)
+* Enables running multiple Telegram bots simultaneously on the same container backend.
+* **Database Isolation Rule:** All user lookups, state updates, seen jobs, and alert queues MUST scope by `bot_id`. Never execute global user updates without `bot_id` scoping.
+
+### D. Analytics & Conversion Funnel (`handlers/analytics.py`, `db/tracker.py`)
+* 5-page interactive dashboard accessible via `/analytics` and `/alertstats`:
+  * **Page 1:** Users, Plans, Growth, Active Jobs.
+  * **Page 2:** AI usage & Cover Letter generation stats.
+  * **Page 3:** Link click tracking across legacy job boards.
+  * **Page 4:** Instant Career Alert metrics (24h, 7d, 30d cohorts for Alerts Sent, Apply Clicks, HR Request Clicks, Daily Feed Clicks, Browse Jobs Clicks).
+  * **Page 5:** Retention cohorts (Day-1, Day-7, Day-30).
+* **Redirect Tracking:** All job application buttons route through `/r/{job_id}?uid={telegram_id}&src={surface}` via FastAPI to ensure zero untracked clicks.
+
+### E. Monetization & Credit Guardrails (`handlers/requests.py`, `handlers/admin.py`)
+* **SaaS Subscription:** Free tier (limited preview, locked breakdown) vs Pro Trial / Pro Subscription (instant alerts, full match insight, daily curated feeds).
+* **Concierge Services:** Request HR Details (`hr_requests_left`) and Human Resume Review (`resume_reviews_left`) are strictly separated from bot subscriptions.
+* **Trial Economics:** `/masstrial <days> [message|silent]` grants Pro trial access without granting free manual request credits, protecting unit economics.
 
 ---
 
 ## 3. Historical Incidents & Safeguards
-### The Telegram Deletion Incident
-*   **What happened:** In the early days, the original bot account was deleted by Telegram without warning. 
-*   **The Safeguard:** We never market the direct `t.me` link. We market `getfroncy.com` (routed through Cloudflare). If the bot gets banned again, we spin up a new bot token, update the backend, and change the Cloudflare redirect. The database seamlessly recognizes returning users via their `telegram_id`.
 
-### The Merge Conflict / Broken Production Incident
-*   **What happened:** We developed a major feature (Resumes) on the `develop` branch while fixing bugs on `main`. During the merge, an import (`import asyncio`) was dropped, causing the bot to crash completely on launch for all users.
-*   **The Safeguard:** We now rely heavily on our Staging Environment (`@FroncyTestBot` hooked to `develop`). For the future, we must NEVER push code directly to `main` without testing in `develop` first, and we should use Linters/Code Review (like CodeRabbit) for PRs.
+### 1. The Telegram Deletion Incident
+* **What Happened:** Original bot username was suspended by Telegram without prior notice.
+* **The Safeguard:** Never market direct `t.me` URLs. All public marketing links point to `getfroncy.com` through Cloudflare. In a disaster recovery scenario, a new bot token is plugged in and Cloudflare is re-pointed without losing any user database records (`telegram_id` remains the immutable key).
 
----
+### 2. The Merge Conflict / Broken Production Incident
+* **What Happened:** Unsynchronized merges directly into `main` dropped critical imports, taking down production.
+* **The Safeguard:** **NEVER push directly to `main`.** All development occurs on `develop`. Pushes must be synchronized to both remotes:
+  ```powershell
+  git push origin develop
+  git push froncyv2 develop
+  ```
 
-## 4. The Graveyard (Failed Experiments & Lessons)
-*DO NOT REPEAT THESE MISTAKES.*
+### 3. The MarkdownV2 Reserved Character Crash
+* **What Happened:** Using raw hyphens `-` or brackets `[` in string templates caused Telegram to reject messages with `BadRequest: Can't parse entities: character '-' is reserved`.
+* **The Safeguard:** All MarkdownV2 messages must pass dynamic text through `escape_md()`. Literal dashes between title and company must be written as `\\-`. Fallback number tags must use `\\[{i}\\]`.
 
-### ❌ Failed Experiment 1: The 5-Step Onboarding
-*   **What we tried:** We asked users for their intent (Hunting/Exploring), Skills, Location, Batch Year (which required typing), and Resume upload immediately upon clicking `/start`.
-*   **The Result:** A catastrophic **50% drop-off rate**. Users quit before seeing a single job.
-*   **The Fix:** We ripped it down to 2 steps (Skills ➔ Experience). Drop-off fell to 5-10%. 
-*   **Rule for AI:** NEVER add friction to the `/start` onboarding flow. Push secondary settings (Resume, Location) to the `/settings` menu.
-
-### ❌ Failed Experiment 2: Raw Hyperlinks for Job Tracking
-*   **What we tried:** We put the job application URL as a raw, clickable blue hyperlink directly in the message text.
-*   **The Result:** Telegram opened the browser directly. Our backend `link_clicks` analytics permanently showed `0`.
-*   **The Fix:** We completely removed hyperlinks from message bodies. We force users to click an `🔗 Open Link` inline keyboard button, which routes them through our `main.py` FastApi redirector (`/r/{job_id}`) to log the click before sending them to the job.
-*   **Rule for AI:** NEVER put direct URLs in message text if we need to track intent. Always use inline buttons + the redirector.
-
-### ❌ Failed Experiment 3: Silent AI Generation
-*   **What we tried:** Generating a high-quality Llama 3 70B cover letter took 60-70 seconds. The bot sat in silence while processing.
-*   **The Result:** Users thought the bot was broken and abandoned the process.
-*   **The Fix:** Implemented a dynamic async loader (`"Analyzing job..." ➔ "Scanning resume..." ➔ "Writing..."`).
-*   **Rule for AI:** Any backend process taking longer than 3 seconds MUST have a visible, updating loading state for the user.
+### 4. Database Column Drift Handling
+* **What Happened:** Production database had `created_at` on `ai_usage_logs` while staging had `used_at`, crashing `/analytics` page 2.
+* **The Safeguard:** Database queries inspect column existence dynamically via `information_schema.columns` or handle safe schema migrations in `db/connection.py`.
 
 ---
 
-## 5. Coding Standards & AI Rules
-1. **Performance:** Always use `async`/`await` for DB calls (`asyncpg`) and Telegram API calls. Never use blocking `requests` or `time.sleep()`.
-2. **UI Real Estate:** Mobile screens are small. Keep message text concise. We previously had a bug where the `[Step 1 of 2]` indicator was pushed off-screen because the text was too long.
-3. **Analytics First:** Every major action (cover letter copied, job link clicked, ATS check run) must be logged in the `ai_usage_logs` or `link_clicks` tables. 
+## 4. The Graveyard (Failed Experiments & Hard Rules)
+
+* **❌ 5-Step Onboarding:** Do not ask for user goals, location, batch year, and resume at `/start`. It produced a 50% drop-off. Keep `/start` to 2 quick taps (Skills ➔ Experience). Push everything else to `/settings`.
+* **❌ Raw Message Hyperlinks:** Never embed raw application URLs in message text. Telegram bypasses the bot backend. Always use inline buttons routed through `/r/{job_id}`.
+* **❌ Free Credits on Mass Trials:** Never bundle free human/API-costly credits (HR lookups, resume reviews) into free mass trials. Trials should only grant automated bot features.
+* **❌ Pipe `|` Separators & `Not Disclosed` Clutter:** Do not dump pipe-separated database text into job cards. Use clean Unicode bullets `•` and omit undisclosed salaries to keep cards tight and mobile-friendly.
 
 ---
-*End of Brain. If you have ingested this, acknowledge it and ask the user what they want to build today.*
+
+## 5. Coding Standards & Terminal Execution
+
+1. **Strict Asynchronous Code:** Use `async`/`await` across all database (`asyncpg`), HTTP (`httpx`), and Telegram handlers. Never use blocking `requests` or `time.sleep()`.
+2. **Windows PowerShell Encoding:** When running test scripts in PowerShell, always prepend:
+   ```powershell
+   $env:PYTHONIOENCODING='utf-8'; & '.\venv\Scripts\python.exe' -c "..."
+   ```
+3. **No Em-Dashes in Telegram Strings:** Never introduce em-dashes (`—`) or en-dashes (`–`) into bot messages. Use clean standard dashes (`-` escaped as `\\-`) or colons.
+4. **Multi-Tenant Safety:** Every user-facing handler must obtain `bot_id = context.bot_data.get('bot_id', 1)` and scope queries accordingly.
