@@ -27,7 +27,12 @@ def get_registry() -> Dict[str, tuple]:
 
 def get_primary_app() -> Application | None:
     """Return the primary FroncyBot Application (for webhooks, admin alerts, etc.)."""
-    return _registry.get(_primary_token, (None,))[0]
+    if _primary_token and _primary_token in _registry:
+        return _registry[_primary_token][0]
+    if _registry:
+        # Fallback to the first registered bot app
+        return next(iter(_registry.values()))[0]
+    return None
 
 
 
