@@ -524,13 +524,14 @@ async def run_career_sync() -> list[dict]:
         total_new = sum(s["new"] for s in summaries)
         logger.info(f"⚡ Career sync complete. Total new jobs: {total_new}")
 
-        # Auto-heal existing database jobs that have empty skills
-        try:
-            repaired = await backfill_empty_skills_jobs(limit=30)
-            if repaired > 0:
-                logger.info(f"✨ Auto-healed {repaired} jobs with missing skills!")
-        except Exception as e:
-            logger.warning(f"Error during auto-heal backfill: {e}")
+        # Auto-heal: only trigger if fresh jobs were ingested during this run
+        if total_new > 0:
+            try:
+                repaired = await backfill_empty_skills_jobs(limit=10)
+                if repaired > 0:
+                    logger.info(f"✨ Auto-healed {repaired} new jobs with missing skills!")
+            except Exception as e:
+                logger.warning(f"Error during auto-heal backfill: {e}")
 
         return summaries
 
@@ -550,12 +551,13 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
                 """
                 SELECT id, title, description, location, url
                 FROM manual_jobs
-                WHERE skills = '{}' 
-                   OR array_length(skills, 1) IS NULL 
-                   OR array_length(skills, 1) = 0
-                   OR role_category IS NULL
-                   OR description LIKE '%<%'
-                   OR description LIKE '%&quot;%'
+                WHERE (COALESCE(skills_attempts, 0) < 2)
+                   AND (
+                       skills = '{}' 
+                       OR array_length(skills, 1) IS NULL 
+                       OR array_length(skills, 1) = 0
+                       OR role_category IS NULL
+                   )
                 ORDER BY id DESC
                 LIMIT $1
                 """,
@@ -568,9 +570,20 @@ async def backfill_empty_skills_jobs(limit: int = 50) -> int:
         from services.career_fetcher import _strip_html
         logger.info(f"🔄 Backfilling intelligence for {len(rows)} jobs needing enrichment...")
         for row in rows:
+            job_id = row["id"]
+            title = row["title"]
             try:
-                job_id = row["id"]
-                title = row["title"]
+                # Mark attempt count immediately to prevent infinite retry loops
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE manual_jobs
+                        SET skills_attempts = COALESCE(skills_attempts, 0) + 1,
+                            skills_attempted_at = NOW()
+                        WHERE id = $1
+                        """,
+                        job_id
+                    )
                 raw_desc = row["description"] or ""
                 desc = _strip_html(raw_desc)
                 loc = row["location"] or ""

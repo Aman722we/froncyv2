@@ -369,6 +369,9 @@ async def init_db() -> asyncpg.Pool:
                 )
                 WHERE description LIKE '%<%' OR description LIKE '%&quot;%' OR description LIKE '%&amp;%';
             """)
+            # Track skills enrichment attempts to prevent infinite retry loops
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS skills_attempts INT DEFAULT 0;")
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS skills_attempted_at TIMESTAMPTZ;")
         except Exception as e:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 

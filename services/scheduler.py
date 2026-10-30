@@ -9,6 +9,7 @@ from loguru import logger
 from bot_registry import get_app_for_bot_id
 from utils.error_alert import send_error_alert
 from db.connection import get_pool
+from config import settings
 
 
 scheduler = AsyncIOScheduler()
@@ -449,7 +450,12 @@ async def _send_evening_digest():
 
 
 async def _run_career_sync_job():
-    """Background scheduled job: sync all active career page sources."""
+    """Background scheduled job: sync all active career page sources (Production only)."""
+    from config import settings
+    if settings.ENVIRONMENT != "production":
+        logger.info("ℹ️ Career sync job skipped (ENVIRONMENT is not production).")
+        return
+
     try:
         from services.career_sync import run_career_sync
         await run_career_sync()
@@ -532,16 +538,19 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Career Page Sync (Froncy V2) — every 60 minutes
-    scheduler.add_job(
-        _run_career_sync_job,
-        CronTrigger(minute="0"),
-        id="career_page_sync",
-        name="Sync career pages every 60 min",
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
-    )
+    # Career Page Sync (Froncy V2) — every 60 minutes (Production only)
+    if settings.ENVIRONMENT == "production":
+        scheduler.add_job(
+            _run_career_sync_job,
+            CronTrigger(minute="0"),
+            id="career_page_sync",
+            name="Sync career pages every 60 min",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    else:
+        logger.info("ℹ️ Career page sync scheduler omitted (ENVIRONMENT is not production).")
 
     ist = ZoneInfo("Asia/Kolkata")
 
