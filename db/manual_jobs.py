@@ -29,15 +29,31 @@ async def add_manual_job(data: dict) -> int:
                added_by (int telegram_id), posted_at (datetime optional)
     Returns: new job ID
     """
+    company_name = (data.get("company") or "").strip()
+    company_id = data.get("company_id")
+
     pool = get_pool()
     async with pool.acquire() as conn:
+        if not company_id and company_name and company_name != "Unknown":
+            # Link to existing company or insert canonical company
+            c_row = await conn.fetchrow("SELECT id FROM companies WHERE lower(name) = lower($1)", company_name)
+            if c_row:
+                company_id = c_row["id"]
+            else:
+                ins_row = await conn.fetchrow(
+                    "INSERT INTO companies (name, is_active) VALUES ($1, TRUE) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+                    company_name,
+                )
+                if ins_row:
+                    company_id = ins_row["id"]
+
         row = await conn.fetchrow(
             """
             INSERT INTO manual_jobs (
                 title, company, url, location, salary, job_type, duration,
                 skills, min_yoe, eligible_batches, added_by, posted_at,
-                hm_name, hm_role, hm_linkedin, hm_email
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                hm_name, hm_role, hm_linkedin, hm_email, company_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
             RETURNING id
             """,
             data["title"],
@@ -56,10 +72,11 @@ async def add_manual_job(data: dict) -> int:
             data.get("hm_role"),
             data.get("hm_linkedin"),
             data.get("hm_email"),
+            company_id,
         )
         job_id = row["id"]
         invalidate_jobs_cache()
-        logger.info(f"Manual job added: ID={job_id} — {data['title']} @ {data['company']}")
+        logger.info(f"Manual job added: ID={job_id} — {data['title']} @ {data['company']} (company_id={company_id})")
         return job_id
 
 
