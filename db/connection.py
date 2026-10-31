@@ -372,6 +372,8 @@ async def init_db() -> asyncpg.Pool:
             # Track skills enrichment attempts to prevent infinite retry loops
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS skills_attempts INT DEFAULT 0;")
             await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS skills_attempted_at TIMESTAMPTZ;")
+            # Track whether job had a genuine publish timestamp from ATS (RFC-001 v2 alert safety)
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS has_verified_pub_date BOOLEAN DEFAULT TRUE;")
         except Exception as e:
             logger.warning(f"Failed to apply career_sources migrations: {e}")
 
@@ -379,6 +381,18 @@ async def init_db() -> asyncpg.Pool:
         try:
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS hr_requests_left INT DEFAULT 0;")
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_reviews_left INT DEFAULT 0;")
+
+            # ── Notification Preferences & Churn Defense (RFC-002) ──
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_instant_alerts BOOLEAN NOT NULL DEFAULT TRUE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_daily_digest BOOLEAN NOT NULL DEFAULT TRUE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_evening_digest BOOLEAN NOT NULL DEFAULT FALSE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_weekly_scorecard BOOLEAN NOT NULL DEFAULT FALSE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS silent_night_mode BOOLEAN NOT NULL DEFAULT TRUE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS alerts_paused_until TIMESTAMPTZ;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ;")
+            # Weekly Free Sample Tracker (RFC-003)
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_sample_alert_at TIMESTAMPTZ;")
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS manual_requests (
                     id              SERIAL PRIMARY KEY,
@@ -449,6 +463,118 @@ async def init_db() -> asyncpg.Pool:
             """)
         except Exception as e:
             logger.warning(f"Failed to apply engagement tracking migrations: {e}")
+
+        # ── Pro Company Watchlist & Free Employer Mute Engine (RFC-004) ──
+        try:
+            # 1. Companies directory with hierarchy constraint
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS companies (
+                    id          SERIAL PRIMARY KEY,
+                    name        TEXT NOT NULL UNIQUE,
+                    parent_id   INT REFERENCES companies(id) ON DELETE SET NULL,
+                    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at  TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT chk_no_self_parent CHECK (parent_id IS NULL OR parent_id != id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_companies_active_name ON companies (is_active, name);
+            """)
+
+            # 2. Add company_id foreign keys to career_sources and manual_jobs
+            await conn.execute("ALTER TABLE career_sources ADD COLUMN IF NOT EXISTS company_id INT REFERENCES companies(id) ON DELETE SET NULL;")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_career_sources_company_id ON career_sources (company_id);")
+
+            await conn.execute("ALTER TABLE manual_jobs ADD COLUMN IF NOT EXISTS company_id INT REFERENCES companies(id) ON DELETE SET NULL;")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_jobs_company_id ON manual_jobs (company_id);")
+
+            # 3. User Company Preferences (Composite PK; users has compound PK (telegram_id, bot_id))
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_company_prefs (
+                    telegram_id BIGINT NOT NULL,
+                    company_id  INT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                    pref_type   VARCHAR(10) NOT NULL CHECK (pref_type IN ('follow', 'mute')),
+                    created_at  TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (telegram_id, company_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_company_prefs_user ON user_company_prefs (telegram_id, pref_type);
+            """)
+
+            # 4. Filter mode on users table
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS company_filter_mode VARCHAR(20) NOT NULL DEFAULT 'all';")
+
+            # 5. Curated Bundles
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS company_bundles (
+                    id          SERIAL PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    emoji       TEXT NOT NULL,
+                    slug        TEXT NOT NULL UNIQUE,
+                    description TEXT
+                );
+                CREATE TABLE IF NOT EXISTS company_bundle_members (
+                    bundle_id   INT NOT NULL REFERENCES company_bundles(id) ON DELETE CASCADE,
+                    company_id  INT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                    PRIMARY KEY (bundle_id, company_id)
+                );
+            """)
+
+            # 6. Automatic Backfill: Populate companies from distinct career_sources company_name
+            await conn.execute("""
+                INSERT INTO companies (name)
+                SELECT DISTINCT trim(company_name)
+                FROM career_sources
+                WHERE company_name IS NOT NULL AND trim(company_name) != ''
+                ON CONFLICT (name) DO NOTHING;
+            """)
+
+            # Link career_sources.company_id
+            await conn.execute("""
+                UPDATE career_sources cs
+                SET company_id = c.id
+                FROM companies c
+                WHERE cs.company_id IS NULL AND trim(cs.company_name) = c.name;
+            """)
+
+            # Link manual_jobs.company_id where company matches canonical name
+            await conn.execute("""
+                UPDATE manual_jobs mj
+                SET company_id = c.id
+                FROM companies c
+                WHERE mj.company_id IS NULL AND lower(trim(mj.company)) = lower(c.name);
+            """)
+
+            # 7. Seed Default Curated Bundles
+            bundles_data = [
+                ("FAANG & Global Giants", "🌐", "big-tech", "Tier-1 global tech leaders with large engineering hubs in India"),
+                ("Top Indian Unicorns", "🦄", "unicorns", "India's highest valued consumer & tech startups"),
+                ("DevTools & AI", "🚀", "devtools-ai", "Fast-growing developer infrastructure & AI companies"),
+                ("FinTech & Quant Trading", "🏦", "fintech-quant", "Top fintechs and high-frequency quantitative trading firms"),
+            ]
+            for bname, bemoji, bslug, bdesc in bundles_data:
+                await conn.execute("""
+                    INSERT INTO company_bundles (name, emoji, slug, description)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (slug) DO NOTHING;
+                """, bname, bemoji, bslug, bdesc)
+
+            # 8. Seed Default Bundle Members
+            bundle_members_mapping = [
+                ("big-tech", ["Reddit India", "Discord Tech", "Thoughtworks India", "ZoomInfo India", "Netskope", "Celonis"]),
+                ("unicorns", ["Drivetrain", "Springboard", "AlphaSense", "Owner.com"]),
+                ("devtools-ai", ["PostHog", "GitLab", "Sourcegraph", "Kognitos", "Gather AI", "SingleStore"]),
+                ("fintech-quant", ["Branch International", "Oportun", "Check Technologies", "PolicyMe"]),
+            ]
+            for bslug, cnames in bundle_members_mapping:
+                await conn.execute("""
+                    INSERT INTO company_bundle_members (bundle_id, company_id)
+                    SELECT b.id, c.id
+                    FROM company_bundles b
+                    CROSS JOIN companies c
+                    WHERE b.slug = $1 AND c.name = ANY($2::text[])
+                    ON CONFLICT DO NOTHING;
+                """, bslug, cnames)
+
+        except Exception as e:
+            logger.warning(f"Failed to apply RFC-004 company preference migrations: {e}")
 
     logger.info("Database initialized successfully.")
     return _pool

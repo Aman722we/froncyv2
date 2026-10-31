@@ -271,6 +271,35 @@ async def log_instant_alert_sent(telegram_id: int, job_id: int) -> None:
         logger.warning(f"Could not log instant alert sent (non-critical): {e}")
 
 
+async def count_pro_delivered_jobs(job_ids: list[int], min_hours_prior: float = 2.0) -> int:
+    """
+    Returns count of unique jobs in job_ids that were sent as instant alerts
+    to Pro members at least min_hours_prior hours ago.
+    100% computed from real database logs.
+    """
+    if not job_ids:
+        return 0
+    pool = get_pool()
+    try:
+        async with pool.acquire() as conn:
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT s.job_id)
+                FROM instant_alerts_sent s
+                JOIN users u ON s.telegram_id = u.telegram_id
+                WHERE s.job_id = ANY($1::int[])
+                  AND u.plan IN ('pro', 'trial', 'proplus', 'premium')
+                  AND s.sent_at <= NOW() - ($2 || ' hours')::INTERVAL
+                """,
+                job_ids,
+                str(min_hours_prior)
+            )
+            return count or 0
+    except Exception as e:
+        logger.warning(f"Could not count pro delivered jobs (non-critical): {e}")
+        return 0
+
+
 async def log_hr_request_click(telegram_id: int, job_id: int | None, source: str = "other") -> None:
     """Log a 'Request HR Details' button click with source attribution."""
     pool = get_pool()

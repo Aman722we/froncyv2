@@ -260,8 +260,14 @@ def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:
     if apply_row:
         buttons.append(apply_row)
 
+    if plan == "free":
+        buttons.append([
+            InlineKeyboardButton("⭐ Unlock Instant Drops (Pro)", callback_data="upgrade_pro")
+        ])
+
     buttons.append([
-        InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")
+        InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
+        InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications"),
     ])
 
     return InlineKeyboardMarkup(buttons)
@@ -349,10 +355,10 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 
     buttons = []
 
-    # Row 1: Cover Letter & HR Details
+    # Row 1: Cover Letter (HR Details hidden)
     buttons.append([
         InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-        InlineKeyboardButton("✅ HR Details Granted", callback_data="ignore") if hr_granted else InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job['id']}")
+        # InlineKeyboardButton("✅ HR Details Granted", callback_data="ignore") if hr_granted else InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job['id']}")
     ])
     
     # Row 3: Mark as Applied (or "✅ Applied" if already applied) + Remind Me
@@ -372,6 +378,14 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     else:
         back_cb = "menu_jobs"
         back_label = "⬅️ Back to Jobs"
+
+    cid = job.get("company_id")
+    if cid:
+        cname = (job.get("company") or "Company")[:15]
+        buttons.append([
+            InlineKeyboardButton(f"⭐ Follow {cname}", callback_data=f"cf_fw:{cid}"),
+            InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{cid}"),
+        ])
 
     buttons.append([
         InlineKeyboardButton("🔗 Open Link", url=apply_url),
@@ -435,9 +449,10 @@ def resume_keyboard(has_resume: bool, plan: str = "free") -> InlineKeyboardMarku
             [
                 InlineKeyboardButton("🔄 Replace", callback_data="resume_upload"),
             ],
-            [
-                InlineKeyboardButton("📄 Request Human Review", callback_data="req_resume_review"),
-            ],
+            # Hidden: Request Human Review
+            # [
+            #     InlineKeyboardButton("📄 Request Human Review", callback_data="req_resume_review"),
+            # ],
             [
                 InlineKeyboardButton("🔙 Back", callback_data="back_menu")
             ]
@@ -483,9 +498,10 @@ def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("📍 Change Location", callback_data="settings_location"),
-            InlineKeyboardButton("⏰ Alert Time", callback_data="settings_alert_time"),
+            InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications"),
         ],
         [
+            InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
             InlineKeyboardButton("📊 My Status", callback_data="settings_status"),
         ],
         [
@@ -536,3 +552,94 @@ def saved_jobs_keyboard(jobs: list[dict]) -> InlineKeyboardMarkup:
     ])
 
     return InlineKeyboardMarkup(buttons)
+
+
+def notification_settings_keyboard(user: dict, is_pro: bool = False) -> InlineKeyboardMarkup:
+    """Builds interactive inline keyboard for Notification Preferences (RFC-002)."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    paused_until = user.get("alerts_paused_until")
+    is_paused = False
+    if paused_until:
+        if hasattr(paused_until, "tzinfo") and paused_until.tzinfo is None:
+            paused_until = paused_until.replace(tzinfo=timezone.utc)
+        is_paused = paused_until > now
+
+    instant_on = user.get("notify_instant_alerts", True)
+    daily_on = user.get("notify_daily_digest", True)
+    silent_on = user.get("silent_night_mode", True)
+    evening_on = user.get("notify_evening_digest", False)
+    weekly_on = user.get("notify_weekly_scorecard", False)
+
+    buttons = []
+
+    # Row 1: Instant Alerts (Pro vs Free Sample - RFC-003)
+    if is_pro:
+        inst_btn = InlineKeyboardButton(
+            f"🚨 Instant Drops: {'✅ ON' if instant_on else '❌ OFF'}",
+            callback_data=f"notif_set_instant_{0 if instant_on else 1}"
+        )
+    else:
+        inst_btn = InlineKeyboardButton(
+            f"🎁 Weekly Free Sample: {'✅ ON' if instant_on else '❌ OFF'}",
+            callback_data=f"notif_set_instant_{0 if instant_on else 1}"
+        )
+    buttons.append([inst_btn])
+
+    # Row 2: Daily Digest & Silent Night
+    buttons.append([
+        InlineKeyboardButton(
+            f"📬 Daily Feed: {'✅ ON' if daily_on else '❌ OFF'}",
+            callback_data=f"notif_set_daily_{0 if daily_on else 1}"
+        ),
+        InlineKeyboardButton(
+            f"🌙 Silent Night: {'✅ ON' if silent_on else '❌ OFF'}",
+            callback_data=f"notif_set_silent_{0 if silent_on else 1}"
+        ),
+    ])
+
+    # Row 3: Evening Saved Jobs & Friday Review
+    buttons.append([
+        InlineKeyboardButton(
+            f"🌆 Evening Nudge: {'✅ ON' if evening_on else '❌ OFF'}",
+            callback_data=f"notif_set_evening_{0 if evening_on else 1}"
+        ),
+        InlineKeyboardButton(
+            f"📊 Friday Review: {'✅ ON' if weekly_on else '❌ OFF'}",
+            callback_data=f"notif_set_weekly_{0 if weekly_on else 1}"
+        ),
+    ])
+
+    # Row 4: Feed Time & Pause/Resume
+    alert_time = user.get("alert_time", "09:00")
+    pause_btn = (
+        InlineKeyboardButton("▶️ Resume Alerts", callback_data="notif_pause_resume")
+        if is_paused
+        else InlineKeyboardButton("🔕 Pause Alerts", callback_data="notif_pause_menu")
+    )
+    buttons.append([
+        InlineKeyboardButton(f"⏰ Feed Time ({alert_time})", callback_data="settings_alert_time"),
+        pause_btn,
+    ])
+
+    # Target Companies & Back to Settings
+    buttons.append([InlineKeyboardButton("🏢 Target Company Filters", callback_data="settings_companies")])
+    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def pause_duration_keyboard() -> InlineKeyboardMarkup:
+    """Duration choices for pausing notifications."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⏸️ 3 Days", callback_data="notif_pause_set_3d"),
+            InlineKeyboardButton("⏸️ 1 Week", callback_data="notif_pause_set_7d"),
+        ],
+        [
+            InlineKeyboardButton("⏸️ 2 Weeks", callback_data="notif_pause_set_14d"),
+            InlineKeyboardButton("⏸️ Indefinitely", callback_data="notif_pause_set_forever"),
+        ],
+        [
+            InlineKeyboardButton("🔙 Back to Notifications", callback_data="settings_notifications")
+        ]
+    ])

@@ -842,13 +842,15 @@ async def syncnow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if len(summaries) > 10 and s.get("new", 0) == 0 and s.get("errors", 0) == 0 and s.get("deactivated", 0) == 0:
             continue
             
+        stale_str = f" | Stale: {s['stale_dropped']}" if s.get("stale_dropped", 0) > 0 else ""
         deact_str = f" | Closed: {s['deactivated']}" if s.get("deactivated", 0) > 0 else ""
         lines.append(
             f"<b>{s['company']}</b>\n"
-            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']}{deact_str} | Errors: {s['errors']}"
+            f"  Fetched: {s['fetched']} | New: {s['new']} | Dupes: {s['duplicates']}{stale_str}{deact_str} | Errors: {s['errors']}"
         )
     
-    lines.append(f"\n🎉 <b>Total new: {total_new}</b> | 🗑️ <b>Closed/Expired: {total_deactivated}</b>")
+    total_stale = sum(s.get("stale_dropped", 0) for s in summaries)
+    lines.append(f"\n🎉 <b>Total new: {total_new}</b> | ⏳ <b>Stale dropped: {total_stale}</b> | 🗑️ <b>Closed/Expired: {total_deactivated}</b>")
     if len(summaries) > 10 and total_new == 0 and total_errors == 0 and total_deactivated == 0:
         lines.append("<i>(All other sources fetched 0 new jobs without errors.)</i>")
         
@@ -1004,6 +1006,23 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if top_skills:
             skills_line = f"🛠️ *Key Skills:* {escape_md(', '.join(top_skills))}\n"
 
+    posted = job.get("posted_at")
+    if posted:
+        from datetime import datetime, timezone
+        if hasattr(posted, "tzinfo") and posted.tzinfo is None:
+            posted = posted.replace(tzinfo=timezone.utc)
+        mins_ago = int((datetime.now(timezone.utc) - posted).total_seconds() / 60)
+        if mins_ago < 0:
+            mins_ago = 0
+        if mins_ago < 60:
+            freshness = f"{mins_ago} min ago" if mins_ago > 0 else "just now"
+        elif mins_ago < 1440:
+            freshness = f"{mins_ago // 60}h ago"
+        else:
+            freshness = f"{mins_ago // 1440}d ago"
+    else:
+        freshness = "just now"
+
     msg = (
         f"🚨 *NEW JOB ALERT*\n\n"
         f"*{title}* @ *{company}*\n"
@@ -1014,7 +1033,7 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"{skills_line}"
         f"🎯 *{score}% Match*\n\n"
         f"⚡ Direct from company careers\n"
-        f"🕐 Posted 2h ago"
+        f"🕐 Posted {escape_md(freshness)}"
     )
 
     from utils.helpers import get_base_url
@@ -1027,7 +1046,8 @@ async def admin_pingjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     kb = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url),
-            InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_alert_{job_id}"),
+            InlineKeyboardButton("⏳ Remind Me", callback_data=f"remind_manual_{job_id}"),
+            # InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_alert_{job_id}"),
         ],
     ])
     
