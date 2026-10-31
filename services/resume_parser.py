@@ -9,7 +9,11 @@ Why pymupdf4llm:
 """
 import os
 from pathlib import Path
-import fitz  # PyMuPDF
+try:
+    import pymupdf
+    import pymupdf as fitz
+except ImportError:
+    import fitz  # PyMuPDF fallback
 import pymupdf4llm
 from loguru import logger
 

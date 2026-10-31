@@ -2,6 +2,12 @@
 Application builder for python-telegram-bot.
 Assembles all handlers and returns the bot Application instance.
 """
+import warnings
+from telegram.warnings import PTBUserWarning
+
+# Suppress harmless PTB user warnings regarding ConversationHandler per_message setting
+warnings.filterwarnings("ignore", category=PTBUserWarning)
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 from telegram.error import TelegramError
