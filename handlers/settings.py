@@ -457,7 +457,13 @@ async def delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_T
     
     success = await soft_delete_user(user_id)
     if success:
-        # We don't delete the resume file anymore since it's a soft delete and we want to recover it later
+        try:
+            from db.connection import get_pool
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute("DELETE FROM user_company_prefs WHERE telegram_id = $1", user_id)
+        except Exception as e:
+            logger.warning(f"Failed to purge user_company_prefs on account delete: {e}")
         logger.info(f"User {user_id} soft deleted their account.")
         await query.edit_message_text(messages.account_deleted(), parse_mode="MarkdownV2")
     else:
@@ -517,3 +523,161 @@ async def cancel_subscription_confirm(update: Update, context: ContextTypes.DEFA
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]])
         )
+
+
+
+# ──────────────────────────────────────────────
+# Notification Preferences (RFC-002)
+# ──────────────────────────────────────────────
+
+async def settings_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render Notification Preferences menu."""
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
+    
+    is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+    text = messages.notification_settings_message(user)
+    kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
+    
+    try:
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error editing notification menu: {e}")
+
+
+async def settings_toggle_notification(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Atomic idempotent handler for toggling notification streams."""
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    data = query.data  # e.g. notif_set_instant_0 or notif_set_daily_1
+    
+    parts = data.split("_")
+    stream = parts[2]
+    val = (parts[3] == "1")
+
+    column_map = {
+        "instant": "notify_instant_alerts",
+        "daily": "notify_daily_digest",
+        "silent": "silent_night_mode",
+        "evening": "notify_evening_digest",
+        "weekly": "notify_weekly_scorecard",
+    }
+    col = column_map.get(stream)
+    if not col:
+        return
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(f"UPDATE users SET {col} = $1 WHERE telegram_id = $2", val, user_id)
+
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
+    is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+    text = messages.notification_settings_message(user)
+    kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
+
+    try:
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error updating notification toggle: {e}")
+
+
+async def settings_instant_locked(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show toast explaining instant alerts are a Pro feature."""
+    query = update.callback_query
+    await query.answer("⭐ Instant alerts require Froncy Pro. Type /upgrade to unlock!", show_alert=True)
+
+
+async def settings_pause_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show duration picker for pausing notifications."""
+    query = update.callback_query
+    await query.answer()
+    
+    text = (
+        "🔕 *Pause All Notifications*\n\n"
+        "Need a break from job alerts? Choose how long to pause:\n\n"
+        "• While paused, all instant alerts & daily feeds are silenced\\.\n"
+        "• Scheduled application follow\\-ups will still arrive\\.\n"
+        "• Alerts will automatically resume once the duration ends\\."
+    )
+    try:
+        await query.edit_message_text(text, reply_markup=keyboards.pause_duration_keyboard(), parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error showing pause menu: {e}")
+
+
+async def settings_pause_set(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set pause duration on alerts_paused_until."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    data = query.data
+
+    duration_str = data.replace("notif_pause_set_", "")
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    
+    if duration_str == "3d":
+        paused_until = now + timedelta(days=3)
+        msg_toast = "🔕 Alerts paused for 3 days."
+    elif duration_str == "7d":
+        paused_until = now + timedelta(days=7)
+        msg_toast = "🔕 Alerts paused for 1 week."
+    elif duration_str == "14d":
+        paused_until = now + timedelta(days=14)
+        msg_toast = "🔕 Alerts paused for 2 weeks."
+    else:  # forever
+        paused_until = now + timedelta(days=365)
+        msg_toast = "🔕 Alerts paused indefinitely until resumed."
+
+    await query.answer(msg_toast, show_alert=True)
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET alerts_paused_until = $1 WHERE telegram_id = $2", paused_until, user_id)
+
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
+    is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+    text = messages.notification_settings_message(user)
+    kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
+
+    try:
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error updating paused state: {e}")
+
+
+async def settings_pause_resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Resume alerts immediately."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    await query.answer("▶️ Alerts resumed!", show_alert=True)
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET alerts_paused_until = NULL WHERE telegram_id = $1", user_id)
+
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
+    is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+    text = messages.notification_settings_message(user)
+    kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
+
+    try:
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error resuming alerts: {e}")

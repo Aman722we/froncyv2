@@ -72,7 +72,12 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     if jobs:
-        await log_jobs_sent(user_id, [j["id"] for j in jobs], bot_id=bot_id)
+        from db.company_prefs import get_user_company_prefs
+        from utils.visibility import is_job_visible_to_user
+        u_mutes, u_follows = await get_user_company_prefs(user_id, is_pro=(plan in ("pro", "trial", "proplus", "premium")))
+        jobs = [j for j in jobs if is_job_visible_to_user(user_dict, j, u_mutes, u_follows, context="browse")]
+        if jobs:
+            await log_jobs_sent(user_id, [j["id"] for j in jobs], bot_id=bot_id)
 
     # Build optional skill tip (Phase 4) — compute from last 20 matched jobs
     skill_tip = None
@@ -102,7 +107,11 @@ async def daily_feed_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         msg = messages.no_jobs_found()
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
     else:
-        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs, skill_tip=skill_tip)
+        pro_delivered = 0
+        if plan == "free":
+            from db.tracker import count_pro_delivered_jobs
+            pro_delivered = await count_pro_delivered_jobs([j["id"] for j in jobs])
+        msg = messages.format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs, skill_tip=skill_tip, pro_delivered_count=pro_delivered)
         kb = keyboards.daily_feed_keyboard(jobs, plan)
 
     if update.callback_query:
@@ -180,6 +189,10 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
             return
         all_jobs = await get_manual_jobs(limit=10, offset=0)
+        from db.company_prefs import get_user_company_prefs
+        from utils.visibility import is_job_visible_to_user
+        u_mutes, u_follows = await get_user_company_prefs(user_id, is_pro=False)
+        all_jobs = [j for j in all_jobs if is_job_visible_to_user(user_dict, j, u_mutes, u_follows, context="browse")]
         filtered_jobs = all_jobs
     else:
         # Pro / Trial: personalized, browse all (high limit)
@@ -351,6 +364,13 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         details = compute_match_details(user_skills, job.get("skills", []), str(user_exp), job.get("experience_required"))
     score = details["score"]
     
+    from db.company_prefs import get_user_company_prefs
+    from utils.visibility import is_job_visible_to_user
+    u_mutes, u_follows = await get_user_company_prefs(user_id, is_pro=(plan in ("pro", "trial", "proplus", "premium")))
+    if not is_job_visible_to_user(user, job, u_mutes, u_follows, context="browse"):
+        await query.answer("⚠️ This job is from a company you muted.", show_alert=True)
+        return
+
     from db.manual_requests import get_completed_request_reply, is_request_completed
     hr_reply = None
     hr_completed = False

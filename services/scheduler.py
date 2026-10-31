@@ -9,6 +9,7 @@ from loguru import logger
 from bot_registry import get_app_for_bot_id
 from utils.error_alert import send_error_alert
 from db.connection import get_pool
+from config import settings
 
 
 scheduler = AsyncIOScheduler()
@@ -47,10 +48,14 @@ async def _send_daily_alerts():
             users = await conn.fetch(
                 """
                 SELECT telegram_id, bot_id, skills, location_pref, plan,
-                       experience_level, batch_year, role_pref, is_trial, trial_expires_at
+                       experience_level, batch_year, role_pref, is_trial, trial_expires_at,
+                       silent_night_mode
                 FROM users
                 WHERE is_onboarded = TRUE AND alert_time = $1
                 AND (is_deleted IS NULL OR is_deleted = FALSE)
+                AND (is_blocked IS NULL OR is_blocked = FALSE)
+                AND (notify_daily_digest IS NULL OR notify_daily_digest = TRUE)
+                AND (alerts_paused_until IS NULL OR alerts_paused_until < NOW())
                 """,
                 current_time_str
             )
@@ -70,6 +75,9 @@ async def _send_daily_alerts():
         total_active_jobs = await count_manual_jobs()
 
         from utils.helpers import get_effective_plan
+        from db.company_prefs import load_all_active_company_prefs
+        from utils.visibility import is_job_visible_to_user
+        all_user_mutes, all_user_follows = await load_all_active_company_prefs()
 
         for user in users:
             try:
@@ -94,6 +102,15 @@ async def _send_daily_alerts():
                 if not jobs:
                     continue
 
+                u_mutes = all_user_mutes.get(user["telegram_id"], set())
+                u_follows = all_user_follows.get(user["telegram_id"], set())
+                jobs = [j for j in jobs if is_job_visible_to_user(user_dict, j, u_mutes, u_follows, context="digest", now_utc=now_ist)]
+                if not jobs:
+                    continue
+
+                if u_follows:
+                    jobs.sort(key=lambda j: (0 if j.get("company_id") in u_follows else 1))
+
                 # Freshness count since the user's last alert reset time
                 from db.manual_jobs import count_new_jobs_since
                 new_jobs = await count_new_jobs_since(datetime.now(timezone.utc) - timedelta(hours=24))
@@ -102,17 +119,34 @@ async def _send_daily_alerts():
                 from utils.messages import format_daily_feed_message
                 from utils import keyboards
 
-                msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs)
+                pro_delivered = 0
+                if plan == "free":
+                    from db.tracker import count_pro_delivered_jobs
+                    pro_delivered = await count_pro_delivered_jobs([j["id"] for j in jobs])
+
+                msg = format_daily_feed_message(jobs, plan, total_active_jobs, user=user_dict, new_jobs=new_jobs, pro_delivered_count=pro_delivered)
                 kb = keyboards.daily_feed_keyboard(jobs, plan)
 
-                await (get_app_for_bot_id(user.get("bot_id", 1)) or _bot_app).bot.send_message(
-                        chat_id=user["telegram_id"],
+                from utils.safe_send import safe_send_message
+                bot_id = user.get("bot_id", 1)
+                target_app = get_app_for_bot_id(bot_id) or _bot_app
+
+                # Silent night check (10 PM to 8 AM IST)
+                is_night = (now_ist.hour >= 22 or now_ist.hour < 8)
+                silent_delivery = is_night and user.get("silent_night_mode", True)
+
+                sent_msg = await safe_send_message(
+                    bot=target_app.bot,
+                    chat_id=user["telegram_id"],
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
+                    disable_notification=silent_delivery,
                     disable_web_page_preview=True,
+                    bot_id=bot_id
                 )
-                sent_count += 1
+                if sent_msg:
+                    sent_count += 1
 
             except Exception as e:
                 logger.error(f"Failed to send alert to {user['telegram_id']}: {e}")
@@ -217,7 +251,10 @@ async def _send_weekly_digest():
                 """SELECT telegram_id, bot_id, skills, first_name
                    FROM users
                    WHERE is_onboarded = TRUE
-                   AND (is_deleted IS NULL OR is_deleted = FALSE)"""
+                   AND (is_deleted IS NULL OR is_deleted = FALSE)
+                   AND (is_blocked IS NULL OR is_blocked = FALSE)
+                   AND (alerts_paused_until IS NULL OR alerts_paused_until < NOW())
+                   AND notify_weekly_scorecard IS TRUE"""
             )
 
         global _bot_app
@@ -331,12 +368,13 @@ async def _downgrade_expired_trials_job():
 
 
 async def _cleanup_old_manual_jobs():
-    """Soft-delete manual jobs older than 15 days."""
+    """Soft-delete manual jobs older than configured retention period (default 14 days)."""
     try:
         from db.manual_jobs import cleanup_old_manual_jobs
-        logger.info("🧹 Running manual jobs cleanup...")
-        deleted = await cleanup_old_manual_jobs(days=15)
-        logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs (older than 15 days).")
+        from config import settings
+        logger.info(f"🧹 Running manual jobs cleanup (older than {settings.JOB_RETENTION_DAYS} days)...")
+        deleted = await cleanup_old_manual_jobs(days=settings.JOB_RETENTION_DAYS)
+        logger.info(f"🧹 Cleanup complete: deactivated {deleted} old manual jobs (older than {settings.JOB_RETENTION_DAYS} days).")
     except Exception as e:
         logger.error(f"❌ Failed to cleanup old manual jobs: {e}")
         if _bot_app:
@@ -374,12 +412,14 @@ async def _send_evening_digest():
         async with pool.acquire() as conn:
             candidate_rows = await conn.fetch(
                 """
-                SELECT DISTINCT u.telegram_id, u.bot_id
+                SELECT DISTINCT u.telegram_id, u.bot_id, u.notify_evening_digest
                 FROM users u
                 WHERE u.is_onboarded = TRUE
                   AND (u.is_deleted IS NULL OR u.is_deleted = FALSE)
+                  AND (u.is_blocked IS NULL OR u.is_blocked = FALSE)
+                  AND (u.alerts_paused_until IS NULL OR u.alerts_paused_until < NOW())
                   AND (
-                      EXISTS (SELECT 1 FROM saved_jobs sj WHERE sj.telegram_id = u.telegram_id)
+                      (EXISTS (SELECT 1 FROM saved_jobs sj WHERE sj.telegram_id = u.telegram_id) AND u.notify_evening_digest IS TRUE)
                    OR EXISTS (SELECT 1 FROM reminders r WHERE r.telegram_id = u.telegram_id AND r.sent = FALSE AND r.remind_at <= NOW())
                   )
                 """
@@ -422,11 +462,17 @@ async def _send_evening_digest():
                     [InlineKeyboardButton("📋 Open Tracker", callback_data="tracker")]
                 ])
 
-                await (get_app_for_bot_id(u.get("bot_id", 1)) or _bot_app).bot.send_message(
-                        chat_id=telegram_id,
+                from utils.safe_send import safe_send_message
+                wb_id = u.get("bot_id", 1)
+                wt_app = get_app_for_bot_id(wb_id) or _bot_app
+
+                await safe_send_message(
+                    bot=wt_app.bot,
+                    chat_id=telegram_id,
                     text=msg,
                     reply_markup=kb,
                     parse_mode="MarkdownV2",
+                    bot_id=wb_id
                 )
 
                 # Mark those follow-up reminders as sent
@@ -449,7 +495,12 @@ async def _send_evening_digest():
 
 
 async def _run_career_sync_job():
-    """Background scheduled job: sync all active career page sources."""
+    """Background scheduled job: sync all active career page sources (Production only)."""
+    from config import settings
+    if settings.ENVIRONMENT != "production":
+        logger.info("ℹ️ Career sync job skipped (ENVIRONMENT is not production).")
+        return
+
     try:
         from services.career_sync import run_career_sync
         await run_career_sync()
@@ -519,7 +570,7 @@ def start_scheduler():
         _cleanup_old_manual_jobs,
         CronTrigger(hour=0, minute=0),
         id="cleanup_manual_jobs",
-        name="Deactivate manual jobs older than 15 days",
+        name=f"Deactivate manual jobs older than {settings.JOB_RETENTION_DAYS} days",
         replace_existing=True,
     )
 
@@ -532,16 +583,19 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Career Page Sync (Froncy V2) — every 60 minutes
-    scheduler.add_job(
-        _run_career_sync_job,
-        CronTrigger(minute="0"),
-        id="career_page_sync",
-        name="Sync career pages every 60 min",
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
-    )
+    # Career Page Sync (Froncy V2) — every 60 minutes (Production only)
+    if settings.ENVIRONMENT == "production":
+        scheduler.add_job(
+            _run_career_sync_job,
+            CronTrigger(minute="0"),
+            id="career_page_sync",
+            name="Sync career pages every 60 min",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    else:
+        logger.info("ℹ️ Career page sync scheduler omitted (ENVIRONMENT is not production).")
 
     ist = ZoneInfo("Asia/Kolkata")
 

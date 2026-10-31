@@ -81,7 +81,7 @@ async def handle_url_submission(update: Update, context: ContextTypes.DEFAULT_TY
             kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
             [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
             [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
         ])
             await update.message.reply_text(
@@ -456,7 +456,7 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
             [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
             [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
         ])
         try:
@@ -563,7 +563,7 @@ async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT
     kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
             [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
+            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
             [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
         ])
     msg = (
@@ -620,6 +620,8 @@ def get_submission_conversation_handler() -> ConversationHandler:
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
             CallbackQueryHandler(sub_duplicate_callback, pattern=r"^sub_duplicate_\d+$"),
         ],
+        per_chat=True,
+        per_user=True,
         per_message=False,
     )
 
@@ -763,7 +765,7 @@ async def _render_my_links(update: Update, context: ContextTypes.DEFAULT_TYPE, p
             ])
             buttons.append([
                 InlineKeyboardButton("✍️ Cover Letter", callback_data=f"gen_coverletter_{sub['manual_job_id']}"),
-                InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{sub['manual_job_id']}")
+                # InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{sub['manual_job_id']}")
             ])
         else:
             lines.append(f"{icon} {domain} <i>({date_str}) — {sub['status'].capitalize()}</i>")

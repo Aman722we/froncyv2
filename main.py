@@ -62,8 +62,9 @@ async def lifespan(app: FastAPI):
         logger.info("Polling mode enabled (development).")
         await primary_app.updater.start_polling(drop_pending_updates=True)
         await primary_app.start()
-        from bot_registry import _registry
-        _registry[settings.TELEGRAM_BOT_TOKEN] = (primary_app, 1)
+        import bot_registry
+        bot_registry._primary_token = settings.TELEGRAM_BOT_TOKEN
+        bot_registry._registry[settings.TELEGRAM_BOT_TOKEN] = (primary_app, 1)
     else:
         await boot_all_bots(
             primary_token=settings.TELEGRAM_BOT_TOKEN,

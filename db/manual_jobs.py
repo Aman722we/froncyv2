@@ -287,8 +287,11 @@ async def log_jobs_sent(telegram_id: int, job_ids: list[int], bot_id: int = 1) -
 
 
 
-async def cleanup_old_manual_jobs(days: int = 15) -> int:
-    """Soft-delete manual jobs older than `days` days (default 15 days)."""
+async def cleanup_old_manual_jobs(days: int = None) -> int:
+    """Soft-delete manual jobs older than `days` days (default settings.JOB_RETENTION_DAYS)."""
+    if days is None:
+        from config import settings
+        days = settings.JOB_RETENTION_DAYS
     pool = get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(

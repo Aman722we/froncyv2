@@ -25,6 +25,9 @@ from handlers.settings import (
     settings_change_batch, settings_batch_save,
     cancel_subscription_prompt, cancel_subscription_confirm,
     settings_add_custom_skill_prompt, settings_custom_skill_receive,
+    settings_notifications, settings_toggle_notification,
+    settings_instant_locked, settings_pause_menu,
+    settings_pause_set, settings_pause_resume,
 )
 from handlers.payments import upgrade_command, checkout_handler
 from handlers.tracker import (
@@ -157,11 +160,30 @@ def build_bot(token: str | None = None) -> Application:
             bid = get_bot_id_for_token(token)
             context.bot_data["bot_id"] = bid if bid is not None else 1
                 
-        # Run DB tracking in the background so it doesn't block the next handler
+        # Run DB tracking & unblock recovery in the background so it doesn't block the next handler
         if update.effective_user:
             asyncio.create_task(log_daily_active(update.effective_user.id))
+            from utils.safe_send import mark_user_unblocked
+            asyncio.create_task(mark_user_unblocked(update.effective_user.id))
             
     app.add_handler(TypeHandler(Update, _global_pre_processor), group=-1)
+
+    # ── Real-time Block/Unblock Detector (RFC-002) ──
+    async def _chat_member_update(update: Update, context) -> None:
+        if update.my_chat_member:
+            status = update.my_chat_member.new_chat_member.status
+            user_id = update.my_chat_member.from_user.id
+            from utils.safe_send import mark_user_blocked, mark_user_unblocked
+            if status in ("kicked", "left"):
+                logger.info(f"🚫 User {user_id} blocked/kicked bot (chat_member status={status})")
+                await mark_user_blocked(user_id)
+            elif status in ("member", "administrator"):
+                logger.info(f"✅ User {user_id} unblocked/joined bot (chat_member status={status})")
+                await mark_user_unblocked(user_id)
+
+    from telegram.ext import ChatMemberHandler
+    app.add_handler(ChatMemberHandler(_chat_member_update, ChatMemberHandler.MY_CHAT_MEMBER))
+
     app.add_handler(get_start_handler())
     app.add_handler(get_feedback_handler())
 
@@ -241,7 +263,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(daily_feed_command, pattern="^menu_daily$"))
     app.add_handler(CallbackQueryHandler(view_resume, pattern="^menu_resume$"))
     app.add_handler(CallbackQueryHandler(view_saved_jobs, pattern="^menu_saved$"))
-    app.add_handler(CallbackQueryHandler(settings_command, pattern="^menu_settings$"))
+    app.add_handler(CallbackQueryHandler(settings_command, pattern="^(menu_settings|settings_main)$"))
     app.add_handler(CallbackQueryHandler(upgrade_command, pattern="^menu_upgrade$"))
     app.add_handler(CallbackQueryHandler(coverletter_menu_handler, pattern="^menu_coverletter$"))
     app.add_handler(CallbackQueryHandler(refer_callback, pattern="^menu_refer$"))
@@ -278,6 +300,9 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(resume_upload_new_callback, pattern="^resume_upload_new$"))
     app.add_handler(MessageHandler(filters.Document.PDF, replace_resume_receive))
     async def text_router(update, context):
+        from handlers.company_settings import handle_company_search_text
+        if await handle_company_search_text(update, context):
+            return
         text = update.message.text or update.message.caption or ""
         if context.user_data.get("awaiting_settings_custom_skill"):
             await settings_custom_skill_receive(update, context)
@@ -316,6 +341,37 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(settings_role_save, pattern="^setrole_"))
     app.add_handler(CallbackQueryHandler(settings_alert_time, pattern="^settings_alert_time$"))
     app.add_handler(CallbackQueryHandler(settings_alert_time_save, pattern="^setalert_"))
+    # Company Preferences & Filtering Callbacks (RFC-004)
+    from handlers.company_settings import (
+        company_action_callback,
+        settings_companies_menu,
+        settings_comp_mode_toggle,
+        settings_comp_search_start,
+        settings_comp_bundles,
+        handle_bundle_follow_callback,
+        settings_comp_edit_follows,
+        handle_menu_unfollow_callback,
+        settings_comp_edit_mutes,
+        handle_menu_unmute_callback,
+    )
+    app.add_handler(CallbackQueryHandler(company_action_callback, pattern=r"^cf_(fw|unfw|mt|unmt):"))
+    app.add_handler(CallbackQueryHandler(settings_companies_menu, pattern="^settings_companies$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_mode_toggle, pattern="^settings_comp_mode_(all|watchlist)$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_search_start, pattern="^settings_comp_search$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_bundles, pattern="^settings_comp_bundles$"))
+    app.add_handler(CallbackQueryHandler(handle_bundle_follow_callback, pattern=r"^cf_bdl_\d+$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_edit_follows, pattern=r"^settings_comp_edit_follows(:\d+)?$"))
+    app.add_handler(CallbackQueryHandler(handle_menu_unfollow_callback, pattern=r"^cf_unfw_menu:\d+(:\d+)?$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_edit_mutes, pattern=r"^settings_comp_edit_mutes(:\d+)?$"))
+    app.add_handler(CallbackQueryHandler(handle_menu_unmute_callback, pattern=r"^cf_unmt_menu:\d+(:\d+)?$"))
+
+    # Notification Preferences Callbacks (RFC-002)
+    app.add_handler(CallbackQueryHandler(settings_notifications, pattern="^settings_notifications$"))
+    app.add_handler(CallbackQueryHandler(settings_toggle_notification, pattern="^notif_set_"))
+    app.add_handler(CallbackQueryHandler(settings_instant_locked, pattern="^notif_set_instant_locked$"))
+    app.add_handler(CallbackQueryHandler(settings_pause_menu, pattern="^notif_pause_menu$"))
+    app.add_handler(CallbackQueryHandler(settings_pause_set, pattern="^notif_pause_set_"))
+    app.add_handler(CallbackQueryHandler(settings_pause_resume, pattern="^notif_pause_resume$"))
     app.add_handler(CallbackQueryHandler(settings_change_batch, pattern="^settings_batch$"))
     app.add_handler(CallbackQueryHandler(settings_batch_save, pattern="^setbatch_"))
     app.add_handler(CallbackQueryHandler(delete_account_prompt, pattern="^settings_delete$"))

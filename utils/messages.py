@@ -550,15 +550,16 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         if posted_at:
             if posted_at.tzinfo is None:
                 posted_at = posted_at.replace(tzinfo=timezone.utc)
-            age_days = (datetime.now(timezone.utc) - posted_at).days
-            if age_days <= 3:
+            age_seconds = (datetime.now(timezone.utc) - posted_at).total_seconds()
+            age_days = max(0.0, age_seconds / 86400.0)
+            if age_days <= 1.0:
                 recency_pct = 100
-            elif age_days <= 7:
-                recency_pct = 80
-            elif age_days <= 14:
+            elif age_days <= 3.0:
+                recency_pct = 85
+            elif age_days <= 7.0:
+                recency_pct = 70
+            elif age_days <= 14.0:
                 recency_pct = 50
-            elif age_days <= 30:
-                recency_pct = max(0, 50 - int((age_days - 14) * 3))
             else:
                 recency_pct = 0
         else:
@@ -632,6 +633,7 @@ def format_job_list_message(
     applied_job_ids: set = None,
     page: int = 1,
     total_active: int = 0,
+    pro_delivered_count: int = 0,
 ) -> str:
     """Format a list of jobs for display."""
     showing = len(jobs)
@@ -658,22 +660,20 @@ def format_job_list_message(
         applied_job_ids = set()
 
     lines = []
-    nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
-
     for i, job in enumerate(jobs[:5]):
         is_applied = job.get("id") in applied_job_ids
         lines.append(_render_job_line(i + 1, job, user, plan, applied=is_applied))
 
     footer = "──────────────────\n"
     if plan == "free":
+        if pro_delivered_count > 0:
+            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\\.*\n"
         start_idx = (page - 1) * 5 + 1
         end_idx = (page - 1) * 5 + showing
         count_str = f"all {total_active}+" if total_active else "all"
         footer += escape_md(f"Showing jobs {start_idx}-{end_idx} of {total_count} latest • Upgrade Pro to browse {count_str} jobs")
 
     return header + "".join(lines) + footer
-
-
 
 
 def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:
@@ -807,6 +807,7 @@ def format_daily_feed_message(
     user: dict,
     new_jobs: dict | None = None,
     skill_tip: str | None = None,
+    pro_delivered_count: int = 0,
 ) -> str:
     """Format the 12-job curated daily alert feed.
 
@@ -855,6 +856,8 @@ def format_daily_feed_message(
     shown_count = len(jobs)
     remaining = max(0, total_count - shown_count)
     if plan == "free":
+        if pro_delivered_count > 0:
+            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\\.*\n"
         footer += f"🔒 \\+{remaining} more jobs available today\n"
         footer += "*Upgrade to unlock*\n"
     else:
@@ -1249,6 +1252,41 @@ def upgrade_plans(current_plan: str) -> str:
 
 def settings_menu() -> str:
     return "⚙️ *Settings*\n\nWhat would you like to change?"
+
+
+def notification_settings_message(user: dict) -> str:
+    """Renders user-facing Notification Preferences overview."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    now = datetime.now(timezone.utc)
+    paused_until = user.get("alerts_paused_until")
+    
+    pause_status_line = ""
+    if paused_until:
+        if hasattr(paused_until, "tzinfo") and paused_until.tzinfo is None:
+            paused_until = paused_until.replace(tzinfo=timezone.utc)
+        if paused_until > now:
+            ist_time = paused_until.astimezone(ZoneInfo("Asia/Kolkata"))
+            pause_status_line = f"\n⚠️ *Alerts are PAUSED until {ist_time.strftime('%b %d, %I:%M %p')} IST*\n"
+
+    alert_time = user.get("alert_time", "09:00")
+    is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+    if is_pro:
+        instant_desc = "🚨 *Instant Drops:* Real\\-time alerts when new jobs match your profile\n"
+    else:
+        instant_desc = "🎁 *Weekly Free Sample:* 1 silent high\\-match drop/week \\(upgrade for instant drops\\)\n"
+    
+    return (
+        f"🔔 *Notification Preferences*\n"
+        f"{pause_status_line}\n"
+        f"Customize what notifications you receive from Froncy:\n\n"
+        f"{instant_desc}"
+        f"📬 *Daily Morning Feed:* Top curated jobs at {escape_md(alert_time)} IST\n"
+        f"🌙 *Silent Night:* Silent delivery between 10 PM – 8 AM IST \\(no buzzer\\)\n"
+        f"🌆 *Evening Nudge:* 6:30 PM reminder for saved jobs\n"
+        f"📊 *Friday Review:* Weekly application progress & skill insights\n\n"
+        f"_Tap any button below to toggle on or off:_"
+    )
 
 
 def user_status(user: dict) -> str:

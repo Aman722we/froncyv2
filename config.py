@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     MAX_COVER_LETTERS_FREE: int = 3
 
+    # Job Pipeline & Freshness Config (RFC-001 v2)
+    JOB_INGEST_MAX_AGE_DAYS: int = 7       # Drop jobs older than 7 days at gatekeeper (pre-LLM)
+    JOB_RETENTION_DAYS: int = 14          # Decoupled DB retention: soft-delete jobs after 14 days
+    ALERT_FRESHNESS_MAX_HOURS: int = 24    # Only trigger real-time instant alerts for jobs <= 24h old with verified ATS timestamp
+
     # Development Overrides
     DEV_TELEGRAM_BOT_TOKEN: str = ""
     DEV_DATABASE_URL: str = ""
