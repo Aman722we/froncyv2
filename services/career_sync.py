@@ -95,6 +95,8 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
         # Even if it says "Remote", drop it if it specifically locks to a foreign region and NOT India
         if not is_india:
+            if "u.s." in loc or "u.s " in loc or loc.endswith("u.s") or "united states" in loc:
+                return False
             foreign_terms = [
                 "us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", 
                 "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", 
