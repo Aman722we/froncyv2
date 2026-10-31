@@ -11,6 +11,12 @@ Multi-Tenant Architecture:
 """
 import sys
 import traceback
+import warnings
+from telegram.warnings import PTBUserWarning
+
+# Suppress harmless PTB user warnings regarding ConversationHandler per_message setting
+warnings.filterwarnings("ignore", category=PTBUserWarning)
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse

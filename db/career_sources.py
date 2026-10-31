@@ -41,26 +41,34 @@ async def get_all_career_sources() -> list[dict]:
 
 
 async def update_source_check(source_id: int, success: bool, error: str = None) -> None:
-    """Update last_checked_at and optionally last_successful_check_at."""
+    """Update last_checked_at, last_successful_check_at, and operational RFC-005 health columns."""
     pool = get_pool()
     async with pool.acquire() as conn:
         if success:
             await conn.execute(
                 """
                 UPDATE career_sources
-                SET last_checked_at = NOW(), last_successful_check_at = NOW(), last_error = NULL
+                SET last_checked_at = NOW(), 
+                    last_successful_check_at = NOW(), 
+                    last_error = NULL,
+                    consecutive_fetch_failures = 0,
+                    last_fetch_status = 'ok'
                 WHERE id = $1
                 """,
                 source_id
             )
         else:
+            status_desc = f"error_{error[:20]}" if error else "error"
             await conn.execute(
                 """
                 UPDATE career_sources
-                SET last_checked_at = NOW(), last_error = $2
+                SET last_checked_at = NOW(), 
+                    last_error = $2,
+                    consecutive_fetch_failures = consecutive_fetch_failures + 1,
+                    last_fetch_status = $3
                 WHERE id = $1
                 """,
-                source_id, error
+                source_id, error, status_desc[:30]
             )
 
 

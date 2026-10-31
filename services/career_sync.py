@@ -95,6 +95,8 @@ def is_relevant_tech_job(title: str, department: str, location: str) -> bool:
 
         # Even if it says "Remote", drop it if it specifically locks to a foreign region and NOT India
         if not is_india:
+            if "u.s." in loc or "u.s " in loc or loc.endswith("u.s") or "united states" in loc:
+                return False
             foreign_terms = [
                 "us", "usa", "united states", "uk", "united kingdom", "london", "europe", "emea", 
                 "amer", "latam", "canada", "australia", "spain", "sweden", "ireland", "germany", 
@@ -275,8 +277,22 @@ async def sync_one_source(source: dict) -> dict:
     }
 
     try:
-        jobs = await fetch_jobs_for_source(source)
+        jobs, raw_jobs, is_truncated = await fetch_jobs_for_source(source)
         summary["fetched"] = len(jobs)
+
+        # ── RFC-005: Geo-Tally & Opportunistic Weekly Snapshotting ─────────────
+        try:
+            from utils.geo_classifier import tally_raw_jobs
+            from db.source_geo_snapshots import maybe_record_weekly_snapshot
+
+            geo_tally = tally_raw_jobs(raw_jobs, provider)
+            await maybe_record_weekly_snapshot(
+                source=source,
+                tally=geo_tally,
+                is_truncated=is_truncated
+            )
+        except Exception as e:
+            logger.warning(f"Error recording RFC-005 geo snapshot for {company}: {e}")
 
         new_job_ids = []
         active_ext_ids = []

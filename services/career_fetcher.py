@@ -53,11 +53,11 @@ def _strip_html(raw_html: str) -> str:
     return '\n'.join(clean_lines).strip()
 
 
-async def fetch_greenhouse_jobs(board_token: str) -> list[dict]:
+async def fetch_greenhouse_jobs(board_token: str) -> tuple[list[dict], list[dict], bool]:
     """
     Fetch all published jobs from a Greenhouse board.
     Uses the public Job Board API — no auth required.
-    Returns a list of normalized job dicts.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
     """
     url = f"https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true"
     
@@ -74,6 +74,12 @@ async def fetch_greenhouse_jobs(board_token: str) -> list[dict]:
         raise
 
     jobs = data.get("jobs", [])
+    total_meta = data.get("meta", {}).get("total")
+    is_truncated = False
+    if total_meta is not None and len(jobs) < total_meta:
+        is_truncated = True
+        logger.warning(f"Greenhouse [{board_token}]: payload truncated ({len(jobs)} < {total_meta})")
+
     normalized = []
 
     for job in jobs:
@@ -118,12 +124,15 @@ async def fetch_greenhouse_jobs(board_token: str) -> list[dict]:
             logger.warning(f"Error normalizing Greenhouse job {job.get('id')}: {e}")
             continue
 
-    logger.info(f"Greenhouse [{board_token}]: fetched {len(normalized)} jobs")
-    return normalized
+    logger.info(f"Greenhouse [{board_token}]: fetched {len(normalized)} jobs (raw={len(jobs)}, truncated={is_truncated})")
+    return normalized, jobs, is_truncated
 
 
-async def fetch_lever_jobs(site_slug: str) -> list[dict]:
-    """Fetch all published jobs from a Lever board. Public API only."""
+async def fetch_lever_jobs(site_slug: str) -> tuple[list[dict], list[dict], bool]:
+    """
+    Fetch all published jobs from a Lever board. Public API only.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
+    """
     url = f"https://api.lever.co/v0/postings/{site_slug}?mode=json"
 
     try:
@@ -137,6 +146,15 @@ async def fetch_lever_jobs(site_slug: str) -> list[dict]:
     except Exception as e:
         logger.warning(f"Lever fetch failed for {site_slug}: {e}")
         raise
+
+    is_truncated = False
+    if not isinstance(jobs, list):
+        jobs = []
+        is_truncated = True
+    else:
+        link_hdr = resp.headers.get("link", "").lower()
+        if 'rel="next"' in link_hdr or 'rel=next' in link_hdr:
+            is_truncated = True
 
     normalized = []
     for job in jobs:
@@ -175,12 +193,15 @@ async def fetch_lever_jobs(site_slug: str) -> list[dict]:
             logger.warning(f"Error normalizing Lever job {job.get('id')}: {e}")
             continue
 
-    logger.info(f"Lever [{site_slug}]: fetched {len(normalized)} jobs")
-    return normalized
+    logger.info(f"Lever [{site_slug}]: fetched {len(normalized)} jobs (raw={len(jobs)}, truncated={is_truncated})")
+    return normalized, jobs, is_truncated
 
 
-async def fetch_ashby_jobs(board_name: str) -> list[dict]:
-    """Fetch all published jobs from an Ashby board. Public API only."""
+async def fetch_ashby_jobs(board_name: str) -> tuple[list[dict], list[dict], bool]:
+    """
+    Fetch all published jobs from an Ashby board. Public API only.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
+    """
     url = f"https://api.ashbyhq.com/posting-api/job-board/{board_name}?includeCompensation=true"
 
     try:
@@ -196,6 +217,10 @@ async def fetch_ashby_jobs(board_name: str) -> list[dict]:
         raise
 
     jobs = data.get("jobs", [])
+    is_truncated = bool(data.get("nextPageToken") or data.get("hasMore"))
+    if is_truncated:
+        logger.warning(f"Ashby [{board_name}]: payload truncated flag detected")
+
     normalized = []
     for job in jobs:
         try:
@@ -232,12 +257,15 @@ async def fetch_ashby_jobs(board_name: str) -> list[dict]:
             logger.warning(f"Error normalizing Ashby job {job.get('id')}: {e}")
             continue
 
-    logger.info(f"Ashby [{board_name}]: fetched {len(normalized)} jobs")
-    return normalized
+    logger.info(f"Ashby [{board_name}]: fetched {len(normalized)} jobs (raw={len(jobs)}, truncated={is_truncated})")
+    return normalized, jobs, is_truncated
 
 
-async def fetch_jobs_for_source(source: dict) -> list[dict]:
-    """Route to the correct fetcher based on provider."""
+async def fetch_jobs_for_source(source: dict) -> tuple[list[dict], list[dict], bool]:
+    """
+    Route to the correct fetcher based on provider.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
+    """
     provider = source["provider"].upper()
     token = source["board_token"]
     

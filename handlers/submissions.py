@@ -363,9 +363,20 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
         from datetime import datetime, timedelta, timezone
 
         # Line 1: Title - Company
-        title_company = lines[0].split("-", 1)
+        # Protect against titles containing hyphens (e.g., 'Senior Front-End Developer - Company')
+        if " - " in lines[0]:
+            title_company = lines[0].rsplit(" - ", 1)
+        elif "-" in lines[0]:
+            title_company = lines[0].rsplit("-", 1)
+        else:
+            title_company = [lines[0]]
+
         title   = title_company[0].strip()
         company = title_company[1].strip() if len(title_company) > 1 else "Unknown"
+        # Normalize company: strip legal entities & trailing punctuation
+        company = re.sub(r',?\s*\b(pvt\.?\s*ltd\.?|private\s+limited|pvt\.?|ltd\.?|llc|llp|inc\.?)\b\.?', '', company, flags=re.IGNORECASE).strip(' ,-.')
+        if company.islower():
+            company = company.title()
 
         # Line 2: URL — prefer the admin-pasted URL; fall back to original submission URL
         url_line = lines[1]
