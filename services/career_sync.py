@@ -277,8 +277,22 @@ async def sync_one_source(source: dict) -> dict:
     }
 
     try:
-        jobs = await fetch_jobs_for_source(source)
+        jobs, raw_jobs, is_truncated = await fetch_jobs_for_source(source)
         summary["fetched"] = len(jobs)
+
+        # ── RFC-005: Geo-Tally & Opportunistic Weekly Snapshotting ─────────────
+        try:
+            from utils.geo_classifier import tally_raw_jobs
+            from db.source_geo_snapshots import maybe_record_weekly_snapshot
+
+            geo_tally = tally_raw_jobs(raw_jobs, provider)
+            await maybe_record_weekly_snapshot(
+                source=source,
+                tally=geo_tally,
+                is_truncated=is_truncated
+            )
+        except Exception as e:
+            logger.warning(f"Error recording RFC-005 geo snapshot for {company}: {e}")
 
         new_job_ids = []
         active_ext_ids = []

@@ -576,6 +576,105 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply RFC-004 company preference migrations: {e}")
 
+        # ── RFC-005: Source Geo-Hiring Intelligence & Weekly Snapshot Engine ──
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS source_geo_snapshots (
+                    source_id               INT NOT NULL REFERENCES career_sources(id) ON DELETE CASCADE,
+                    snapshot_date           DATE NOT NULL,
+                    scanned_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    total_board_jobs        INT NOT NULL DEFAULT 0,
+                    india_tech_jobs         INT NOT NULL DEFAULT 0,
+                    india_non_tech_jobs     INT NOT NULL DEFAULT 0,
+                    remote_global_jobs      INT NOT NULL DEFAULT 0,
+                    remote_ambiguous_jobs   INT NOT NULL DEFAULT 0,
+                    foreign_jobs            INT NOT NULL DEFAULT 0,
+                    unclassified_jobs       INT NOT NULL DEFAULT 0,
+                    PRIMARY KEY (source_id, snapshot_date)
+                );
+                CREATE INDEX IF NOT EXISTS idx_source_geo_snapshots_lookup 
+                    ON source_geo_snapshots (source_id, snapshot_date DESC);
+                CREATE INDEX IF NOT EXISTS idx_source_geo_snapshots_date 
+                    ON source_geo_snapshots (snapshot_date DESC);
+
+                ALTER TABLE career_sources
+                  ADD COLUMN IF NOT EXISTS last_geo_snapshot_at          TIMESTAMPTZ,
+                  ADD COLUMN IF NOT EXISTS consecutive_empty_snapshots   INT NOT NULL DEFAULT 0,
+                  ADD COLUMN IF NOT EXISTS consecutive_fetch_failures    INT NOT NULL DEFAULT 0,
+                  ADD COLUMN IF NOT EXISTS last_fetch_status             VARCHAR(30) NOT NULL DEFAULT 'ok';
+
+                CREATE OR REPLACE VIEW v_source_geo_health AS
+                WITH latest_snapshots AS (
+                    SELECT DISTINCT ON (source_id) *
+                    FROM source_geo_snapshots
+                    ORDER BY source_id, snapshot_date DESC
+                )
+                SELECT 
+                    cs.id AS source_id,
+                    cs.company_name,
+                    cs.provider,
+                    cs.board_token,
+                    cs.company_id,
+                    cs.is_active,
+                    cs.consecutive_empty_snapshots,
+                    cs.consecutive_fetch_failures,
+                    cs.last_fetch_status,
+                    s.snapshot_date AS latest_snapshot_date,
+                    COALESCE(s.total_board_jobs, 0) AS total_board_jobs,
+                    COALESCE(s.india_tech_jobs, 0) AS india_tech_jobs,
+                    COALESCE(s.india_non_tech_jobs, 0) AS india_non_tech_jobs,
+                    COALESCE(s.remote_global_jobs, 0) AS remote_global_jobs,
+                    COALESCE(s.remote_ambiguous_jobs, 0) AS remote_ambiguous_jobs,
+                    COALESCE(s.foreign_jobs, 0) AS foreign_jobs,
+                    COALESCE(s.unclassified_jobs, 0) AS unclassified_jobs,
+                    
+                    CASE
+                        WHEN s.snapshot_date IS NULL THEN 'no_data_yet'
+                        WHEN cs.consecutive_fetch_failures >= 5 THEN 'failing_fetch'
+                        WHEN COALESCE(s.total_board_jobs, 0) = 0 THEN 'dormant_empty'
+                        WHEN COALESCE(s.india_tech_jobs, 0) > 0 THEN 'india_tech_active'
+                        WHEN COALESCE(s.india_non_tech_jobs, 0) > 0 THEN 'india_non_tech_only'
+                        WHEN COALESCE(s.remote_global_jobs, 0) > 0 THEN 'global_remote'
+                        WHEN COALESCE(s.remote_ambiguous_jobs, 0) > 0 THEN 'ambiguous_remote'
+                        WHEN COALESCE(s.foreign_jobs, 0) > 0 THEN 'foreign_only'
+                        ELSE 'unclassified_only'
+                    END AS geo_category
+                FROM career_sources cs
+                LEFT JOIN latest_snapshots s ON cs.id = s.source_id;
+
+                CREATE OR REPLACE VIEW v_company_geo_summary AS
+                SELECT 
+                    c.id AS company_id,
+                    c.name AS company_name,
+                    COUNT(v.source_id) AS total_boards,
+                    COUNT(CASE WHEN v.geo_category = 'failing_fetch' THEN 1 END) AS boards_failing,
+                    SUM(v.total_board_jobs) AS total_board_jobs,
+                    SUM(v.india_tech_jobs) AS total_india_tech_jobs,
+                    SUM(v.india_non_tech_jobs) AS total_india_non_tech_jobs,
+                    SUM(v.remote_global_jobs) AS total_remote_global_jobs,
+                    SUM(v.remote_ambiguous_jobs) AS total_remote_ambiguous_jobs,
+                    SUM(v.foreign_jobs) AS total_foreign_jobs,
+                    SUM(v.unclassified_jobs) AS total_unclassified_jobs,
+                    
+                    CASE 
+                        WHEN bool_and(v.geo_category = 'no_data_yet') THEN 'no_data_yet'
+                        WHEN bool_and(v.geo_category = 'failing_fetch') THEN 'failing_fetch'
+                        WHEN COALESCE(SUM(v.total_board_jobs), 0) = 0 THEN 'dormant_empty'
+                        WHEN COALESCE(SUM(v.india_tech_jobs), 0) > 0 THEN 'india_tech_active'
+                        WHEN COALESCE(SUM(v.india_non_tech_jobs), 0) > 0 THEN 'india_non_tech_only'
+                        WHEN COALESCE(SUM(v.remote_global_jobs), 0) > 0 THEN 'global_remote'
+                        WHEN COALESCE(SUM(v.remote_ambiguous_jobs), 0) > 0 THEN 'ambiguous_remote'
+                        WHEN COALESCE(SUM(v.foreign_jobs), 0) > 0 THEN 'foreign_only'
+                        ELSE 'unclassified_only'
+                    END AS company_geo_category
+                FROM companies c
+                JOIN v_source_geo_health v ON c.id = v.company_id
+                WHERE v.is_active = TRUE
+                GROUP BY c.id, c.name;
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply RFC-005 geo snapshot migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 
