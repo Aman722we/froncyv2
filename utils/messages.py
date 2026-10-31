@@ -633,6 +633,7 @@ def format_job_list_message(
     applied_job_ids: set = None,
     page: int = 1,
     total_active: int = 0,
+    pro_delivered_count: int = 0,
 ) -> str:
     """Format a list of jobs for display."""
     showing = len(jobs)
@@ -648,8 +649,6 @@ def format_job_list_message(
             stream_label = "Jobs"
     
     if plan == "free":
-        if pro_delivered_count > 0:
-            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\.*\n"
         total_pages = max(1, (total_count + 4) // 5)
         header = f"🔍 *Latest {escape_md(stream_label)}* \\(Page {page} of {total_pages}\\)\n"
         header += "──────────────────\n\n"
@@ -661,8 +660,6 @@ def format_job_list_message(
         applied_job_ids = set()
 
     lines = []
-    nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
-
     for i, job in enumerate(jobs[:5]):
         is_applied = job.get("id") in applied_job_ids
         lines.append(_render_job_line(i + 1, job, user, plan, applied=is_applied))
@@ -670,15 +667,13 @@ def format_job_list_message(
     footer = "──────────────────\n"
     if plan == "free":
         if pro_delivered_count > 0:
-            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\.*\n"
+            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\\.*\n"
         start_idx = (page - 1) * 5 + 1
         end_idx = (page - 1) * 5 + showing
         count_str = f"all {total_active}+" if total_active else "all"
         footer += escape_md(f"Showing jobs {start_idx}-{end_idx} of {total_count} latest • Upgrade Pro to browse {count_str} jobs")
 
     return header + "".join(lines) + footer
-
-
 
 
 def _render_job_line(i: int, job: dict, user: dict, plan: str, applied: bool = False) -> str:
@@ -862,7 +857,7 @@ def format_daily_feed_message(
     remaining = max(0, total_count - shown_count)
     if plan == "free":
         if pro_delivered_count > 0:
-            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\.*\n"
+            footer += f"⚡ *{pro_delivered_count} of today's matches were delivered to Pro members earlier\\.*\n"
         footer += f"🔒 \\+{remaining} more jobs available today\n"
         footer += "*Upgrade to unlock*\n"
     else:

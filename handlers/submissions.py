@@ -620,6 +620,8 @@ def get_submission_conversation_handler() -> ConversationHandler:
             CallbackQueryHandler(sub_approve_callback, pattern=r"^sub_approve_\d+$"),
             CallbackQueryHandler(sub_duplicate_callback, pattern=r"^sub_duplicate_\d+$"),
         ],
+        per_chat=True,
+        per_user=True,
         per_message=False,
     )
 

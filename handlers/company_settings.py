@@ -453,7 +453,7 @@ async def handle_bundle_follow_callback(update: Update, context: ContextTypes.DE
 
 PAGE_SIZE = 8
 
-async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = None) -> None:
     """Renders active follows list with 1-tap unfollow buttons and clean pagination."""
     query = update.callback_query
     await query.answer()
@@ -463,12 +463,13 @@ async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAU
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
-    page = 0
-    if query.data and ":" in query.data:
-        try:
-            page = int(query.data.split(":")[-1])
-        except Exception:
-            page = 0
+    if page is None:
+        page = 0
+        if query.data and ":" in query.data:
+            try:
+                page = int(query.data.split(":")[-1])
+            except Exception:
+                page = 0
 
     prefs = await get_user_prefs_detail(user_id, is_pro=is_pro)
     follows = prefs["active_follows"]
@@ -526,12 +527,11 @@ async def handle_menu_unfollow_callback(update: Update, context: ContextTypes.DE
     await unfollow_company(user_id, cid)
     await query.answer(f"Unfollowed {cname}.", show_alert=False)
 
-    # Adjust page if needed and reload
-    query.data = f"settings_comp_edit_follows:{page}"
-    await settings_comp_edit_follows(update, context)
+    # Reload edit follows menu with preserved page
+    await settings_comp_edit_follows(update, context, page=page)
 
 
-async def settings_comp_edit_mutes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def settings_comp_edit_mutes(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = None) -> None:
     """Renders muted companies list with 1-tap unmute buttons and clean pagination."""
     query = update.callback_query
     await query.answer()
@@ -541,12 +541,13 @@ async def settings_comp_edit_mutes(update: Update, context: ContextTypes.DEFAULT
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
-    page = 0
-    if query.data and ":" in query.data:
-        try:
-            page = int(query.data.split(":")[-1])
-        except Exception:
-            page = 0
+    if page is None:
+        page = 0
+        if query.data and ":" in query.data:
+            try:
+                page = int(query.data.split(":")[-1])
+            except Exception:
+                page = 0
 
     prefs = await get_user_prefs_detail(user_id, is_pro=is_pro)
     mutes = prefs["mutes"]
@@ -603,5 +604,5 @@ async def handle_menu_unmute_callback(update: Update, context: ContextTypes.DEFA
     await unmute_company(user_id, cid)
     await query.answer(f"Unmuted {cname}.", show_alert=False)
 
-    query.data = f"settings_comp_edit_mutes:{page}"
-    await settings_comp_edit_mutes(update, context)
+    # Reload edit mutes menu with preserved page
+    await settings_comp_edit_mutes(update, context, page=page)
