@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # App Config
     ENVIRONMENT: str = "development"
     MAX_COVER_LETTERS_FREE: int = 3
+    ENABLE_FREE_TRIAL: bool = False  # Disabled for 1-on-1 sprint: new users start on Free plan
 
     # Job Pipeline & Freshness Config (RFC-001 v2)
     JOB_INGEST_MAX_AGE_DAYS: int = 7       # Drop jobs older than 7 days at gatekeeper (pre-LLM)

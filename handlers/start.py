@@ -13,6 +13,7 @@ from telegram.ext import (
     filters,
 )
 from loguru import logger
+from config import settings
 
 from db.users import get_or_create_user, update_user_profile, update_resume, set_onboarded, get_user
 from db.connection import get_pool
@@ -72,7 +73,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     # New user → start onboarding
     context.user_data["selected_skills"] = []
 
-    # Capture referral param (e.g. /start ref_8619554269)
+    # Capture referral param (e.g. /start ref_8619554269) or pilot source (e.g. /start li_pilot)
     if context.args:
         arg = context.args[0]
         if arg.startswith("ref_") and arg[4:].isdigit():
@@ -93,6 +94,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                         )
                 except Exception as e:
                     logger.warning(f"Failed to persist referred_by on start: {e}")
+        elif arg in ("li_pilot", "pilot") or arg.startswith("li_"):
+            context.user_data["signup_source"] = "linkedin_pilot"
 
 
     # 🔔 Notify admin ONLY if this is their absolute first time clicking /start
@@ -462,13 +465,47 @@ async def _complete_onboarding(
     location = context.user_data.get("location", "all")
     exp      = context.user_data.get("experience_level", "0")
 
-    # Activate 7-day free trial for new user
     db_pool = get_pool()
     bot_id = context.bot_data.get("bot_id", 1)
-    trial_expires_at = await start_trial(user_id, db_pool, bot_id=bot_id)
 
-    msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
-    kb = keyboards.onboarding_complete_keyboard()
+    signup_source = context.user_data.get("signup_source", "organic")
+    signup_cohort = "trial" if getattr(settings, "ENABLE_FREE_TRIAL", True) else "no_trial"
+
+    # Persist cohort & source tracking to users table
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE users 
+                SET signup_cohort = $1, signup_source = $2, updated_at = NOW()
+                WHERE telegram_id = $3 AND bot_id = $4
+                """,
+                signup_cohort, signup_source, user_id, bot_id
+            )
+    except Exception as e:
+        logger.warning(f"Failed to record cohort/source for user {user_id}: {e}")
+
+    if getattr(settings, "ENABLE_FREE_TRIAL", True):
+        trial_expires_at = await start_trial(user_id, db_pool, bot_id=bot_id)
+        msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
+        kb = keyboards.onboarding_complete_keyboard()
+    else:
+        # Free plan completion with immediate Pro upgrade option (no trial experiment)
+        msg = (
+            "🎉 *Your profile setup is complete\!*\n\n"
+            "You are on the *Free Plan* with access to our daily curated job feed\.\n\n"
+            "⚡ *Want automated alerts?*\n"
+            "Upgrade to *Pro* to have Froncy monitor ~529 company career pages on an hourly crawl "
+            "and alert you on Telegram as matching jobs drop\."
+        )
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 Unlock Pro Alerts — ₹199/mo", callback_data="upgrade_pro")],
+            [
+                InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
+                InlineKeyboardButton("📄 Upload Resume", callback_data="resume_upload"),
+            ]
+        ])
 
     if query:
         await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
@@ -494,7 +531,8 @@ async def _complete_onboarding(
         f"🎯 Stream: {role_pref.capitalize()}\n"
         f"🛠 Skills: {skills_str}\n"
         f"📍 Location: {loc_esc} | Exp: {exp_esc} yrs\n"
-        f"📄 Resume: {resume_str}"
+        f"📄 Resume: {resume_str}\n"
+        f"🏷 Source: {signup_source} | Cohort: {signup_cohort}"
     )
 
     # ✅ Process referral reward if applicable
