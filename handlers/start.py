@@ -495,7 +495,7 @@ async def _complete_onboarding(
             "🎉 *Your profile setup is complete\!*\n\n"
             "You are on the *Free Plan* with access to our daily curated job feed\.\n\n"
             "⚡ *Want automated alerts?*\n"
-            "Upgrade to *Pro* to have Froncy monitor ~529 company career pages on an hourly crawl "
+            "Upgrade to *Pro* to have Froncy monitor about 529 company career pages on an hourly crawl "
             "and alert you on Telegram as matching jobs drop\."
         )
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
