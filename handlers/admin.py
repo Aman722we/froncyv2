@@ -1658,3 +1658,169 @@ async def genpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.error(f"Error in genpost_command: {e}")
         await status_msg.edit_text(f"❌ <b>Failed to generate post:</b> {html.escape(str(e))}", parse_mode="HTML")
 
+
+async def pitchjob_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Admin command to find the 2 highest matching, fresh active jobs for LinkedIn pitch.
+    Usage:
+        /pitchjob <role> | <yoe> | <stack>
+        /findjob <role> | <yoe> | <stack>
+    Example:
+        /pitchjob MERN | 0 | React, Node
+        /pitchjob Backend | 2 | Python, Django
+    """
+    from config import settings
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    raw_args = " ".join(context.args).strip()
+    if not raw_args:
+        await update.message.reply_text(
+            "ℹ️ <b>Usage:</b> <code>/pitchjob &lt;role&gt; | &lt;yoe&gt; | &lt;tech stack&gt;</code>\n\n"
+            "<b>Examples:</b>\n"
+            "• <code>/pitchjob MERN | 0 | React, Node</code>\n"
+            "• <code>/pitchjob Frontend | 1 | React, TypeScript</code>\n"
+            "• <code>/pitchjob Backend | 2 | Python, Django</code>\n"
+            "• <code>/pitchjob SDE-1 | 0 | Java</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    import re
+    import html
+    from db.connection import get_pool
+
+    role = ""
+    yoe = 0
+    stack_keywords = []
+
+    if "|" in raw_args:
+        parts = [p.strip() for p in raw_args.split("|")]
+        role = parts[0]
+        if len(parts) > 1:
+            m = re.search(r"\d+", parts[1])
+            yoe = int(m.group(0)) if m else 0
+        if len(parts) > 2:
+            stack_keywords = [s.strip().lower() for s in re.split(r"[,/ ]+", parts[2]) if s.strip()]
+    elif "," in raw_args:
+        parts = [p.strip() for p in raw_args.split(",")]
+        role = parts[0]
+        if len(parts) > 1:
+            m = re.search(r"\d+", parts[1])
+            yoe = int(m.group(0)) if m else 0
+        if len(parts) > 2:
+            stack_keywords = [s.strip().lower() for s in parts[2:] if s.strip()]
+    else:
+        tokens = raw_args.split()
+        role_tokens = []
+        for t in tokens:
+            if t.isdigit() and not yoe:
+                yoe = int(t)
+            else:
+                role_tokens.append(t)
+        role = " ".join(role_tokens)
+        stack_keywords = [t.lower() for t in role_tokens]
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # Search active jobs matching YOE ceiling (yoe + 1 to include close matches)
+        sql = """
+            SELECT id, title, company, url, location, min_yoe, max_yoe, skills, role_category, posted_at, is_fresher_friendly
+            FROM manual_jobs
+            WHERE is_active = true
+              AND (min_yoe IS NULL OR min_yoe <= $1)
+            ORDER BY posted_at DESC NULLS LAST, id DESC
+            LIMIT 120;
+        """
+        rows = await conn.fetch(sql, yoe + 1)
+
+    if not rows:
+        await update.message.reply_text(f"❌ No active jobs found matching experience ≤ {yoe} YOE.")
+        return
+
+    role_terms = [r.strip().lower() for r in re.split(r"[,/ ]+", role) if len(r.strip()) > 1]
+
+    scored_jobs = []
+    for r in rows:
+        title_lower = (r["title"] or "").lower()
+        cat_lower = (r["role_category"] or "").lower()
+        skills_list = [s.lower() for s in (r["skills"] or [])]
+
+        score = 0
+        # Title & Category matching
+        for term in role_terms:
+            if term in title_lower:
+                score += 40
+            elif term in cat_lower:
+                score += 20
+
+        # Skill matching
+        for s in stack_keywords:
+            if any(s in skill for skill in skills_list):
+                score += 25
+            elif s in title_lower:
+                score += 15
+
+        # YOE alignment
+        min_y = r["min_yoe"] or 0
+        max_y = r["max_yoe"] or (min_y + 3)
+        if min_y <= yoe <= max_y:
+            score += 25
+        elif yoe == 0 and r["is_fresher_friendly"]:
+            score += 25
+
+        if score > 0:
+            scored_jobs.append((score, r))
+
+    # If no weighted match, fallback to the freshest active jobs within YOE
+    if not scored_jobs:
+        scored_jobs = [(10, r) for r in rows[:2]]
+
+    scored_jobs.sort(key=lambda x: (x[0], x[1]["posted_at"] or ""), reverse=True)
+    top_matches = [j for _, j in scored_jobs[:2]]
+
+    header_text = (
+        f"🎯 <b>Found {len(top_matches)} Fresh Roles for Pitch</b>\n"
+        f"👤 Target: <b>{html.escape(role or 'Any')}</b> | <b>{yoe} YOE</b>"
+    )
+    if stack_keywords:
+        header_text += f" | Stack: <code>{html.escape(', '.join(stack_keywords))}</code>"
+    header_text += "\n\n<i>Tap the code box below to 1-click copy directly into your LinkedIn DM:</i>"
+
+    await update.message.reply_text(header_text, parse_mode="HTML")
+
+    for idx, job in enumerate(top_matches, 1):
+        company = job["company"] or "Company"
+        title = job["title"] or "Software Engineer"
+        location = job["location"] or "Bengaluru / India"
+        url = job["url"] or "https://t.me/FroncyJobsBot"
+        skills_str = ", ".join(job["skills"][:5]) if job["skills"] else "General Development"
+
+        yoe_str = f"{job['min_yoe']}–{job['max_yoe']} YOE" if job["max_yoe"] else f"{job['min_yoe'] or 0}+ YOE"
+        if not job["min_yoe"] and not job["max_yoe"]:
+            yoe_str = "Fresher / Any"
+
+        pitch_msg = (
+            f"Found one that looks relevant to what you're targeting:\n\n"
+            f"🏢 {company}\n"
+            f"Role: {title}\n"
+            f"📍 Location: {location}\n"
+            f"🔗 Direct careers link: {url}\n\n"
+            f"I checked the company's careers page, and the listing appears to be active.\n"
+            f"Is this the kind of opportunity you'd consider applying for?"
+        )
+
+        msg_body = (
+            f"<b>Option {idx}: {html.escape(company)} — {html.escape(title)}</b>\n"
+            f"🟢 <b>Experience:</b> {html.escape(yoe_str)}\n"
+            f"📍 <b>Location:</b> {html.escape(location)}\n"
+            f"🛠 <b>Skills:</b> {html.escape(skills_str)}\n"
+            f"🔗 <b>Careers Link:</b> <a href=\"{html.escape(url)}\">{html.escape(url)}</a>\n\n"
+            f"📋 <b>Tap box to copy for LinkedIn DM:</b>\n"
+            f"<code>{html.escape(pitch_msg)}</code>"
+        )
+
+        await update.message.reply_text(msg_body, parse_mode="HTML", disable_web_page_preview=True)
+
+
