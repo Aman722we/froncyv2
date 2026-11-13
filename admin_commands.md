@@ -28,6 +28,22 @@
 
 ---
 
+### `/pitchjob <role> | <yoe> | <stack>` (or `/findjob`)
+* **Description:** Finds the top 2 highest-matching, freshest active jobs from monitored company career pages to share with a prospect on LinkedIn. Delivers an instant-alert format with a direct career link, plus a 1-tap copy block formatted specifically for LinkedIn DMs.
+* **Usage:**
+  ```text
+  /pitchjob MERN | 0 | React, Node
+  /pitchjob Frontend | 1 | React, TypeScript
+  /pitchjob Backend | 2 | Python, Django
+  /pitchjob SDE-1 | 0 | Java
+  ```
+* **Features:**
+  - Automatically queries `manual_jobs` across monitored company boards.
+  - Matches target role keywords, YOE boundaries, and skill keywords.
+  - Generates a tap-to-copy LinkedIn pitch block in `<code>...</code>` so you never have to search the database manually.
+
+---
+
 ## 📊 1. Job Ingestion & Career Scraper Management
 
 ### `/jobdashboard` (or `/jobstats`)

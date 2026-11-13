@@ -46,7 +46,7 @@ from handlers.admin import (
     delsource_command, listsources_command, bulkadd_command, syncnow_command,
     completerequest_command, admin_pingjob, pending_command, masstrial_command,
     refundrequest_command, jobdashboard_command, jobdashboard_callback,
-    backfillskills_command, genpost_command
+    backfillskills_command, genpost_command, pitchjob_command
 )
 from handlers.guru import dashboard_command, broadcast_command, creator_command
 from handlers.submissions import (
@@ -241,6 +241,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("jobstats", jobdashboard_command))
     app.add_handler(CallbackQueryHandler(jobdashboard_callback, pattern="^admin_refresh_jobdashboard$"))
     app.add_handler(CommandHandler(["genpost", "linkedinpost"], genpost_command))
+    app.add_handler(CommandHandler(["pitchjob", "findjob"], pitchjob_command))
 
     # ── Creator Dashboard (accessible to the Creator + super admin) ──
     app.add_handler(CommandHandler("dashboard", dashboard_command))

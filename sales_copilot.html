@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Froncy V2 - Sales Copilot & Outreach Tracker</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --accent: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #090d16;
+      border-bottom: 1px solid var(--card-border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-brand h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .badge {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+    }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      padding: 7px 14px;
+      transition: all 0.15s ease-in-out;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #334155; color: var(--text); border-color: #475569; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-success { background: #059669; color: white; }
+    .btn-success:hover { background: #047857; }
+    .btn-outline { background: transparent; color: var(--text-muted); border-color: var(--card-border); }
+    .btn-outline:hover { background: #1e293b; color: var(--text); }
+    .btn-sm { padding: 4px 8px; font-size: 0.78rem; }
+    
+    .backup-alert {
+      background: #78350f;
+      color: #fef3c7;
+      border-bottom: 1px solid #92400e;
+      padding: 8px 24px;
+      font-size: 0.82rem;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      flex: 1;
+      overflow: hidden;
+      height: calc(100vh - 61px);
+    }
+
+    /* Left Sidebar: Prospects */
+    .sidebar {
+      background: #131d2e;
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .search-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .search-input:focus { outline: none; border-color: var(--primary); }
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .pill {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: #1e293b;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .pill.active {
+      background: var(--primary);
+      color: white;
+      font-weight: 600;
+    }
+    .prospect-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .prospect-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+    .prospect-card:hover { border-color: #475569; background: #243247; }
+    .prospect-card.active { border-color: var(--primary); background: #1e3a5f; }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .card-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stage-badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .stage-new { background: #334155; color: #cbd5e1; }
+    .stage-opener { background: #1e3a8a; color: #93c5fd; }
+    .stage-replied { background: #065f46; color: #6ee7b7; }
+    .stage-demo { background: #5b21b6; color: #c4b5fd; }
+    .stage-offer { background: #854d0e; color: #fde047; }
+    .stage-paid { background: #047857; color: #a7f3d0; font-weight: 700; }
+    .stage-lost { background: #7f1d1d; color: #fca5a5; }
+    .card-meta {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .due-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #fbbf24;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    /* Right Work Area */
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      gap: 12px;
+    }
+    .prospect-header {
+      background: #131d2e;
+      border-bottom: 1px solid var(--card-border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .prospect-inputs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      flex: 1;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .input-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .input-field {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .input-field:focus { outline: none; border-color: var(--primary); }
+    
+    .workspace-content {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 1100px;
+    }
+
+    /* Script Navigation Tabs */
+    .script-tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 8px 14px;
+      font-size: 0.84rem;
+      border-radius: 6px;
+    }
+    .tab-btn.active {
+      background: var(--card-bg);
+      color: var(--primary);
+      border-color: var(--card-border);
+      font-weight: 700;
+    }
+
+    /* Options Chips Bar */
+    .script-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip-btn {
+      background: #1e293b;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 0.82rem;
+      border-radius: 6px;
+    }
+    .chip-btn:hover { background: #273549; border-color: #475569; }
+    .chip-btn.active {
+      background: #1e3a5f;
+      border-color: var(--primary);
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    /* Copy & Editor Card */
+    .editor-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .editor-header {
+      background: #162032;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .editor-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .script-textarea {
+      width: 100%;
+      min-height: 140px;
+      background: #0f172a;
+      border: none;
+      padding: 14px 16px;
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .script-textarea:focus { outline: none; }
+    .editor-footer {
+      padding: 10px 16px;
+      background: #162032;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Notes & Logs */
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .form-box h3 {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* Modal for Add Prospect */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 24px;
+      width: 480px;
+      max-width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Backup Warning Banner -->
+  <div class="backup-alert" id="backupAlert">
+    <span>⚠️ You haven't exported your CSV in over 24 hours. Back up your prospect data now to prevent data loss.</span>
+    <button class="btn-sm btn-secondary" onclick="exportCSV()">Export Backup CSV</button>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="header-brand">
+      <h1>🚀 Froncy V2 Outreach Copilot</h1>
+      <span class="badge" id="statsBadge">0 Prospects</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-primary" onclick="openAddModal()">➕ Add Prospect</button>
+      <button class="btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+      <button class="btn-outline" onclick="document.getElementById('csvFileInput').click()">📤 Import CSV</button>
+      <input type="file" id="csvFileInput" style="display:none" accept=".csv" onchange="importCSV(event)">
+    </div>
+  </header>
+
+  <!-- Main Body -->
+  <div class="main-layout">
+    
+    <!-- Sidebar: Prospect Queue -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <input type="text" class="search-input" id="searchBox" placeholder="🔍 Search prospects..." oninput="renderProspectList()">
+        <div class="filter-pills">
+          <div class="pill active" onclick="setFilter('all', this)">All (<span id="countAll">0</span>)</div>
+          <div class="pill" onclick="setFilter('due', this)">⏰ Due (<span id="countDue">0</span>)</div>
+          <div class="pill" onclick="setFilter('active', this)">Active (<span id="countActive">0</span>)</div>
+          <div class="pill" onclick="setFilter('paid', this)">Paid 💎 (<span id="countPaid">0</span>)</div>
+          <div class="pill" onclick="setFilter('dnc', this)">DNC (<span id="countDNC">0</span>)</div>
+        </div>
+      </div>
+      <div class="prospect-list" id="prospectListContainer">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- Workspace: Script Navigator & Lead Details -->
+    <div class="workspace" id="workspaceContainer">
+      <div class="empty-state" id="emptyState">
+        <h2>No Prospect Selected</h2>
+        <p>Select a prospect from the left queue or click "+ Add Prospect" to begin outreach.</p>
+        <button class="btn-primary" onclick="openAddModal()">➕ Add Prospect</button>
+      </div>
+
+      <div id="activeWorkspace" style="display:none;">
+        <!-- Top Prospect Inputs -->
+        <div class="prospect-header">
+          <div class="prospect-inputs">
+            <div class="input-group">
+              <label>Name</label>
+              <input type="text" class="input-field" id="pName" oninput="updateCurrentProspect('name', this.value)">
+            </div>
+            <div class="input-group">
+              <label>LinkedIn URL</label>
+              <input type="text" class="input-field" id="pUrl" oninput="updateCurrentProspect('linkedin_url', this.value)">
+            </div>
+            <div class="input-group">
+              <label>Role</label>
+              <input type="text" class="input-field" id="pRole" oninput="updateCurrentProspect('role', this.value)" placeholder="e.g. Backend Developer">
+            </div>
+            <div class="input-group">
+              <label>Tech Stack (Optional)</label>
+              <input type="text" class="input-field" id="pStack" oninput="updateCurrentProspect('tech_stack', this.value)" placeholder="Leave blank to skip (e.g. Backend, React)">
+            </div>
+            <div class="input-group">
+              <label>Source</label>
+              <select class="input-field" id="pSource" onchange="updateCurrentProspect('source', this.value)">
+                <option value="Cold Profile">Cold Profile</option>
+                <option value="Job Post">Job-Search Post</option>
+                <option value="Group">Dev Community / Group</option>
+                <option value="V1 User">Froncy V1 User</option>
+                <option value="Referral">Referral</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Stage</label>
+              <select class="input-field" id="pStage" onchange="updateCurrentProspect('stage', this.value)">
+                <option value="New">New</option>
+                <option value="Opener Sent">Opener Sent</option>
+                <option value="Replied">Replied / Discovery</option>
+                <option value="Demo Shown">Demo Job Shown</option>
+                <option value="Offer Made">Pro Offer Made (₹199)</option>
+                <option value="Paid">Paid Pro 💎</option>
+                <option value="Lost">Lost / Closed</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+            <label style="font-size: 0.78rem; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fca5a5;">
+              <input type="checkbox" id="pDnc" onchange="updateCurrentProspect('do_not_contact', this.checked)">
+              Do Not Contact (DNC)
+            </label>
+            <button class="btn-outline btn-sm" onclick="openLinkedIn()">🔗 Open LinkedIn</button>
+            <button class="btn-sm btn-outline" style="color:#ef4444;" onclick="deleteCurrentProspect()">🗑 Delete</button>
+          </div>
+        </div>
+
+        <div class="workspace-content">
+
+          <!-- Script Tabs -->
+          <div class="script-tabs">
+            <button class="tab-btn active" onclick="setScriptTab('openers', this)">1. Openers</button>
+            <button class="tab-btn" onclick="setScriptTab('discovery', this)">2. Discovery</button>
+            <button class="tab-btn" onclick="setScriptTab('demo_offer', this)">3. Demo & Pro Offer</button>
+            <button class="tab-btn" onclick="setScriptTab('followups', this)">4. Follow-Ups</button>
+            <button class="tab-btn" onclick="setScriptTab('objections', this)">5. Objections SOS (Top 6)</button>
+          </div>
+
+          <!-- Branching / Shortcut Chips -->
+          <div class="script-options" id="scriptChipsContainer">
+            <!-- Dynamically populated based on active tab -->
+          </div>
+
+          <!-- Script Template Editor & 1-Click Copy -->
+          <div class="editor-card">
+            <div class="editor-header">
+              <span class="editor-title" id="currentScriptLabel">📝 Message Preview</span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Click text to edit before copying</span>
+            </div>
+            <textarea class="script-textarea" id="scriptBox" placeholder="Select a script above..."></textarea>
+            <div class="editor-footer">
+              <span id="copyStatusText" style="font-size:0.8rem; color:#10b981; font-weight:600; display:none;">✅ Copied to clipboard!</span>
+              <div style="display:flex; gap:8px; margin-left:auto;">
+                <button class="btn-primary" onclick="copyScript()">📋 Copy to Clipboard</button>
+                <button class="btn-success" onclick="markMessageSent()">🚀 Mark Sent & Log Date</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes, Quotes & Objections Log -->
+          <div class="details-grid">
+            <div class="form-box">
+              <h3>💡 Main Pain Point / Exact Quote</h3>
+              <textarea class="input-field" id="pPain" rows="3" placeholder="e.g. 'I miss openings on career pages because LinkedIn shows them 3 days late'..." oninput="updateCurrentProspect('discovery_pain', this.value)"></textarea>
+            </div>
+            <div class="form-box">
+              <h3>🛑 Objection Raised & Notes</h3>
+              <input type="text" class="input-field" id="pObjection" placeholder="e.g. Price too high, checks pages manually..." oninput="updateCurrentProspect('objection_raised', this.value)">
+              <textarea class="input-field" id="pNotes" rows="2" placeholder="General notes on this conversation..." oninput="updateCurrentProspect('notes', this.value)"></textarea>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Prospect Modal -->
+  <div class="modal-overlay" id="addModal">
+    <div class="modal-content">
+      <h3 style="font-size: 1.1rem;">Add New Prospect</h3>
+      <div class="input-group">
+        <label>Full Name *</label>
+        <input type="text" class="input-field" id="newPName" placeholder="e.g. Rahul Sharma" required>
+      </div>
+      <div class="input-group">
+        <label>LinkedIn Profile URL</label>
+        <input type="text" class="input-field" id="newPUrl" placeholder="https://linkedin.com/in/...">
+      </div>
+      <div class="input-group">
+        <label>Target / Current Role</label>
+        <input type="text" class="input-field" id="newPRole" placeholder="e.g. Backend Developer">
+      </div>
+      <div class="input-group">
+        <label>Tech Stack (Optional)</label>
+        <input type="text" class="input-field" id="newPStack" placeholder="Leave blank to skip (e.g. Backend, React, C++)">
+      </div>
+      <div class="input-group">
+        <label>Source</label>
+        <select class="input-field" id="newPSource">
+          <option value="Cold Profile">Cold Profile</option>
+          <option value="Job Post">Job-Search Post</option>
+          <option value="Group">Dev Community / Group</option>
+          <option value="V1 User">Froncy V1 User</option>
+          <option value="Referral">Referral</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="closeAddModal()">Cancel</button>
+        <button class="btn-primary" onclick="submitAddProspect()">Save Prospect</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Data Store & State ---
+    const STORAGE_KEY = 'froncy_v2_prospects';
+    const LAST_BACKUP_KEY = 'froncy_v2_last_backup';
+    let prospects = [];
+    let currentProspectId = null;
+    let activeFilter = 'all';
+    let activeScriptTab = 'openers';
+
+    // --- Verified, Truthful Scripts Catalog ---
+    const SCRIPTS = {
+      openers: [
+        {
+          id: 'op_cold',
+          label: 'Variant B: Cold Working Dev (No Signal)',
+          desc: 'Primary opener for working software engineers.',
+          template: "Hey {Name}, noticed you're working as a {Role}{TechStackClause}.\n\nQuick question: when you're open to exploring new opportunities, how do you usually discover relevant roles, like LinkedIn, referrals, developer communities, or company career pages?\n\nI'm building something in this space and trying to understand how working developers currently approach job discovery."
+        },
+        {
+          id: 'op_signal',
+          label: 'Variant A: Public Job-Search Signal',
+          desc: 'For prospects who recently posted about searching or notice period.',
+          template: "Hey {Name}, saw your post about exploring new opportunities{TechStackIn}.\n\nAre you actively planning a switch in the next 30 to 60 days, or just casually keeping an eye out?"
+        },
+        {
+          id: 'op_v1',
+          label: 'Variant C: Previous Froncy V1 User',
+          desc: 'For contacts who tried Froncy earlier.',
+          template: "Hey {Name}! You had tried Froncy earlier, so I wanted to reach out personally.\n\nWe've now launched Froncy V2, which monitors about 529 supported tech company career pages on an hourly crawl and sends matching job opportunities directly to Telegram.\n\nAre you currently employed and exploring a switch, or has your situation changed since you last used Froncy?"
+        },
+        {
+          id: 'op_ref',
+          label: 'Variant D: Referral',
+          desc: 'For someone referred by a mutual contact.',
+          template: "Hey {Name}, a mutual contact suggested I connect with you.\n\nI'm building Froncy, which helps developers discover relevant openings from about 529 supported company career pages and receive matching job alerts on Telegram.\n\nAre you currently exploring new opportunities, or are you happy where you are right now?"
+        }
+      ],
+      discovery: [
+        {
+          id: 'disc_linkedin',
+          label: 'Reply: "I use LinkedIn"',
+          template: "Got it. Do you usually find enough relevant openings through LinkedIn, or do you also check individual company career pages when you're looking for opportunities?"
+        },
+        {
+          id: 'disc_referrals',
+          label: 'Reply: "I use referrals"',
+          template: "Interesting. Do you generally discover a role first and then look for someone who can refer you, or do you rely on your network to share opportunities?"
+        },
+        {
+          id: 'disc_groups',
+          label: 'Reply: "Telegram / WhatsApp groups"',
+          template: "Makes sense. Do you find those groups useful for discovering relevant roles, or is there a lot of noise and irrelevant opportunities mixed in?"
+        },
+        {
+          id: 'disc_career_pages',
+          label: 'Reply: "I check career pages manually"',
+          template: "How frequently do you check them? Do you have a set of companies you monitor, or do you usually check only when you're actively searching?"
+        },
+        {
+          id: 'disc_not_looking',
+          label: 'Reply: "Not currently exploring"',
+          template: "Fair enough! Do you generally prefer to keep an eye on interesting opportunities even when you're happy with your current role, or do you only start looking when you're ready to switch?"
+        },
+        {
+          id: 'disc_active',
+          label: 'Reply: "Actively looking / In notice"',
+          template: "Got it! What kind of roles are you currently targeting, and which locations are you open to?\n\nAlso, how are you currently discovering new openings, like LinkedIn, referrals, job groups, or individual company career pages?"
+        }
+      ],
+      demo_offer: [
+        {
+          id: 'demo_bridge_offer',
+          label: 'Step 1: Offer to Check Careers (Bridge)',
+          template: "Makes sense! Through what I'm building, I actually track tech company career pages directly.\n\nI can check if there are 1 or 2 fresh {Role} openings matching your stack right now and share them with you.\n\nWould that be helpful?"
+        },
+        {
+          id: 'demo_share_job',
+          label: 'Step 2: Share Relevant Job Example',
+          template: "Found one that looks relevant to what you're targeting:\n\n🏢 [Company Name]\nRole: [Role Title]\n📍 Location: [Location]\n🔗 Direct careers link: [Link]\n\nI checked the company's careers page, and the listing appears to be active.\n\nIs this the kind of opportunity you'd consider applying for?"
+        },
+        {
+          id: 'demo_value_check',
+          label: 'Step 3: Check If Automated Alerts Resonate',
+          template: "Great. And would it be useful to have Froncy automatically discover and send you more opportunities like this on Telegram, rather than having to check individual company career pages yourself?"
+        },
+        {
+          id: 'offer_pro_pitch',
+          label: 'Step 4: Present Pro Offer (₹199/mo)',
+          template: "That's exactly what Froncy is built for.\n\nInstead of manually checking multiple company career pages, Froncy monitors about 529 supported tech company career pages on an hourly crawl, matches new openings against your profile, and sends relevant alerts directly to Telegram.\n\nThe Pro plan also gives you access to the full job database.\n\nIt's ₹199/month.\n\nHere's the bot link: https://t.me/FroncyJobsBot?start=li_pilot\n\nYou can explore the free daily feed first and activate Pro inside the bot. Let me know once you set it up!"
+        },
+        {
+          id: 'offer_price_inquiry',
+          label: 'Direct Price Inquiry Reply',
+          template: "Froncy Pro is ₹199/month.\n\nIt unlocks automated hourly job alerts based on your profile across about 529 supported company career pages, plus access to the full job database.\n\nYou can also explore the free daily job feed first before deciding whether to upgrade.\n\nHere's the bot: https://t.me/FroncyJobsBot?start=li_pilot"
+        }
+      ],
+      followups: [
+        {
+          id: 'fu_opener_day3',
+          label: 'Follow-up 1: No reply to Opener (Day 3)',
+          template: "Hey {Name}, just following up on my earlier message.\n\nI was curious how you're currently discovering relevant opportunities as a working {Role}. No pressure if it's not something you're exploring right now."
+        },
+        {
+          id: 'fu_opener_day7',
+          label: 'Follow-up 2: Final Close Loop (Day 7)',
+          template: "Hey {Name}, I'll close the loop here so I don't keep disturbing you.\n\nThanks anyway, and all the best with your work!"
+        },
+        {
+          id: 'fu_discovery',
+          label: 'Follow-up: Replied to opener but missed discovery',
+          template: "Hey {Name}, just wanted to follow up on this.\n\nI was trying to understand how developers in your role discover relevant openings and whether checking individual company career pages is still part of the process.\n\nNo rush if you're busy!"
+        },
+        {
+          id: 'fu_demo_job',
+          label: 'Follow-up: Shared job example, no reply',
+          template: "Hey {Name}, did you get a chance to look at the {Role} opening I shared?\n\nJust wanted to check whether that kind of opportunity matches what you're currently targeting."
+        },
+        {
+          id: 'fu_bot_sent',
+          label: 'Follow-up: Sent bot link, haven\'t onboarded',
+          template: "Hey {Name}, were you able to open the Froncy bot?\n\nYou can start with the free daily feed and configure your role preferences there. Let me know if you run into any onboarding issues: https://t.me/FroncyJobsBot?start=li_pilot"
+        }
+      ],
+      objections: [
+        {
+          id: 'obj_price',
+          label: '1. "₹199 is expensive / too high"',
+          template: "Fair enough! I don't want you to pay for something that won't be useful.\n\nThe main question is whether automated hourly monitoring and relevant alerts across about 529 company career pages would save you enough time to justify ₹199/month.\n\nIf it doesn't, I'd rather you stick with the free daily job feed."
+        },
+        {
+          id: 'obj_free_pages',
+          label: '2. "Why pay when career pages are free?"',
+          template: "You're right, the job listings themselves are public on company career pages.\n\nFroncy isn't charging for secret jobs. You're paying for automated hourly monitoring, profile-based matching, Telegram alerts, and having opportunities from about 529 supported tech companies in one place without having to remember to check them manually.\n\nThe value is purely saving hours of manual searching."
+        },
+        {
+          id: 'obj_linkedin',
+          label: '3. "I already use LinkedIn"',
+          template: "Absolutely. LinkedIn is great for discovering opportunities.\n\nFroncy isn't meant to replace LinkedIn. It adds another layer by monitoring company career pages that don't always get posted on LinkedIn right away, and sends matching alerts to your Telegram.\n\nYou can easily use both."
+        },
+        {
+          id: 'obj_groups',
+          label: '4. "I get jobs from Telegram groups"',
+          template: "That's useful! Do you generally find the opportunities in those groups relevant to your experience and target roles, or do you spend time filtering through a lot of unrelated posts?"
+        },
+        {
+          id: 'obj_guarantee',
+          label: '5. "Will Froncy guarantee me an interview?"',
+          template: "No. Froncy doesn't guarantee interviews, callbacks, or hiring.\n\nIt helps you discover relevant openings sooner on company career pages and cuts the manual work of searching. Your application, qualifications, timing, and the employer's process still determine interviews."
+        },
+        {
+          id: 'obj_not_looking',
+          label: '6. "I\'m not actively looking right now"',
+          template: "No problem at all! Are you generally open to interesting opportunities if something better comes along, or are you completely focused on your current role right now?"
+        }
+      ]
+    };
+
+    // --- Init & Storage ---
+    function init() {
+      loadProspects();
+      checkBackupReminder();
+      renderProspectList();
+      setScriptTab('openers');
+    }
+
+    function loadProspects() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        prospects = data ? JSON.parse(data) : [];
+      } catch (e) {
+        console.error("Failed to load prospects from localStorage:", e);
+        prospects = [];
+      }
+    }
+
+    function saveProspects() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prospects));
+      updateCounts();
+    }
+
+    function checkBackupReminder() {
+      const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+      const now = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      if (prospects.length > 0 && (!lastBackup || now - parseInt(lastBackup) > oneDayMs)) {
+        document.getElementById('backupAlert').style.display = 'flex';
+      } else {
+        document.getElementById('backupAlert').style.display = 'none';
+      }
+    }
+
+    // --- Prospect Computations ---
+    function isDueForFollowup(p) {
+      if (p.do_not_contact) return false;
+      if (['Paid', 'Lost'].includes(p.stage)) return false;
+      if (!p.last_contact_date) return false;
+      if ((p.followup_count || 0) >= 2) return false;
+
+      const lastContact = new Date(p.last_contact_date).getTime();
+      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+      return (Date.now() - lastContact) >= threeDaysMs;
+    }
+
+    function updateCounts() {
+      document.getElementById('statsBadge').textContent = `${prospects.length} Prospects`;
+      document.getElementById('countAll').textContent = prospects.length;
+      document.getElementById('countDue').textContent = prospects.filter(isDueForFollowup).length;
+      document.getElementById('countActive').textContent = prospects.filter(p => !p.do_not_contact && !['Paid', 'Lost'].includes(p.stage)).length;
+      document.getElementById('countPaid').textContent = prospects.filter(p => p.stage === 'Paid').length;
+      document.getElementById('countDNC').textContent = prospects.filter(p => p.do_not_contact).length;
+    }
+
+    // --- Render Sidebar List ---
+    function renderProspectList() {
+      updateCounts();
+      const container = document.getElementById('prospectListContainer');
+      const query = (document.getElementById('searchBox').value || '').toLowerCase();
+
+      let filtered = prospects.filter(p => {
+        const matchesQuery = (p.name || '').toLowerCase().includes(query) || 
+                             (p.role || '').toLowerCase().includes(query) ||
+                             (p.tech_stack || '').toLowerCase().includes(query);
+        if (!matchesQuery) return false;
+
+        if (activeFilter === 'due') return isDueForFollowup(p);
+        if (activeFilter === 'active') return !p.do_not_contact && !['Paid', 'Lost'].includes(p.stage);
+        if (activeFilter === 'paid') return p.stage === 'Paid';
+        if (activeFilter === 'dnc') return p.do_not_contact;
+        return true;
+      });
+
+      // Sort: Due first, then by last contact date
+      filtered.sort((a, b) => {
+        const aDue = isDueForFollowup(a);
+        const bDue = isDueForFollowup(b);
+        if (aDue && !bDue) return -1;
+        if (!aDue && bDue) return 1;
+        return new Date(b.last_contact_date || b.date_added) - new Date(a.last_contact_date || a.date_added);
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No prospects match this filter.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(p => {
+        const isActive = p.id === currentProspectId;
+        const due = isDueForFollowup(p);
+        const stageClass = getStageClass(p.stage);
+        const lastContactStr = p.last_contact_date ? new Date(p.last_contact_date).toLocaleDateString() : 'Never';
+
+        return `
+          <div class="prospect-card ${isActive ? 'active' : ''}" onclick="selectProspect('${p.id}')">
+            <div class="card-top">
+              <span class="card-name">${escapeHtml(p.name || 'Unnamed')}</span>
+              <span class="stage-badge ${stageClass}">${escapeHtml(p.stage || 'New')}</span>
+            </div>
+            <div class="card-meta">
+              <span>${escapeHtml(p.role || 'No role')} ${p.tech_stack ? '• ' + escapeHtml(p.tech_stack) : ''}</span>
+              <span style="font-size: 0.72rem;">Last contact: ${lastContactStr} (F/U: ${p.followup_count || 0}/2)</span>
+            </div>
+            ${due ? '<div class="due-tag">⏰ Follow-up Due (3+ days)</div>' : ''}
+            ${p.do_not_contact ? '<div style="font-size:0.7rem; color:#ef4444; font-weight:600; margin-top:2px;">🚫 Do Not Contact</div>' : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getStageClass(stage) {
+      switch (stage) {
+        case 'New': return 'stage-new';
+        case 'Opener Sent': return 'stage-opener';
+        case 'Replied': return 'stage-replied';
+        case 'Demo Shown': return 'stage-demo';
+        case 'Offer Made': return 'stage-offer';
+        case 'Paid': return 'stage-paid';
+        case 'Lost': return 'stage-lost';
+        default: return 'stage-new';
+      }
+    }
+
+    function setFilter(filter, el) {
+      activeFilter = filter;
+      document.querySelectorAll('.filter-pills .pill').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      renderProspectList();
+    }
+
+    // --- Prospect Details & Selection ---
+    function selectProspect(id) {
+      currentProspectId = id;
+      const p = prospects.find(x => x.id === id);
+      if (!p) return;
+
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('activeWorkspace').style.display = 'block';
+
+      document.getElementById('pName').value = p.name || '';
+      document.getElementById('pUrl').value = p.linkedin_url || '';
+      document.getElementById('pRole').value = p.role || '';
+      document.getElementById('pStack').value = p.tech_stack || '';
+      document.getElementById('pSource').value = p.source || 'Cold Profile';
+      document.getElementById('pStage').value = p.stage || 'New';
+      document.getElementById('pDnc').checked = !!p.do_not_contact;
+      document.getElementById('pPain').value = p.discovery_pain || '';
+      document.getElementById('pObjection').value = p.objection_raised || '';
+      document.getElementById('pNotes').value = p.notes || '';
+
+      renderProspectList();
+      applyTemplate();
+    }
+
+    function updateCurrentProspect(field, value) {
+      if (!currentProspectId) return;
+      const p = prospects.find(x => x.id === currentProspectId);
+      if (!p) return;
+
+      p[field] = value;
+      saveProspects();
+      renderProspectList();
+      applyTemplate();
+    }
+
+    function deleteCurrentProspect() {
+      if (!currentProspectId) return;
+      if (!confirm("Are you sure you want to delete this prospect?")) return;
+      prospects = prospects.filter(x => x.id !== currentProspectId);
+      currentProspectId = null;
+      saveProspects();
+      document.getElementById('activeWorkspace').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'flex';
+      renderProspectList();
+    }
+
+    function openLinkedIn() {
+      const url = document.getElementById('pUrl').value.trim();
+      if (url) {
+        window.open(url.startsWith('http') ? url : 'https://' + url, '_blank');
+      } else {
+        alert("Please enter a valid LinkedIn URL first.");
+      }
+    }
+
+    // --- Script Tab & Chips ---
+    function setScriptTab(tabKey, el) {
+      activeScriptTab = tabKey;
+      if (el) {
+        document.querySelectorAll('.script-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+      }
+
+      const chipsContainer = document.getElementById('scriptChipsContainer');
+      const scripts = SCRIPTS[tabKey] || [];
+
+      chipsContainer.innerHTML = scripts.map((s, idx) => `
+        <button class="chip-btn ${idx === 0 ? 'active' : ''}" onclick="selectScript('${s.id}', this)">
+          ${escapeHtml(s.label)}
+        </button>
+      `).join('');
+
+      if (scripts.length > 0) {
+        selectScript(scripts[0].id);
+      }
+    }
+
+    let activeScriptId = null;
+    function selectScript(scriptId, el) {
+      activeScriptId = scriptId;
+      if (el) {
+        document.querySelectorAll('.script-options .chip-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+      }
+      applyTemplate();
+    }
+
+    function applyTemplate() {
+      if (!activeScriptId) return;
+      let foundScript = null;
+      for (const cat in SCRIPTS) {
+        const item = SCRIPTS[cat].find(s => s.id === activeScriptId);
+        if (item) { foundScript = item; break; }
+      }
+      if (!foundScript) return;
+
+      document.getElementById('currentScriptLabel').textContent = `📝 ${foundScript.label}`;
+
+      const p = prospects.find(x => x.id === currentProspectId) || {};
+      const name = p.name ? p.name.trim().split(' ')[0] : 'there';
+      const role = p.role ? p.role.trim() : 'Software Engineer';
+      const stack = p.tech_stack ? p.tech_stack.trim() : '';
+
+      let text = foundScript.template
+        .replace(/{Name}/g, name)
+        .replace(/{Role}/g, role);
+
+      // Handle Tech Stack smoothly if provided or omitted
+      if (stack) {
+        text = text.replace(/{TechStackClause}/g, ` and have experience with ${stack}`)
+                   .replace(/{TechStackIn}/g, ` in ${stack}`)
+                   .replace(/{TechStack}/g, stack);
+      } else {
+        text = text.replace(/{TechStackClause}/g, '')
+                   .replace(/{TechStackIn}/g, '')
+                   .replace(/{TechStack}/g, 'software development');
+      }
+
+      document.getElementById('scriptBox').value = text;
+    }
+
+    function copyScript() {
+      const box = document.getElementById('scriptBox');
+      navigator.clipboard.writeText(box.value).then(() => {
+        const status = document.getElementById('copyStatusText');
+        status.style.display = 'inline';
+        setTimeout(() => { status.style.display = 'none'; }, 2500);
+      }).catch(err => {
+        box.select();
+        document.execCommand('copy');
+        alert("Copied to clipboard!");
+      });
+    }
+
+    function markMessageSent() {
+      if (!currentProspectId) return;
+      const p = prospects.find(x => x.id === currentProspectId);
+      if (!p) return;
+
+      p.last_contact_date = new Date().toISOString();
+
+      // Stage progression logic
+      if (activeScriptTab === 'openers') {
+        p.stage = 'Opener Sent';
+      } else if (activeScriptTab === 'discovery') {
+        p.stage = 'Replied';
+      } else if (activeScriptTab === 'demo_offer') {
+        if (activeScriptId === 'demo_bridge_offer') {
+          p.stage = 'Replied';
+        } else if (activeScriptId === 'demo_share_job' || activeScriptId === 'demo_value_check') {
+          p.stage = 'Demo Shown';
+        } else {
+          p.stage = 'Offer Made';
+        }
+      } else if (activeScriptTab === 'followups') {
+        p.followup_count = (p.followup_count || 0) + 1;
+      }
+
+      document.getElementById('pStage').value = p.stage;
+      saveProspects();
+      renderProspectList();
+      alert(`✅ Updated: Marked sent on ${new Date().toLocaleTimeString()} (Stage: ${p.stage})`);
+    }
+
+    // --- Add Prospect Modal ---
+    function openAddModal() {
+      document.getElementById('newPName').value = '';
+      document.getElementById('newPUrl').value = '';
+      document.getElementById('newPRole').value = '';
+      document.getElementById('newPStack').value = '';
+      document.getElementById('addModal').style.display = 'flex';
+      document.getElementById('newPName').focus();
+    }
+
+    function closeAddModal() {
+      document.getElementById('addModal').style.display = 'none';
+    }
+
+    function submitAddProspect() {
+      const name = document.getElementById('newPName').value.trim();
+      if (!name) {
+        alert("Please enter at least a name.");
+        return;
+      }
+
+      const newP = {
+        id: 'p_' + Date.now(),
+        name: name,
+        linkedin_url: document.getElementById('newPUrl').value.trim(),
+        role: document.getElementById('newPRole').value.trim(),
+        tech_stack: document.getElementById('newPStack').value.trim(),
+        source: document.getElementById('newPSource').value,
+        stage: 'New',
+        date_added: new Date().toISOString(),
+        last_contact_date: null,
+        followup_count: 0,
+        do_not_contact: false,
+        discovery_pain: '',
+        objection_raised: '',
+        notes: ''
+      };
+
+      prospects.unshift(newP);
+      saveProspects();
+      closeAddModal();
+      selectProspect(newP.id);
+    }
+
+    // --- CSV Export / Import ---
+    function exportCSV() {
+      if (prospects.length === 0) {
+        alert("No prospect records to export.");
+        return;
+      }
+
+      const headers = [
+        "Name", "LinkedIn URL", "Role", "Tech Stack", "Source", 
+        "Date Added", "Last Contact Date", "Follow-up Count", 
+        "Stage", "Discovery Pain / Quote", "Objection Raised", 
+        "Do Not Contact", "Notes"
+      ];
+
+      const rows = prospects.map(p => [
+        p.name || '',
+        p.linkedin_url || '',
+        p.role || '',
+        p.tech_stack || '',
+        p.source || '',
+        p.date_added || '',
+        p.last_contact_date || '',
+        p.followup_count || 0,
+        p.stage || 'New',
+        (p.discovery_pain || '').replace(/"/g, '""'),
+        (p.objection_raised || '').replace(/"/g, '""'),
+        p.do_not_contact ? 'Yes' : 'No',
+        (p.notes || '').replace(/"/g, '""')
+      ]);
+
+      const csvContent = "\uFEFF" + [
+        headers.join(','),
+        ...rows.map(r => r.map(field => `"${field}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Froncy_Outreach_Backup_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
+      checkBackupReminder();
+    }
+
+    function importCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+        if (lines.length < 2) {
+          alert("CSV file seems empty or invalid.");
+          return;
+        }
+
+        let importedCount = 0;
+        // Simple CSV parser ignoring header
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (!cols || cols.length < 1) continue;
+
+          const name = cols[0];
+          if (!name) continue;
+
+          // Deduplicate by URL or exact name
+          const existing = prospects.find(p => 
+            (cols[1] && p.linkedin_url && p.linkedin_url.toLowerCase() === cols[1].toLowerCase()) ||
+            (p.name.toLowerCase() === name.toLowerCase())
+          );
+
+          if (!existing) {
+            prospects.push({
+              id: 'p_' + Date.now() + '_' + i,
+              name: cols[0] || '',
+              linkedin_url: cols[1] || '',
+              role: cols[2] || '',
+              tech_stack: cols[3] || '',
+              source: cols[4] || 'Cold Profile',
+              date_added: cols[5] || new Date().toISOString(),
+              last_contact_date: cols[6] || null,
+              followup_count: parseInt(cols[7]) || 0,
+              stage: cols[8] || 'New',
+              discovery_pain: cols[9] || '',
+              objection_raised: cols[10] || '',
+              do_not_contact: cols[11] === 'Yes',
+              notes: cols[12] || ''
+            });
+            importedCount++;
+          }
+        }
+
+        saveProspects();
+        renderProspectList();
+        alert(`Successfully imported ${importedCount} new prospects!`);
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function parseCSVLine(line) {
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQuotes && line[i+1] === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (c === ',' && !inQuotes) {
+          result.push(cur.trim());
+          cur = '';
+        } else {
+          cur += c;
+        }
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Run on startup
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
