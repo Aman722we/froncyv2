@@ -8,8 +8,9 @@ All public endpoints only.
 """
 import html
 import re
+import urllib.parse
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from loguru import logger
 
 
@@ -261,6 +262,181 @@ async def fetch_ashby_jobs(board_name: str) -> tuple[list[dict], list[dict], boo
     return normalized, jobs, is_truncated
 
 
+
+
+def _parse_workday_token(token: str) -> tuple[str, str, str]:
+    """
+    Parse a Workday board token into (host, tenant, site_id).
+    Accepts:
+      - 'fnz.wd3.myworkdayjobs.com/fnz_careers'
+      - 'fnz.wd3/fnz_careers'
+      - 'https://fnz.wd3.myworkdayjobs.com/en-US/fnz_careers'
+      - 'https://elevancehealth.wd1.myworkdayjobs.com/carelonglobal_in'
+      - 'accenture.wd103.myworkdayjobs.com/AccentureCareers'
+    """
+    token = token.strip()
+    if token.startswith("http://") or token.startswith("https://"):
+        parsed = urllib.parse.urlparse(token)
+        host = parsed.netloc
+        path_parts = [p for p in parsed.path.split("/") if p and p not in ("en-US", "en")]
+        site = path_parts[0] if path_parts else ""
+    else:
+        parts = token.split("/")
+        host_part = parts[0]
+        site = parts[1] if len(parts) > 1 else ""
+        if "myworkdayjobs.com" not in host_part:
+            host = f"{host_part}.myworkdayjobs.com"
+        else:
+            host = host_part
+
+    tenant = host.split(".")[0]
+    return host, tenant, site
+
+
+def _parse_workday_posted_on(posted_on_str: str) -> datetime | None:
+    """Parse Workday relative/text posting dates like 'Posted Today', 'Posted 2 Days Ago'."""
+    if not posted_on_str:
+        return None
+    s = posted_on_str.lower().strip()
+    now = datetime.now(timezone.utc)
+    if "today" in s:
+        return now
+    if "yesterday" in s:
+        return now - timedelta(days=1)
+    m = re.search(r'posted\s+(\d+)\s+days?\s+ago', s)
+    if m:
+        return now - timedelta(days=int(m.group(1)))
+    m_hours = re.search(r'posted\s+(\d+)\s+hours?\s+ago', s)
+    if m_hours:
+        return now - timedelta(hours=int(m_hours.group(1)))
+    if "30+" in s:
+        return now - timedelta(days=35)
+    return None
+
+
+async def fetch_workday_jobs(board_token: str) -> tuple[list[dict], list[dict], bool]:
+    """
+    Fetch published jobs from a Workday career portal.
+    Uses Workday's public CXS JSON API.
+    Paginates up to 100 jobs (5 pages) or until encountering stale postings.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
+    """
+    host, tenant, site = _parse_workday_token(board_token)
+    if not host or not site:
+        logger.warning(f"Workday: Invalid token '{board_token}'. Expected 'host/site_id'.")
+        return [], [], False
+
+    url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    raw_jobs = []
+    is_truncated = False
+    page_size = 20
+    max_pages = 5
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        for page in range(max_pages):
+            offset = page * page_size
+            payload = {
+                "appliedFacets": {},
+                "limit": page_size,
+                "offset": offset,
+                "searchText": ""
+            }
+
+            try:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"Workday HTTP error for {board_token} (page {page}): {e.response.status_code}")
+                if page == 0:
+                    raise
+                break
+            except Exception as e:
+                logger.warning(f"Workday fetch failed for {board_token} (page {page}): {e}")
+                if page == 0:
+                    raise
+                break
+
+            postings = data.get("jobPostings", [])
+            total = data.get("total", 0)
+            if not postings:
+                break
+
+            raw_jobs.extend(postings)
+
+            if len(raw_jobs) >= total or len(postings) < page_size:
+                break
+
+            if page == max_pages - 1 and len(raw_jobs) < total:
+                is_truncated = True
+
+    normalized = []
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        for job in raw_jobs:
+            try:
+                title = job.get("title", "Untitled")
+                ext_path = job.get("externalPath", "")
+                if not ext_path:
+                    continue
+
+                bullets = job.get("bulletFields") or []
+                external_id = bullets[0] if bullets else ""
+                if not external_id:
+                    slug_match = re.search(r'_([A-Z0-9\-]+)$', ext_path)
+                    external_id = slug_match.group(1) if slug_match else ext_path.split("/")[-1]
+
+                location = job.get("locationsText")
+                posted_on = job.get("postedOn")
+                published_at = _parse_workday_posted_on(posted_on)
+
+                job_web_url = f"https://{host}/en-US/{site}{ext_path}"
+                clean_url = job_web_url.split("?")[0].rstrip("/")
+                if clean_url.endswith("/apply") or clean_url.endswith("/applyManually"):
+                    clean_url = re.sub(r'/apply(/applyManually)?$', '', clean_url)
+
+                detail_url = f"https://{host}/wday/cxs/{tenant}/{site}{ext_path}"
+                description = ""
+                try:
+                    d_resp = await client.get(detail_url, headers=headers)
+                    if d_resp.status_code == 200:
+                        d_data = d_resp.json()
+                        info = d_data.get("jobPostingInfo", {})
+                        raw_desc = info.get("jobDescription") or ""
+                        description = _strip_html(raw_desc)
+                        start_date = info.get("startDate")
+                        if start_date:
+                            try:
+                                published_at = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.debug(f"Workday detail fetch skipped for {ext_path}: {e}")
+
+                normalized.append({
+                    "external_id": str(external_id),
+                    "title": title,
+                    "location": location,
+                    "department": "",
+                    "description": description,
+                    "published_at": published_at,
+                    "job_url": clean_url,
+                    "apply_url": clean_url,
+                    "source_provider": "WORKDAY",
+                })
+            except Exception as e:
+                logger.warning(f"Error normalizing Workday job {job.get('externalPath')}: {e}")
+                continue
+
+    logger.info(f"Workday [{board_token}]: fetched {len(normalized)} jobs (raw={len(raw_jobs)}, truncated={is_truncated})")
+    return normalized, raw_jobs, is_truncated
+
+
 async def fetch_jobs_for_source(source: dict) -> tuple[list[dict], list[dict], bool]:
     """
     Route to the correct fetcher based on provider.
@@ -275,6 +451,8 @@ async def fetch_jobs_for_source(source: dict) -> tuple[list[dict], list[dict], b
         return await fetch_lever_jobs(token)
     elif provider == "ASHBY":
         return await fetch_ashby_jobs(token)
+    elif provider == "WORKDAY":
+        return await fetch_workday_jobs(token)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -290,6 +468,21 @@ async def verify_board_token(provider: str, token: str) -> bool:
         url = f"https://api.lever.co/v0/postings/{token}?mode=json"
     elif provider == "ASHBY":
         url = f"https://api.ashbyhq.com/posting-api/job-board/{token}"
+    elif provider == "WORKDAY":
+        host, tenant, site = _parse_workday_token(token)
+        if not host or not site:
+            return False
+        wday_url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
+        wday_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.post(wday_url, json={"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""}, headers=wday_headers)
+                return resp.status_code == 200
+        except Exception:
+            return False
     else:
         return False
         

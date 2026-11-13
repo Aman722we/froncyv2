@@ -77,22 +77,29 @@
 
 ### `/addsource <provider> <board_token> <Company Name>`
 * **Description:** Adds a new company career board to the automated 15-minute polling engine.
-* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`
+* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`, `WORKDAY`
 * **Usage:**
   ```text
   /addsource GREENHOUSE gatherai Gather AI
   /addsource LEVER notion Notion
   /addsource ASHBY linear Linear
+  /addsource WORKDAY fnz.wd3/fnz_careers FNZ
+  /addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India
+  /addsource WORKDAY accenture.wd103/AccentureCareers Accenture
   ```
+  *(For Workday, you can pass either `host.wdX/site_id` or the full career page URL; the crawler automatically resolves the CXS endpoint).*
 
-### `/bulkadd <provider>\n<token> <Company Name>...`
-* **Description:** Bulk adds dozens or hundreds of career sources at once in a single message.
+### `/bulkadd`
+* **Description:** Bulk adds dozens of career sources at once in a single message.
 * **Usage:**
   ```text
-  /bulkadd GREENHOUSE
-  stripe Stripe
-  figma Figma
-  datadog Datadog
+  /bulkadd
+  GREENHOUSE stripe Stripe
+  LEVER notion Notion
+  ASHBY linear Linear
+  WORKDAY fnz.wd3/fnz_careers FNZ
+  WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India
+  WORKDAY accenture.wd103/AccentureCareers Accenture
   ```
 
 ### `/listsources`

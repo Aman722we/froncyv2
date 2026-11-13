@@ -637,21 +637,24 @@ async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not args or len(args) < 3:
         await update.message.reply_text(
             "<b>Usage:</b> /addsource <provider> <board_token> <Company Name>\n\n"
-            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY\n\n"
+            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY, WORKDAY\n\n"
             "<b>Examples:</b>\n"
             "<code>/addsource GREENHOUSE gatherai Gather AI</code>\n"
             "<code>/addsource LEVER notion Notion</code>\n"
-            "<code>/addsource ASHBY linear Linear</code>",
+            "<code>/addsource ASHBY linear Linear</code>\n"
+            "<code>/addsource WORKDAY fnz.wd3/fnz_careers FNZ</code>\n"
+            "<code>/addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India</code>\n"
+            "<code>/addsource WORKDAY accenture.wd103/AccentureCareers Accenture</code>",
             parse_mode="HTML"
         )
         return
     
     provider = args[0].upper()
-    if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
-        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, or ASHBY.", parse_mode="HTML")
+    if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
+        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, ASHBY, or WORKDAY.", parse_mode="HTML")
         return
     
-    board_token = args[1].lower()
+    board_token = args[1].strip()
     company_name = " ".join(args[2:])
     
     from db.career_sources import add_career_source
@@ -686,7 +689,8 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "<b>Usage:</b> /bulkadd\n"
             "GREENHOUSE doordash DoorDash\n"
             "LEVER notion Notion\n"
-            "ASHBY linear Linear\n\n"
+            "ASHBY linear Linear\n"
+            "WORKDAY fnz.wd3/fnz_careers FNZ\n\n"
             "<i>(Paste up to 50 lines at once)</i>",
             parse_mode="HTML"
         )
@@ -714,7 +718,7 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             continue
             
         provider = parts[0].upper()
-        if provider not in ("GREENHOUSE", "LEVER", "ASHBY"):
+        if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
             errors.append(f"Line {i+1}: Unknown provider {provider}")
             continue
             
