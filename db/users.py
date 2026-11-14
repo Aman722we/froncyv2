@@ -396,22 +396,22 @@ async def get_all_users(bot_id: int | None = None) -> list[int]:
 
 
 async def downgrade_expired_trials() -> None:
-    """Downgrade users with expired trials back to the 'free' plan."""
+    """Downgrade users with expired trials or expired pro plans back to the 'free' plan."""
     pool = get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE users
-            SET plan = 'free'
-            WHERE plan = 'trial'
-              AND is_trial = TRUE
-              AND trial_expires_at <= NOW()
+            SET plan = 'free',
+                is_trial = FALSE
+            WHERE (plan = 'trial' AND is_trial = TRUE AND trial_expires_at <= NOW())
+               OR (plan = 'pro' AND plan_expires_at IS NOT NULL AND plan_expires_at <= NOW())
             """
         )
         # result is a string like 'UPDATE N'
         updated_count = int(result.split()[-1]) if result.startswith("UPDATE") else 0
         if updated_count > 0:
-            logger.info(f"Downgraded {updated_count} expired trials to free plan.")
+            logger.info(f"Downgraded {updated_count} expired trials/plans to free plan.")
 
 
 async def get_apply_smart_usage(telegram_id: int) -> dict:

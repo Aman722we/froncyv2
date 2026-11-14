@@ -150,6 +150,34 @@
   /refundrequest 7963303313
   ```
 
+### `/grantpro <telegram_id> <days> [silent|message]` (alias: `/setpro`)
+* **Description:** Grants full **Froncy Pro** access to a specific user for the given number of days.
+  - Automatically unlocks hourly career-page alerts, ATS match scores, and direct application links.
+  - If omitted or only days provided, sends the user a clean Pro welcome announcement in Telegram.
+  - **Silent Mode:** Pass `silent` as the 3rd argument to upgrade the user without sending any notification in Telegram (ideal when closing prospects on LinkedIn).
+  - **Custom Message:** Any text after `<days>` will be sent directly to the user as your custom announcement.
+* **Usage:**
+  ```text
+  /grantpro 8619554269 3
+  /grantpro 8619554269 7 silent
+  /grantpro 8619554269 7 Hey Rahul! Here is 7 days of Pro on us to test out career alerts.
+  ```
+
+### `/granttrial <telegram_id> <days> [silent|message]` (alias: `/settrial`)
+* **Description:** Grants a **Pro Trial** to a specific user for the given number of days.
+* **Usage:**
+  ```text
+  /granttrial 8619554269 3
+  /granttrial 8619554269 7 silent
+  ```
+
+### `/revokepro <telegram_id>` (alias: `/revokeplan`)
+* **Description:** Immediately revokes a user's Pro or Trial plan and downgrades them back to the **Free** tier.
+* **Usage:**
+  ```text
+  /revokepro 8619554269
+  ```
+
 ### `/masstrial <days> [message|silent]`
 * **Description:** Grants a Pro Trial to all eligible free and trial users for the specified number of days.
   - **Silent Mode (Default):** If the message is omitted or set to `silent`, it quietly upgrades all eligible users with **0 notification messages sent**. Perfect for observing user reactions to instant alerts without broadcast fatigue.
