@@ -1828,3 +1828,297 @@ async def pitchjob_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg_body, parse_mode="HTML", disable_web_page_preview=True)
 
 
+async def grantpro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    /grantpro <telegram_id> <days> [silent|message]
+    Grant Froncy Pro to a specific user for X days.
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "<b>Usage:</b>\n"
+            "• <code>/grantpro &lt;telegram_id&gt; &lt;days&gt;</code> (Notifies user with Pro welcome message)\n"
+            "• <code>/grantpro &lt;telegram_id&gt; &lt;days&gt; silent</code> (Quietly upgrades user without sending DM)\n"
+            "• <code>/grantpro &lt;telegram_id&gt; &lt;days&gt; &lt;custom message&gt;</code> (Sends your custom message)\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/grantpro 8619554269 3</code>\n"
+            "<code>/grantpro 8619554269 7 silent</code>\n"
+            "<code>/grantpro 8619554269 7 Hey Rahul, here is 7 days of Pro on us!</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Telegram ID must be a numeric ID (e.g. <code>8619554269</code>).", parse_mode="HTML")
+        return
+
+    try:
+        days = int(context.args[1])
+        if days <= 0 or days > 365:
+            await update.message.reply_text("❌ Days must be between 1 and 365.")
+            return
+    except ValueError:
+        await update.message.reply_text("❌ Days must be a number.")
+        return
+
+    is_silent = False
+    custom_msg = None
+    if len(context.args) > 2:
+        arg2 = context.args[2].strip().lower()
+        if arg2 in ("silent", "--silent", "-s", "quiet", "none", "noannounce", "false"):
+            is_silent = True
+        else:
+            custom_msg = " ".join(context.args[2:])
+
+    from db.connection import get_pool
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        user_row = await conn.fetchrow(
+            "SELECT telegram_id, first_name, username, plan, is_onboarded FROM users WHERE telegram_id = $1",
+            target_id
+        )
+        if not user_row:
+            await update.message.reply_text(
+                f"❌ No user found with Telegram ID <code>{target_id}</code>.\n"
+                f"They must open the bot and press <b>/start</b> at least once.",
+                parse_mode="HTML"
+            )
+            return
+
+        res = await conn.fetchrow(
+            f"""
+            UPDATE users 
+            SET plan = 'pro',
+                plan_expires_at = NOW() + INTERVAL '{days} days',
+                is_trial = FALSE,
+                is_deleted = FALSE,
+                updated_at = NOW()
+            WHERE telegram_id = $1
+            RETURNING plan_expires_at
+            """,
+            target_id
+        )
+
+    expires_at = res["plan_expires_at"] if res else None
+    exp_str = expires_at.strftime("%d %b %Y, %H:%M UTC") if expires_at else f"+{days} days"
+    user_name = html.escape(user_row.get("first_name") or "User")
+
+    msg_status = "🤫 Silent (No message sent)"
+    if not is_silent:
+        if custom_msg:
+            dm_text = (
+                f"{custom_msg}\n\n"
+                f"✨ <i>Your Froncy Pro access is active until {exp_str}. Use /menu to explore your Pro perks!</i>"
+            )
+        else:
+            dm_text = (
+                f"🎉 <b>Froncy Pro Activated!</b>\n\n"
+                f"Hey {user_name}! You've been granted <b>{days} days</b> of Froncy Pro access (valid until <b>{exp_str}</b>).\n\n"
+                f"⚡ <b>What you get:</b>\n"
+                f"• Direct alerts from 500+ company career pages as soon as they go live\n"
+                f"• Full ATS resume match scores and keyword breakdowns\n"
+                f"• Direct application links without delays\n\n"
+                f"Use /menu or /jobs to start exploring!"
+            )
+
+        try:
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=dm_text,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+            msg_status = "✅ Delivered to user via Telegram"
+        except Exception as e:
+            msg_status = f"⚠️ Updated DB, but DM failed: {html.escape(str(e))}"
+
+    await update.message.reply_text(
+        f"💎 <b>Froncy Pro Granted Successfully!</b>\n\n"
+        f"👤 <b>User:</b> {user_name} (<code>{target_id}</code>)\n"
+        f"⏳ <b>Duration:</b> {days} days\n"
+        f"📅 <b>Expires At:</b> <code>{exp_str}</code>\n"
+        f"💬 <b>Notification:</b> {msg_status}",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin granted Pro to {target_id} for {days} days (silent={is_silent})")
+
+
+async def granttrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    /granttrial <telegram_id> <days> [silent|message]
+    Grant a Pro Trial to a specific user for X days.
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "<b>Usage:</b>\n"
+            "• <code>/granttrial &lt;telegram_id&gt; &lt;days&gt;</code> (Notifies user with Trial welcome message)\n"
+            "• <code>/granttrial &lt;telegram_id&gt; &lt;days&gt; silent</code> (Quietly activates trial without sending DM)\n"
+            "• <code>/granttrial &lt;telegram_id&gt; &lt;days&gt; &lt;custom message&gt;</code> (Sends your custom message)\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/granttrial 8619554269 3</code>\n"
+            "<code>/granttrial 8619554269 7 silent</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Telegram ID must be a numeric ID (e.g. <code>8619554269</code>).", parse_mode="HTML")
+        return
+
+    try:
+        days = int(context.args[1])
+        if days <= 0 or days > 365:
+            await update.message.reply_text("❌ Days must be between 1 and 365.")
+            return
+    except ValueError:
+        await update.message.reply_text("❌ Days must be a number.")
+        return
+
+    is_silent = False
+    custom_msg = None
+    if len(context.args) > 2:
+        arg2 = context.args[2].strip().lower()
+        if arg2 in ("silent", "--silent", "-s", "quiet", "none", "noannounce", "false"):
+            is_silent = True
+        else:
+            custom_msg = " ".join(context.args[2:])
+
+    from db.connection import get_pool
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        user_row = await conn.fetchrow(
+            "SELECT telegram_id, first_name, username, plan, is_onboarded FROM users WHERE telegram_id = $1",
+            target_id
+        )
+        if not user_row:
+            await update.message.reply_text(
+                f"❌ No user found with Telegram ID <code>{target_id}</code>.\n"
+                f"They must open the bot and press <b>/start</b> at least once.",
+                parse_mode="HTML"
+            )
+            return
+
+        res = await conn.fetchrow(
+            f"""
+            UPDATE users 
+            SET plan = 'trial',
+                is_trial = TRUE,
+                trial_expires_at = NOW() + INTERVAL '{days} days',
+                trial_used = TRUE,
+                is_deleted = FALSE,
+                updated_at = NOW()
+            WHERE telegram_id = $1
+            RETURNING trial_expires_at
+            """,
+            target_id
+        )
+
+    expires_at = res["trial_expires_at"] if res else None
+    exp_str = expires_at.strftime("%d %b %Y, %H:%M UTC") if expires_at else f"+{days} days"
+    user_name = html.escape(user_row.get("first_name") or "User")
+
+    msg_status = "🤫 Silent (No message sent)"
+    if not is_silent:
+        if custom_msg:
+            dm_text = (
+                f"{custom_msg}\n\n"
+                f"✨ <i>Your trial access is active until {exp_str}. Use /menu to explore!</i>"
+            )
+        else:
+            dm_text = (
+                f"🎉 <b>Froncy Pro Trial Activated!</b>\n\n"
+                f"Hey {user_name}! You've been granted a <b>{days}-day Pro Trial</b> (valid until <b>{exp_str}</b>).\n\n"
+                f"⚡ You will now receive instant alerts from 500+ tech company career pages as new jobs matching your profile go live.\n\n"
+                f"Use /menu to explore your trial features!"
+            )
+
+        try:
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=dm_text,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+            msg_status = "✅ Delivered to user via Telegram"
+        except Exception as e:
+            msg_status = f"⚠️ Updated DB, but DM failed: {html.escape(str(e))}"
+
+    await update.message.reply_text(
+        f"⏳ <b>Froncy Trial Granted Successfully!</b>\n\n"
+        f"👤 <b>User:</b> {user_name} (<code>{target_id}</code>)\n"
+        f"⏳ <b>Duration:</b> {days} days\n"
+        f"📅 <b>Expires At:</b> <code>{exp_str}</code>\n"
+        f"💬 <b>Notification:</b> {msg_status}",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin granted Trial to {target_id} for {days} days (silent={is_silent})")
+
+
+async def revokepro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    /revokepro <telegram_id> - Downgrade a user back to the Free plan.
+    """
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    if not context.args or len(context.args) < 1:
+        await update.message.reply_text(
+            "<b>Usage:</b> <code>/revokepro &lt;telegram_id&gt;</code>\n"
+            "Example: <code>/revokepro 8619554269</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Telegram ID must be a numeric ID.", parse_mode="HTML")
+        return
+
+    from db.connection import get_pool
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        user_row = await conn.fetchrow(
+            "SELECT telegram_id, first_name, username, plan FROM users WHERE telegram_id = $1",
+            target_id
+        )
+        if not user_row:
+            await update.message.reply_text(f"❌ No user found with ID <code>{target_id}</code>.", parse_mode="HTML")
+            return
+
+        await conn.execute(
+            """
+            UPDATE users 
+            SET plan = 'free',
+                is_trial = FALSE,
+                plan_expires_at = NULL,
+                trial_expires_at = NULL,
+                updated_at = NOW()
+            WHERE telegram_id = $1
+            """,
+            target_id
+        )
+
+    user_name = html.escape(user_row.get("first_name") or "User")
+    await update.message.reply_text(
+        f"✅ <b>Plan Revoked:</b> User {user_name} (<code>{target_id}</code>) has been downgraded back to <b>Free</b>.",
+        parse_mode="HTML"
+    )
+    logger.info(f"Admin revoked plan for {target_id}")
+
+

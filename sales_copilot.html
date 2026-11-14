@@ -17,6 +17,7 @@
       --warning: #f59e0b;
       --danger: #ef4444;
       --accent: #8b5cf6;
+      --cyan: #06b6d4;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -55,6 +56,11 @@
       background: rgba(59, 130, 246, 0.2);
       color: #60a5fa;
       border: 1px solid rgba(59, 130, 246, 0.4);
+    }
+    .badge-exp {
+      background: rgba(6, 182, 212, 0.2);
+      color: #67e8f9;
+      border: 1px solid rgba(6, 182, 212, 0.4);
     }
     .header-actions {
       display: flex;
@@ -99,24 +105,24 @@
       display: grid;
       grid-template-columns: 380px 1fr;
       flex: 1;
+      height: calc(100vh - 60px);
       overflow: hidden;
-      height: calc(100vh - 61px);
     }
 
-    /* Left Sidebar: Prospects */
+    /* Left Sidebar */
     .sidebar {
-      background: #131d2e;
+      background: #111827;
       border-right: 1px solid var(--card-border);
       display: flex;
       flex-direction: column;
-      height: 100%;
+      overflow: hidden;
     }
     .sidebar-header {
-      padding: 14px 16px;
+      padding: 12px;
       border-bottom: 1px solid var(--card-border);
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
     .search-input {
       width: 100%;
@@ -128,25 +134,28 @@
       font-size: 0.85rem;
     }
     .search-input:focus { outline: none; border-color: var(--primary); }
+    
     .filter-pills {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       overflow-x: auto;
       padding-bottom: 2px;
     }
     .pill {
-      font-size: 0.75rem;
-      padding: 4px 10px;
-      border-radius: 12px;
       background: #1e293b;
+      border: 1px solid var(--card-border);
       color: var(--text-muted);
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      border-radius: 4px;
       cursor: pointer;
       white-space: nowrap;
-      border: 1px solid transparent;
     }
+    .pill:hover { background: #334155; }
     .pill.active {
       background: var(--primary);
       color: white;
+      border-color: var(--primary);
       font-weight: 600;
     }
     .prospect-list {
@@ -193,6 +202,18 @@
     .stage-offer { background: #854d0e; color: #fde047; }
     .stage-paid { background: #047857; color: #a7f3d0; font-weight: 700; }
     .stage-lost { background: #7f1d1d; color: #fca5a5; }
+
+    .priority-badge {
+      font-size: 0.68rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .prio-high { background: #065f46; color: #a7f3d0; }
+    .prio-low { background: #713f12; color: #fef08a; }
+    .prio-disq { background: #831843; color: #fbcfe8; }
+
     .card-meta {
       font-size: 0.78rem;
       color: var(--text-muted);
@@ -239,7 +260,7 @@
     }
     .prospect-inputs {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 10px;
       flex: 1;
     }
@@ -249,7 +270,7 @@
       gap: 4px;
     }
     .input-group label {
-      font-size: 0.75rem;
+      font-size: 0.73rem;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -266,11 +287,95 @@
     .input-field:focus { outline: none; border-color: var(--primary); }
     
     .workspace-content {
-      padding: 20px 24px;
+      padding: 18px 24px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      max-width: 1100px;
+      gap: 16px;
+      max-width: 1120px;
+    }
+
+    /* Experiment Funnel Banner */
+    .experiment-card {
+      background: linear-gradient(135deg, #0d233a 0%, #112240 100%);
+      border: 1px solid #1e4976;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .exp-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .exp-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #93c5fd;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .exp-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }
+    .metric-pill {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid #23354d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .metric-pill .m-val {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #f8fafc;
+      line-height: 1.2;
+    }
+    .metric-pill .m-lbl {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .metric-pill.success-pill .m-val { color: #34d399; }
+    .metric-pill.cyan-pill .m-val { color: #38bdf8; }
+
+    /* Flow Mode Switcher */
+    .flow-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #141f32;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .flow-pills {
+      display: flex;
+      gap: 6px;
+    }
+    .flow-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .flow-btn.active {
+      background: #1e3a5f;
+      color: #93c5fd;
+      border-color: #3b82f6;
     }
 
     /* Script Navigation Tabs */
@@ -288,6 +393,7 @@
       padding: 8px 14px;
       font-size: 0.84rem;
       border-radius: 6px;
+      white-space: nowrap;
     }
     .tab-btn.active {
       background: var(--card-bg);
@@ -389,26 +495,32 @@
       letter-spacing: 0.04em;
     }
 
-    /* Modal for Add Prospect */
+    /* Modals */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.75);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 100;
+      padding: 20px;
     }
     .modal-content {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
       padding: 24px;
-      width: 480px;
-      max-width: 90%;
+      width: 520px;
+      max-width: 95%;
       display: flex;
       flex-direction: column;
       gap: 14px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-content.wide {
+      width: 720px;
     }
     .modal-actions {
       display: flex;
@@ -416,6 +528,25 @@
       gap: 8px;
       margin-top: 10px;
     }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+      margin-top: 8px;
+    }
+    .matrix-table th, .matrix-table td {
+      border: 1px solid var(--card-border);
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .matrix-table th {
+      background: #141f32;
+      color: #94a3b8;
+    }
+    .tag-green { color: #34d399; font-weight: 700; }
+    .tag-yellow { color: #fde047; font-weight: 700; }
+    .tag-red { color: #f87171; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -431,8 +562,10 @@
     <div class="header-brand">
       <h1>🚀 Froncy V2 Outreach Copilot</h1>
       <span class="badge" id="statsBadge">0 Prospects</span>
+      <span class="badge badge-exp" id="cohortBadge">Cohort B: 0/36</span>
     </div>
     <div class="header-actions">
+      <button class="btn-outline btn-sm" onclick="openMatrixModal()">📋 Qualification Matrix</button>
       <button class="btn-primary" onclick="openAddModal()">➕ Add Prospect</button>
       <button class="btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
       <button class="btn-outline" onclick="document.getElementById('csvFileInput').click()">📤 Import CSV</button>
@@ -449,9 +582,10 @@
         <input type="text" class="search-input" id="searchBox" placeholder="🔍 Search prospects..." oninput="renderProspectList()">
         <div class="filter-pills">
           <div class="pill active" onclick="setFilter('all', this)">All (<span id="countAll">0</span>)</div>
+          <div class="pill" onclick="setFilter('cohortB', this)">⚡ Cohort B (<span id="countCohortB">0</span>)</div>
           <div class="pill" onclick="setFilter('due', this)">⏰ Due (<span id="countDue">0</span>)</div>
-          <div class="pill" onclick="setFilter('active', this)">Active (<span id="countActive">0</span>)</div>
-          <div class="pill" onclick="setFilter('paid', this)">Paid 💎 (<span id="countPaid">0</span>)</div>
+          <div class="pill" onclick="setFilter('high', this)">🔥 High (<span id="countHigh">0</span>)</div>
+          <div class="pill" onclick="setFilter('paid', this)">💎 Paid (<span id="countPaid">0</span>)</div>
           <div class="pill" onclick="setFilter('dnc', this)">DNC (<span id="countDNC">0</span>)</div>
         </div>
       </div>
@@ -482,20 +616,36 @@
             </div>
             <div class="input-group">
               <label>Role</label>
-              <input type="text" class="input-field" id="pRole" oninput="updateCurrentProspect('role', this.value)" placeholder="e.g. Backend Developer">
+              <input type="text" class="input-field" id="pRole" oninput="updateCurrentProspect('role', this.value)" placeholder="e.g. SDE-1 / Backend">
             </div>
             <div class="input-group">
               <label>Tech Stack (Optional)</label>
-              <input type="text" class="input-field" id="pStack" oninput="updateCurrentProspect('tech_stack', this.value)" placeholder="Leave blank to skip (e.g. Backend, React)">
+              <input type="text" class="input-field" id="pStack" oninput="updateCurrentProspect('tech_stack', this.value)" placeholder="Leave blank to skip (e.g. React, Node)">
             </div>
             <div class="input-group">
-              <label>Source</label>
-              <select class="input-field" id="pSource" onchange="updateCurrentProspect('source', this.value)">
-                <option value="Cold Profile">Cold Profile</option>
-                <option value="Job Post">Job-Search Post</option>
-                <option value="Group">Dev Community / Group</option>
-                <option value="V1 User">Froncy V1 User</option>
-                <option value="Referral">Referral</option>
+              <label>Cohort / Experiment</label>
+              <select class="input-field" id="pCohort" onchange="updateCurrentProspect('cohort', this.value)">
+                <option value="Cohort B (Next 36)">⚡ Cohort B (Next 36 - Fast 3-Stage)</option>
+                <option value="Cohort A (Original 36)">🏛️ Cohort A (Original 36 - Classic)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Priority</label>
+              <select class="input-field" id="pPriority" onchange="updateCurrentProspect('priority', this.value)">
+                <option value="Unrated">⚪ Unrated</option>
+                <option value="High Priority">🟢 High Priority (Checks pages / Pain)</option>
+                <option value="Low Priority">🟡 Low Priority (LinkedIn / Passive)</option>
+                <option value="Disqualified">🔴 Disqualified (Doesn't see value)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Intent Level</label>
+              <select class="input-field" id="pIntent" onchange="updateCurrentProspect('intent_level', this.value)">
+                <option value="None">⚪ None / Unassessed</option>
+                <option value="Level 1: Problem Aware">🟡 Level 1: Problem Aware</option>
+                <option value="Level 2: Solution Interested">🔵 Level 2: Solution Interested</option>
+                <option value="Level 3: Purchase Intent">🟢 Level 3: Purchase Intent (Link asked)</option>
+                <option value="Paid Subscriber">💎 Paid ₹199 Subscriber</option>
               </select>
             </div>
             <div class="input-group">
@@ -523,13 +673,57 @@
 
         <div class="workspace-content">
 
-          <!-- Script Tabs -->
-          <div class="script-tabs">
-            <button class="tab-btn active" onclick="setScriptTab('openers', this)">1. Openers</button>
-            <button class="tab-btn" onclick="setScriptTab('discovery', this)">2. Discovery</button>
-            <button class="tab-btn" onclick="setScriptTab('demo_offer', this)">3. Demo & Pro Offer</button>
-            <button class="tab-btn" onclick="setScriptTab('followups', this)">4. Follow-Ups</button>
-            <button class="tab-btn" onclick="setScriptTab('objections', this)">5. Objections SOS (Top 6)</button>
+          <!-- Experiment Progress Card -->
+          <div class="experiment-card">
+            <div class="exp-top">
+              <div class="exp-title">
+                <span>🧪 Next 36 Cohort: Direct 3-Stage Validation Funnel</span>
+              </div>
+              <span class="badge badge-exp" id="expCohortProgress">0 / 36 Messaged</span>
+            </div>
+            <div class="exp-metrics-grid">
+              <div class="metric-pill">
+                <span class="m-val" id="metricReplies">0</span>
+                <span class="m-lbl">Replies Received</span>
+              </div>
+              <div class="metric-pill">
+                <span class="m-val" id="metricPain">0</span>
+                <span class="m-lbl">Pain Aware (L1)</span>
+              </div>
+              <div class="metric-pill cyan-pill">
+                <span class="m-val" id="metricInterested">0</span>
+                <span class="m-lbl">Solution Interested (L2)</span>
+              </div>
+              <div class="metric-pill">
+                <span class="m-val" id="metricLinkSent">0</span>
+                <span class="m-lbl">Bot Link Shared</span>
+              </div>
+              <div class="metric-pill success-pill">
+                <span class="m-val" id="metricPaid">0</span>
+                <span class="m-lbl">Paid ₹199 (L3)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Flow Mode Switcher Bar -->
+          <div class="flow-bar">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700;">Workflow:</span>
+              <div class="flow-pills">
+                <button class="flow-btn active" id="btnFlowFast3" onclick="setFlowMode('fast3')">
+                  ⚡ Direct 3-Stage Qualification (New Next 36)
+                </button>
+                <button class="flow-btn" id="btnFlowClassic" onclick="setFlowMode('classic5')">
+                  🏛️ Classic 5-Stage Discovery (Original Flow)
+                </button>
+              </div>
+            </div>
+            <button class="btn-sm btn-outline" onclick="openMatrixModal()">💡 Qualification Matrix Cheat Sheet</button>
+          </div>
+
+          <!-- Script Tabs (Dynamically updated) -->
+          <div class="script-tabs" id="scriptTabsContainer">
+            <!-- Rendered via JS -->
           </div>
 
           <!-- Branching / Shortcut Chips -->
@@ -585,11 +779,18 @@
       </div>
       <div class="input-group">
         <label>Target / Current Role</label>
-        <input type="text" class="input-field" id="newPRole" placeholder="e.g. Backend Developer">
+        <input type="text" class="input-field" id="newPRole" placeholder="e.g. SDE-1 / Backend Developer">
       </div>
       <div class="input-group">
         <label>Tech Stack (Optional)</label>
-        <input type="text" class="input-field" id="newPStack" placeholder="Leave blank to skip (e.g. Backend, React, C++)">
+        <input type="text" class="input-field" id="newPStack" placeholder="Leave blank to skip (e.g. React, Node, C++)">
+      </div>
+      <div class="input-group">
+        <label>Cohort / Experiment Group</label>
+        <select class="input-field" id="newPCohort">
+          <option value="Cohort B (Next 36)">⚡ Cohort B (Next 36 - Fast 3-Stage)</option>
+          <option value="Cohort A (Original 36)">🏛️ Cohort A (Original 36 - Classic)</option>
+        </select>
       </div>
       <div class="input-group">
         <label>Source</label>
@@ -608,17 +809,216 @@
     </div>
   </div>
 
+  <!-- Qualification Matrix Cheat Sheet Modal -->
+  <div class="modal-overlay" id="matrixModal">
+    <div class="modal-content wide">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-size: 1.15rem; color:#93c5fd;">📋 Qualification Rules & Validation Matrix</h3>
+        <button class="btn-outline btn-sm" onclick="closeMatrixModal()">✖</button>
+      </div>
+      
+      <p style="font-size:0.83rem; color:var(--text-muted);">
+        Don't spend 15 minutes debating a ₹199/month product. Use this simple matrix to qualify or disqualify fast:
+      </p>
+
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th>Prospect Response</th>
+            <th>Your Action</th>
+            <th>Next Step</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Manually checks career pages</strong></td>
+            <td><span class="tag-green">🟢 High Priority</span></td>
+            <td>Send Message 2 (Career Pages question)</td>
+          </tr>
+          <tr>
+            <td><strong>Misses relevant openings / LinkedIn is late</strong></td>
+            <td><span class="tag-green">🟢 High Priority</span></td>
+            <td>Present Froncy 500+ hourly alerts</td>
+          </tr>
+          <tr>
+            <td><strong>Interested in automated alerts</strong></td>
+            <td><span class="tag-green">🟢 High Priority</span></td>
+            <td>Send Message 3 (₹199 Pro Offer + Bot Link)</td>
+          </tr>
+          <tr>
+            <td><strong>LinkedIn is sufficient</strong></td>
+            <td><span class="tag-yellow">🟡 Low Priority</span></td>
+            <td>Check if they ever check top tier career pages, else close loop</td>
+          </tr>
+          <tr>
+            <td><strong>Not exploring opportunities</strong></td>
+            <td><span class="tag-yellow">🟡 Low Priority</span></td>
+            <td><em>Important:</em> Test passive alerts interest before disqualifying!</td>
+          </tr>
+          <tr>
+            <td><strong>Doesn't see value in ₹199</strong></td>
+            <td><span class="tag-red">🔴 Disqualify</span></td>
+            <td>Offer free daily feed and move to the next prospect</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="background:#131d2e; border:1px solid #1e3a5f; border-radius:6px; padding:12px; margin-top:8px;">
+        <h4 style="font-size:0.85rem; color:#38bdf8; margin-bottom:6px;">🎯 The 3 Levels of Validation (Do Not Confuse!)</h4>
+        <div style="font-size:0.8rem; line-height:1.5; color:#cbd5e1; display:flex; flex-direction:column; gap:6px;">
+          <div><strong>1. Problem Awareness:</strong> "Yes, checking career pages is annoying." <em>(They acknowledge the pain, but might not buy).</em></div>
+          <div><strong>2. Solution Interest:</strong> "That sounds useful." <em>(They like the idea, but haven't committed).</em></div>
+          <div><strong>3. Purchase Intent (True Goal):</strong> "Send me the link. I'll try it." <em>(They open the bot and subscribe at ₹199/mo).</em></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="closeMatrixModal()">Got It</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // --- Data Store & State ---
     const STORAGE_KEY = 'froncy_v2_prospects';
     const LAST_BACKUP_KEY = 'froncy_v2_last_backup';
+    const FLOW_MODE_KEY = 'froncy_v2_flow_mode';
+
     let prospects = [];
     let currentProspectId = null;
     let activeFilter = 'all';
-    let activeScriptTab = 'openers';
+    let currentFlowMode = localStorage.getItem(FLOW_MODE_KEY) || 'fast3'; // 'fast3' or 'classic5'
+    let activeScriptTab = currentFlowMode === 'fast3' ? 'f3_opener' : 'openers';
 
-    // --- Verified, Truthful Scripts Catalog ---
-    const SCRIPTS = {
+    // --- Verified Scripts Catalog (No AI em-dashes, fully truthful) ---
+    const FAST3_SCRIPTS = {
+      f3_opener: [
+        {
+          id: 'f3_op_direct',
+          label: 'Direct Opener (Pain + Froncy Intro)',
+          desc: 'Primary opener establishing pain & product immediately.',
+          template: "Hey {Name}! Quick question: do you ever manually check company career pages for new {Role} opportunities, or do you mostly rely on LinkedIn and referrals?\n\nI've built Froncy, a tool that tracks 500+ company career pages and sends instant alerts when relevant opportunities go live, so you don't have to keep checking them manually."
+        },
+        {
+          id: 'f3_op_stack',
+          label: 'Direct Opener (With Tech Stack)',
+          desc: 'Includes specific tech stack if provided.',
+          template: "Hey {Name}! Quick question: do you ever manually check company career pages for new {Role} openings{TechStackIn}, or do you mostly rely on LinkedIn and referrals?\n\nI've built Froncy, a tool that tracks 500+ company career pages and sends instant alerts when relevant opportunities go live, so you don't have to keep checking them manually."
+        },
+        {
+          id: 'f3_op_active',
+          label: 'Opener for Active Search / Notice Period',
+          desc: 'For prospects actively seeking or in notice period.',
+          template: "Hey {Name}! Saw your post about exploring new opportunities{TechStackIn}.\n\nQuick question: do you ever manually check company career pages for openings, or do you mostly rely on LinkedIn and referrals?\n\nI've built Froncy, a tool that tracks 500+ company career pages and sends instant alerts when relevant roles go live, so you don't have to keep checking them manually."
+        }
+      ],
+      f3_qualify: [
+        {
+          id: 'f3_q_manual',
+          label: 'Reply: "I check career pages manually" (High Priority)',
+          desc: 'Prospect experiences the exact pain.',
+          template: "That's exactly the problem Froncy solves. If you could get instant alerts for relevant openings across 500+ companies instead of checking them individually, would that be useful to you?"
+        },
+        {
+          id: 'f3_q_linkedin',
+          label: 'Reply: "I rely on LinkedIn"',
+          desc: 'Test if LinkedIn leaves gaps on career pages.',
+          template: "Got it! Do you feel LinkedIn covers most of the relevant openings you're interested in, or do you sometimes miss opportunities posted directly on company career pages?"
+        },
+        {
+          id: 'f3_q_referrals',
+          label: 'Reply: "I use referrals"',
+          desc: 'Test discovery vs referral gap.',
+          template: "Makes sense! Do you usually discover the role on company career pages first and then find someone who can refer you, or do you rely on your network to share openings?"
+        },
+        {
+          id: 'f3_q_passive',
+          label: 'Reply: "Not actively looking" (Passive candidate)',
+          desc: 'Do not disqualify immediately - test passive alerts.',
+          template: "Totally understand! Even when you're not actively hunting, would you still find it valuable to get passive alerts if a really strong {Role} opening goes live at a top company, or do you prefer zero notifications?"
+        },
+        {
+          id: 'f3_q_miss_pain',
+          label: 'Reply: "Yes, I miss openings / it takes time"',
+          desc: 'Prospect validated pain point directly.',
+          template: "That's super common. How many company career pages do you usually try to keep track of when you're searching?"
+        }
+      ],
+      f3_convert: [
+        {
+          id: 'f3_c_offer',
+          label: 'Step 3: Present Pro Offer (₹199/mo)',
+          desc: 'Direct pitch when they express genuine interest.',
+          template: "Makes sense. Froncy does exactly that. You can set your role and preferences, and it monitors 500+ company career pages for matching opportunities. The subscription is just ₹199/month.\n\nWould you be interested in trying it?\n\nHere's the link to set it up: https://t.me/FroncyJobsBot?start=li_pilot"
+        },
+        {
+          id: 'f3_c_price_asked',
+          label: 'Direct Price Inquiry Reply',
+          desc: 'When prospect asks: "What is the price?"',
+          template: "Froncy is ₹199/month.\n\nIt monitors 500+ company career pages on an hourly crawl and sends matching alerts directly to Telegram based on your role and preferences.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know once you try it out!"
+        },
+        {
+          id: 'f3_c_send_link',
+          label: 'Reply: "Send me the link / I\'ll try it"',
+          desc: 'High purchase intent conversion.',
+          template: "Awesome! Here is the direct link: https://t.me/FroncyJobsBot?start=li_pilot\n\nOnce you open the bot, choose your role and preferences. You'll get instant alerts whenever matching openings go live. Let me know if you run into any questions!"
+        },
+        {
+          id: 'f3_c_discount',
+          label: 'Reply to: "Any discount / why ₹199?"',
+          desc: 'Anchor value over price.',
+          template: "₹199/month is less than the price of a coffee a week, and it saves 10+ hours of manually refreshing company career pages every month.\n\nYou can test out the feed first here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know what you think!"
+        }
+      ],
+      f3_followups: [
+        {
+          id: 'f3_fu_opener_day3',
+          label: 'Follow-up 1: No reply to Opener (Day 3)',
+          desc: 'Short, natural nudge.',
+          template: "Hey {Name}, just following up on this. Do you ever check company career pages directly when looking for opportunities, or is LinkedIn pretty much all you need?"
+        },
+        {
+          id: 'f3_fu_opener_day7',
+          label: 'Follow-up 2: Final Close Loop (Day 7)',
+          desc: 'Polite breakup.',
+          template: "Hey {Name}, closing the loop here so I don't clutter your inbox. Best of luck with your work!"
+        },
+        {
+          id: 'f3_fu_link_sent',
+          label: 'Follow-up: Link sent but haven\'t joined',
+          desc: 'Check if they ran into any issue.',
+          template: "Hey {Name}, were you able to open the Froncy bot? Here's the link if you need it: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know if you have any questions configuring your preferences!"
+        }
+      ],
+      f3_matrix: [
+        {
+          id: 'f3_m_summary',
+          label: '📋 Fast Qualification Rules Summary',
+          desc: 'Decision rules overview.',
+          template: "QUALIFICATION RULES:\n\n🟢 HIGH PRIORITY (Pursue):\n• Manually checks career pages\n• Misses relevant openings on career sites\n• Interested in automated Telegram alerts\n\n🟡 LOW PRIORITY (Keep warm / low effort):\n• LinkedIn is sufficient for them\n• Not exploring opportunities (check if passive alerts appeal)\n\n🔴 DISQUALIFY (Save your time):\n• Argues about ₹199 value after 1 explanation\n• Refuses to use Telegram or automated alerts"
+        },
+        {
+          id: 'f3_m_levels',
+          label: '🎯 3 Validation Levels Reference',
+          desc: 'Measure Level 3, not just polite answers.',
+          template: "THE 3 VALIDATION LEVELS:\n\n1️⃣ Level 1: Problem Awareness (\"Yes, checking career pages is annoying.\")\n2️⃣ Level 2: Solution Interest (\"That sounds useful / cool.\")\n3️⃣ Level 3: Purchase Intent (\"Send me the link. I'll try it.\" -> Subscribes)\n\nMeasure Level 3 across your next 36 prospects!"
+        },
+        {
+          id: 'f3_m_obj_price',
+          label: 'SOS: "₹199 is too high"',
+          desc: 'Quick objection handle.',
+          template: "Fair enough! If checking company career pages manually doesn't take much of your time, ₹199/month might not make sense. But if it saves 10+ hours of searching every month, it pays for itself on day one. You can test it out here: https://t.me/FroncyJobsBot?start=li_pilot"
+        },
+        {
+          id: 'f3_m_obj_free',
+          label: 'SOS: "Career pages are free"',
+          desc: 'Quick objection handle.',
+          template: "The listings are public, but manually checking 500+ career pages takes hours every week. Froncy does the hourly crawl, matching, and instant Telegram delivery so you never miss an opening. Here's the link: https://t.me/FroncyJobsBot?start=li_pilot"
+        }
+      ]
+    };
+
+    const CLASSIC_SCRIPTS = {
       openers: [
         {
           id: 'op_cold',
@@ -765,18 +1165,36 @@
       ]
     };
 
+    // Helper to get active script repo
+    function getActiveScripts() {
+      return currentFlowMode === 'fast3' ? FAST3_SCRIPTS : CLASSIC_SCRIPTS;
+    }
+
     // --- Init & Storage ---
     function init() {
       loadProspects();
       checkBackupReminder();
+      updateFlowModeUI();
+      renderScriptTabs();
       renderProspectList();
-      setScriptTab('openers');
     }
 
     function loadProspects() {
       try {
         const data = localStorage.getItem(STORAGE_KEY);
         prospects = data ? JSON.parse(data) : [];
+        // Backfill new fields if missing
+        prospects.forEach(p => {
+          if (!p.cohort) {
+            p.cohort = 'Cohort A (Original 36)';
+          }
+          if (!p.priority) {
+            p.priority = 'Unrated';
+          }
+          if (!p.intent_level) {
+            p.intent_level = p.stage === 'Paid' ? 'Paid Subscriber' : 'None';
+          }
+        });
       } catch (e) {
         console.error("Failed to load prospects from localStorage:", e);
         prospects = [];
@@ -799,7 +1217,130 @@
       }
     }
 
-    // --- Prospect Computations ---
+    // --- Flow Mode Switching ---
+    function setFlowMode(mode) {
+      currentFlowMode = mode;
+      localStorage.setItem(FLOW_MODE_KEY, mode);
+      updateFlowModeUI();
+      activeScriptTab = currentFlowMode === 'fast3' ? 'f3_opener' : 'openers';
+      renderScriptTabs();
+    }
+
+    function updateFlowModeUI() {
+      const btnFast = document.getElementById('btnFlowFast3');
+      const btnClassic = document.getElementById('btnFlowClassic');
+      if (currentFlowMode === 'fast3') {
+        btnFast.classList.add('active');
+        btnClassic.classList.remove('active');
+      } else {
+        btnClassic.classList.add('active');
+        btnFast.classList.remove('active');
+      }
+    }
+
+    function renderScriptTabs() {
+      const container = document.getElementById('scriptTabsContainer');
+      const isFast = currentFlowMode === 'fast3';
+
+      const tabDefs = isFast ? [
+        { key: 'f3_opener', label: '⚡ 1. Opener (Pain + Intro)' },
+        { key: 'f3_qualify', label: '🎯 2. Qualify Pain (Replies)' },
+        { key: 'f3_convert', label: '💰 3. Convert (₹199 Pro Offer)' },
+        { key: 'f3_followups', label: '⏳ 4. Fast Follow-Ups' },
+        { key: 'f3_matrix', label: '📋 5. Qualification Matrix & SOS' }
+      ] : [
+        { key: 'openers', label: '1. Openers' },
+        { key: 'discovery', label: '2. Discovery' },
+        { key: 'demo_offer', label: '3. Demo & Pro Offer' },
+        { key: 'followups', label: '4. Follow-Ups' },
+        { key: 'objections', label: '5. Objections SOS (Top 6)' }
+      ];
+
+      // Ensure activeScriptTab is valid
+      if (!tabDefs.find(t => t.key === activeScriptTab)) {
+        activeScriptTab = tabDefs[0].key;
+      }
+
+      container.innerHTML = tabDefs.map(t => `
+        <button class="tab-btn ${t.key === activeScriptTab ? 'active' : ''}" onclick="setScriptTab('${t.key}', this)">
+          ${escapeHtml(t.label)}
+        </button>
+      `).join('');
+
+      renderScriptChips();
+    }
+
+    function setScriptTab(tabKey, el) {
+      activeScriptTab = tabKey;
+      if (el) {
+        document.querySelectorAll('.script-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+      }
+      renderScriptChips();
+    }
+
+    function renderScriptChips() {
+      const chipsContainer = document.getElementById('scriptChipsContainer');
+      const scriptsObj = getActiveScripts();
+      const scripts = scriptsObj[activeScriptTab] || [];
+
+      chipsContainer.innerHTML = scripts.map((s, idx) => `
+        <button class="chip-btn ${idx === 0 ? 'active' : ''}" onclick="selectScript('${s.id}', this)">
+          ${escapeHtml(s.label)}
+        </button>
+      `).join('');
+
+      if (scripts.length > 0) {
+        selectScript(scripts[0].id);
+      }
+    }
+
+    let activeScriptId = null;
+    function selectScript(scriptId, el) {
+      activeScriptId = scriptId;
+      if (el) {
+        document.querySelectorAll('.script-options .chip-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+      }
+      applyTemplate();
+    }
+
+    function applyTemplate() {
+      if (!activeScriptId) return;
+      const scriptsObj = getActiveScripts();
+      let foundScript = null;
+      for (const cat in scriptsObj) {
+        const item = scriptsObj[cat].find(s => s.id === activeScriptId);
+        if (item) { foundScript = item; break; }
+      }
+      if (!foundScript) return;
+
+      document.getElementById('currentScriptLabel').textContent = `📝 ${foundScript.label}`;
+
+      const p = prospects.find(x => x.id === currentProspectId) || {};
+      const name = p.name ? p.name.trim().split(' ')[0] : 'there';
+      const role = p.role ? p.role.trim() : 'Software Engineer';
+      const stack = p.tech_stack ? p.tech_stack.trim() : '';
+
+      let text = foundScript.template
+        .replace(/{Name}/g, name)
+        .replace(/{Role}/g, role);
+
+      // Handle Tech Stack smoothly if provided or omitted
+      if (stack) {
+        text = text.replace(/{TechStackClause}/g, ` and have experience with ${stack}`)
+                   .replace(/{TechStackIn}/g, ` in ${stack}`)
+                   .replace(/{TechStack}/g, stack);
+      } else {
+        text = text.replace(/{TechStackClause}/g, '')
+                   .replace(/{TechStackIn}/g, '')
+                   .replace(/{TechStack}/g, 'software development');
+      }
+
+      document.getElementById('scriptBox').value = text;
+    }
+
+    // --- Prospect Computations & Funnel Metrics ---
     function isDueForFollowup(p) {
       if (p.do_not_contact) return false;
       if (['Paid', 'Lost'].includes(p.stage)) return false;
@@ -812,12 +1353,32 @@
     }
 
     function updateCounts() {
-      document.getElementById('statsBadge').textContent = `${prospects.length} Prospects`;
+      const cohortBProspects = prospects.filter(p => p.cohort === 'Cohort B (Next 36)');
+      
+      document.getElementById('statsBadge').textContent = `${prospects.length} Total Prospects`;
+      document.getElementById('cohortBadge').textContent = `Cohort B: ${cohortBProspects.length}/36`;
       document.getElementById('countAll').textContent = prospects.length;
+      document.getElementById('countCohortB').textContent = cohortBProspects.length;
       document.getElementById('countDue').textContent = prospects.filter(isDueForFollowup).length;
-      document.getElementById('countActive').textContent = prospects.filter(p => !p.do_not_contact && !['Paid', 'Lost'].includes(p.stage)).length;
-      document.getElementById('countPaid').textContent = prospects.filter(p => p.stage === 'Paid').length;
+      document.getElementById('countHigh').textContent = prospects.filter(p => p.priority === 'High Priority').length;
+      document.getElementById('countPaid').textContent = prospects.filter(p => p.stage === 'Paid' || p.intent_level === 'Paid Subscriber').length;
       document.getElementById('countDNC').textContent = prospects.filter(p => p.do_not_contact).length;
+
+      // Cohort B Funnel Metrics
+      const bMessaged = cohortBProspects.filter(p => p.stage !== 'New').length;
+      document.getElementById('expCohortProgress').textContent = `${bMessaged} / 36 Messaged`;
+
+      const bReplies = cohortBProspects.filter(p => ['Replied', 'Demo Shown', 'Offer Made', 'Paid'].includes(p.stage)).length;
+      const bPain = cohortBProspects.filter(p => p.intent_level === 'Level 1: Problem Aware' || (p.discovery_pain && p.discovery_pain.trim())).length;
+      const bInterested = cohortBProspects.filter(p => p.intent_level === 'Level 2: Solution Interested').length;
+      const bLinkSent = cohortBProspects.filter(p => p.intent_level === 'Level 3: Purchase Intent' || ['Offer Made', 'Paid'].includes(p.stage)).length;
+      const bPaid = cohortBProspects.filter(p => p.stage === 'Paid' || p.intent_level === 'Paid Subscriber').length;
+
+      document.getElementById('metricReplies').textContent = bReplies;
+      document.getElementById('metricPain').textContent = bPain;
+      document.getElementById('metricInterested').textContent = bInterested;
+      document.getElementById('metricLinkSent').textContent = bLinkSent;
+      document.getElementById('metricPaid').textContent = bPaid;
     }
 
     // --- Render Sidebar List ---
@@ -832,19 +1393,26 @@
                              (p.tech_stack || '').toLowerCase().includes(query);
         if (!matchesQuery) return false;
 
+        if (activeFilter === 'cohortB') return p.cohort === 'Cohort B (Next 36)';
         if (activeFilter === 'due') return isDueForFollowup(p);
-        if (activeFilter === 'active') return !p.do_not_contact && !['Paid', 'Lost'].includes(p.stage);
-        if (activeFilter === 'paid') return p.stage === 'Paid';
+        if (activeFilter === 'high') return p.priority === 'High Priority';
+        if (activeFilter === 'paid') return p.stage === 'Paid' || p.intent_level === 'Paid Subscriber';
         if (activeFilter === 'dnc') return p.do_not_contact;
         return true;
       });
 
-      // Sort: Due first, then by last contact date
+      // Sort: Due first, then High Priority, then date
       filtered.sort((a, b) => {
         const aDue = isDueForFollowup(a);
         const bDue = isDueForFollowup(b);
         if (aDue && !bDue) return -1;
         if (!aDue && bDue) return 1;
+
+        const aHigh = a.priority === 'High Priority';
+        const bHigh = b.priority === 'High Priority';
+        if (aHigh && !bHigh) return -1;
+        if (!aHigh && bHigh) return 1;
+
         return new Date(b.last_contact_date || b.date_added) - new Date(a.last_contact_date || a.date_added);
       });
 
@@ -858,22 +1426,30 @@
         const due = isDueForFollowup(p);
         const stageClass = getStageClass(p.stage);
         const lastContactStr = p.last_contact_date ? new Date(p.last_contact_date).toLocaleDateString() : 'Never';
+        const prioTag = getPriorityBadge(p.priority);
 
         return `
           <div class="prospect-card ${isActive ? 'active' : ''}" onclick="selectProspect('${p.id}')">
             <div class="card-top">
-              <span class="card-name">${escapeHtml(p.name || 'Unnamed')}</span>
+              <span class="card-name">${escapeHtml(p.name || 'Unnamed')} ${prioTag}</span>
               <span class="stage-badge ${stageClass}">${escapeHtml(p.stage || 'New')}</span>
             </div>
             <div class="card-meta">
               <span>${escapeHtml(p.role || 'No role')} ${p.tech_stack ? '• ' + escapeHtml(p.tech_stack) : ''}</span>
-              <span style="font-size: 0.72rem;">Last contact: ${lastContactStr} (F/U: ${p.followup_count || 0}/2)</span>
+              <span style="font-size: 0.72rem;">${escapeHtml(p.cohort || 'Cohort B')} | Last: ${lastContactStr} (F/U: ${p.followup_count || 0}/2)</span>
             </div>
             ${due ? '<div class="due-tag">⏰ Follow-up Due (3+ days)</div>' : ''}
             ${p.do_not_contact ? '<div style="font-size:0.7rem; color:#ef4444; font-weight:600; margin-top:2px;">🚫 Do Not Contact</div>' : ''}
           </div>
         `;
       }).join('');
+    }
+
+    function getPriorityBadge(priority) {
+      if (priority === 'High Priority') return '<span class="priority-badge prio-high">HIGH</span>';
+      if (priority === 'Low Priority') return '<span class="priority-badge prio-low">LOW</span>';
+      if (priority === 'Disqualified') return '<span class="priority-badge prio-disq">DISQ</span>';
+      return '';
     }
 
     function getStageClass(stage) {
@@ -909,7 +1485,9 @@
       document.getElementById('pUrl').value = p.linkedin_url || '';
       document.getElementById('pRole').value = p.role || '';
       document.getElementById('pStack').value = p.tech_stack || '';
-      document.getElementById('pSource').value = p.source || 'Cold Profile';
+      document.getElementById('pCohort').value = p.cohort || 'Cohort B (Next 36)';
+      document.getElementById('pPriority').value = p.priority || 'Unrated';
+      document.getElementById('pIntent').value = p.intent_level || 'None';
       document.getElementById('pStage').value = p.stage || 'New';
       document.getElementById('pDnc').checked = !!p.do_not_contact;
       document.getElementById('pPain').value = p.discovery_pain || '';
@@ -951,72 +1529,6 @@
       }
     }
 
-    // --- Script Tab & Chips ---
-    function setScriptTab(tabKey, el) {
-      activeScriptTab = tabKey;
-      if (el) {
-        document.querySelectorAll('.script-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
-        el.classList.add('active');
-      }
-
-      const chipsContainer = document.getElementById('scriptChipsContainer');
-      const scripts = SCRIPTS[tabKey] || [];
-
-      chipsContainer.innerHTML = scripts.map((s, idx) => `
-        <button class="chip-btn ${idx === 0 ? 'active' : ''}" onclick="selectScript('${s.id}', this)">
-          ${escapeHtml(s.label)}
-        </button>
-      `).join('');
-
-      if (scripts.length > 0) {
-        selectScript(scripts[0].id);
-      }
-    }
-
-    let activeScriptId = null;
-    function selectScript(scriptId, el) {
-      activeScriptId = scriptId;
-      if (el) {
-        document.querySelectorAll('.script-options .chip-btn').forEach(btn => btn.classList.remove('active'));
-        el.classList.add('active');
-      }
-      applyTemplate();
-    }
-
-    function applyTemplate() {
-      if (!activeScriptId) return;
-      let foundScript = null;
-      for (const cat in SCRIPTS) {
-        const item = SCRIPTS[cat].find(s => s.id === activeScriptId);
-        if (item) { foundScript = item; break; }
-      }
-      if (!foundScript) return;
-
-      document.getElementById('currentScriptLabel').textContent = `📝 ${foundScript.label}`;
-
-      const p = prospects.find(x => x.id === currentProspectId) || {};
-      const name = p.name ? p.name.trim().split(' ')[0] : 'there';
-      const role = p.role ? p.role.trim() : 'Software Engineer';
-      const stack = p.tech_stack ? p.tech_stack.trim() : '';
-
-      let text = foundScript.template
-        .replace(/{Name}/g, name)
-        .replace(/{Role}/g, role);
-
-      // Handle Tech Stack smoothly if provided or omitted
-      if (stack) {
-        text = text.replace(/{TechStackClause}/g, ` and have experience with ${stack}`)
-                   .replace(/{TechStackIn}/g, ` in ${stack}`)
-                   .replace(/{TechStack}/g, stack);
-      } else {
-        text = text.replace(/{TechStackClause}/g, '')
-                   .replace(/{TechStackIn}/g, '')
-                   .replace(/{TechStack}/g, 'software development');
-      }
-
-      document.getElementById('scriptBox').value = text;
-    }
-
     function copyScript() {
       const box = document.getElementById('scriptBox');
       navigator.clipboard.writeText(box.value).then(() => {
@@ -1038,23 +1550,46 @@
       p.last_contact_date = new Date().toISOString();
 
       // Stage progression logic
-      if (activeScriptTab === 'openers') {
-        p.stage = 'Opener Sent';
-      } else if (activeScriptTab === 'discovery') {
-        p.stage = 'Replied';
-      } else if (activeScriptTab === 'demo_offer') {
-        if (activeScriptId === 'demo_bridge_offer') {
+      if (currentFlowMode === 'fast3') {
+        if (activeScriptTab === 'f3_opener') {
+          p.stage = 'Opener Sent';
+        } else if (activeScriptTab === 'f3_qualify') {
           p.stage = 'Replied';
-        } else if (activeScriptId === 'demo_share_job' || activeScriptId === 'demo_value_check') {
-          p.stage = 'Demo Shown';
-        } else {
+          if (activeScriptId === 'f3_q_manual' || activeScriptId === 'f3_q_miss_pain') {
+            p.priority = 'High Priority';
+            if (p.intent_level === 'None') p.intent_level = 'Level 1: Problem Aware';
+          }
+        } else if (activeScriptTab === 'f3_convert') {
           p.stage = 'Offer Made';
+          if (activeScriptId === 'f3_c_send_link') {
+            p.intent_level = 'Level 3: Purchase Intent';
+          } else if (p.intent_level === 'None' || p.intent_level === 'Level 1: Problem Aware') {
+            p.intent_level = 'Level 2: Solution Interested';
+          }
+        } else if (activeScriptTab === 'f3_followups') {
+          p.followup_count = (p.followup_count || 0) + 1;
         }
-      } else if (activeScriptTab === 'followups') {
-        p.followup_count = (p.followup_count || 0) + 1;
+      } else {
+        if (activeScriptTab === 'openers') {
+          p.stage = 'Opener Sent';
+        } else if (activeScriptTab === 'discovery') {
+          p.stage = 'Replied';
+        } else if (activeScriptTab === 'demo_offer') {
+          if (activeScriptId === 'demo_bridge_offer') {
+            p.stage = 'Replied';
+          } else if (activeScriptId === 'demo_share_job' || activeScriptId === 'demo_value_check') {
+            p.stage = 'Demo Shown';
+          } else {
+            p.stage = 'Offer Made';
+          }
+        } else if (activeScriptTab === 'followups') {
+          p.followup_count = (p.followup_count || 0) + 1;
+        }
       }
 
       document.getElementById('pStage').value = p.stage;
+      document.getElementById('pPriority').value = p.priority || 'Unrated';
+      document.getElementById('pIntent').value = p.intent_level || 'None';
       saveProspects();
       renderProspectList();
       alert(`✅ Updated: Marked sent on ${new Date().toLocaleTimeString()} (Stage: ${p.stage})`);
@@ -1066,6 +1601,7 @@
       document.getElementById('newPUrl').value = '';
       document.getElementById('newPRole').value = '';
       document.getElementById('newPStack').value = '';
+      document.getElementById('newPCohort').value = 'Cohort B (Next 36)';
       document.getElementById('addModal').style.display = 'flex';
       document.getElementById('newPName').focus();
     }
@@ -1087,6 +1623,9 @@
         linkedin_url: document.getElementById('newPUrl').value.trim(),
         role: document.getElementById('newPRole').value.trim(),
         tech_stack: document.getElementById('newPStack').value.trim(),
+        cohort: document.getElementById('newPCohort').value,
+        priority: 'Unrated',
+        intent_level: 'None',
         source: document.getElementById('newPSource').value,
         stage: 'New',
         date_added: new Date().toISOString(),
@@ -1104,6 +1643,14 @@
       selectProspect(newP.id);
     }
 
+    // --- Matrix Modal ---
+    function openMatrixModal() {
+      document.getElementById('matrixModal').style.display = 'flex';
+    }
+    function closeMatrixModal() {
+      document.getElementById('matrixModal').style.display = 'none';
+    }
+
     // --- CSV Export / Import ---
     function exportCSV() {
       if (prospects.length === 0) {
@@ -1112,8 +1659,8 @@
       }
 
       const headers = [
-        "Name", "LinkedIn URL", "Role", "Tech Stack", "Source", 
-        "Date Added", "Last Contact Date", "Follow-up Count", 
+        "Name", "LinkedIn URL", "Role", "Tech Stack", "Cohort", "Priority", "Intent Level", 
+        "Source", "Date Added", "Last Contact Date", "Follow-up Count", 
         "Stage", "Discovery Pain / Quote", "Objection Raised", 
         "Do Not Contact", "Notes"
       ];
@@ -1123,6 +1670,9 @@
         p.linkedin_url || '',
         p.role || '',
         p.tech_stack || '',
+        p.cohort || 'Cohort B (Next 36)',
+        p.priority || 'Unrated',
+        p.intent_level || 'None',
         p.source || '',
         p.date_added || '',
         p.last_contact_date || '',
@@ -1167,7 +1717,9 @@
         }
 
         let importedCount = 0;
-        // Simple CSV parser ignoring header
+        const headerCols = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const hasCohort = headerCols.includes('cohort');
+
         for (let i = 1; i < lines.length; i++) {
           const cols = parseCSVLine(lines[i]);
           if (!cols || cols.length < 1) continue;
@@ -1182,22 +1734,47 @@
           );
 
           if (!existing) {
-            prospects.push({
-              id: 'p_' + Date.now() + '_' + i,
-              name: cols[0] || '',
-              linkedin_url: cols[1] || '',
-              role: cols[2] || '',
-              tech_stack: cols[3] || '',
-              source: cols[4] || 'Cold Profile',
-              date_added: cols[5] || new Date().toISOString(),
-              last_contact_date: cols[6] || null,
-              followup_count: parseInt(cols[7]) || 0,
-              stage: cols[8] || 'New',
-              discovery_pain: cols[9] || '',
-              objection_raised: cols[10] || '',
-              do_not_contact: cols[11] === 'Yes',
-              notes: cols[12] || ''
-            });
+            if (hasCohort) {
+              prospects.push({
+                id: 'p_' + Date.now() + '_' + i,
+                name: cols[0] || '',
+                linkedin_url: cols[1] || '',
+                role: cols[2] || '',
+                tech_stack: cols[3] || '',
+                cohort: cols[4] || 'Cohort B (Next 36)',
+                priority: cols[5] || 'Unrated',
+                intent_level: cols[6] || 'None',
+                source: cols[7] || 'Cold Profile',
+                date_added: cols[8] || new Date().toISOString(),
+                last_contact_date: cols[9] || null,
+                followup_count: parseInt(cols[10]) || 0,
+                stage: cols[11] || 'New',
+                discovery_pain: cols[12] || '',
+                objection_raised: cols[13] || '',
+                do_not_contact: cols[14] === 'Yes',
+                notes: cols[15] || ''
+              });
+            } else {
+              prospects.push({
+                id: 'p_' + Date.now() + '_' + i,
+                name: cols[0] || '',
+                linkedin_url: cols[1] || '',
+                role: cols[2] || '',
+                tech_stack: cols[3] || '',
+                cohort: 'Cohort A (Original 36)',
+                priority: 'Unrated',
+                intent_level: 'None',
+                source: cols[4] || 'Cold Profile',
+                date_added: cols[5] || new Date().toISOString(),
+                last_contact_date: cols[6] || null,
+                followup_count: parseInt(cols[7]) || 0,
+                stage: cols[8] || 'New',
+                discovery_pain: cols[9] || '',
+                objection_raised: cols[10] || '',
+                do_not_contact: cols[11] === 'Yes',
+                notes: cols[12] || ''
+              });
+            }
             importedCount++;
           }
         }
