@@ -140,7 +140,6 @@ def _build_canonical_patterns() -> dict[str, re.Pattern]:
 
 
 _CANONICAL_PATTERNS = _build_canonical_patterns()
-_groq_circuit_breaker_until: float = 0.0
 
 ROLE_ALIGNMENT: dict[str, set[str]] = {
     "frontend": {"react", "next.js", "vue.js", "angular", "javascript", "typescript", "html", "css", "tailwind css", "redux", "vite", "flutter"},
@@ -210,7 +209,7 @@ def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skil
 async def extract_skills_hybrid(resume_text: str, role_pref: str = "other", max_skills: int = 15) -> list[str]:
     """
     Tiered Hybrid Skill Extraction Architecture:
-      Tier 1: Fast LLM (Groq / OpenAI compatible) attempt with strict 2.0s timeout and circuit breaker.
+      Tier 1: Fast LLM (Groq / OpenAI compatible) attempt with strict 2.0s timeout and key failover.
               Validated and normalized against canonical taxonomy.
       Tier 2: High-speed, deterministic local Python regex extractor with section weighting
               and role stream alignment. Zero synonym multiplication bias.
@@ -219,19 +218,23 @@ async def extract_skills_hybrid(resume_text: str, role_pref: str = "other", max_
       - Returns at most `max_skills` canonical skills.
       - Respects zero-logging of candidate PII.
     """
-    global _groq_circuit_breaker_until
     if not resume_text or not resume_text.strip():
         return []
 
     import time
     now = time.time()
 
-    # Tier 1: Fast LLM attempt (bypassed immediately if circuit breaker is tripped)
-    if now >= _groq_circuit_breaker_until:
+    from config import settings
+    from services.llm_service import _key_cooldowns, _get_client, LLMMode
+    keys = [k.strip() for k in settings.NVIDIA_API_KEY_8B.split(",") if k.strip()]
+
+    # Check if all keys in the pool are currently on cooldown
+    all_cooling = bool(keys) and all(_key_cooldowns.get(k, 0.0) > now for k in keys)
+
+    # Tier 1: Fast LLM attempt (bypassed immediately if all keys are on cooldown)
+    if not all_cooling:
         used_key = None
         try:
-            from services.llm_service import _get_client, LLMMode, _key_cooldowns
-
             client, model = _get_client(LLMMode.FAST, timeout=2.0)
             used_key = getattr(client, "_used_api_key", None)
 
@@ -269,12 +272,12 @@ async def extract_skills_hybrid(resume_text: str, role_pref: str = "other", max_
                             return normalized
         except Exception as e:
             err_msg = str(e).lower()
-            if any(phrase in err_msg for phrase in ("organization_restricted", "unauthorized", "invalid_api_key", "permission_denied")):
-                _groq_circuit_breaker_until = time.time() + 900  # 15 min global circuit breaker
-                logger.warning(f"Groq API circuit breaker tripped for 15m: {e}")
-            elif used_key:
-                from services.llm_service import _key_cooldowns
-                _key_cooldowns[used_key] = time.time() + 300  # 5 min key cooldown
+            if used_key:
+                if any(phrase in err_msg for phrase in ("organization_restricted", "unauthorized", "invalid_api_key", "permission_denied")):
+                    _key_cooldowns[used_key] = time.time() + 86400  # 24 hour cooldown for dead/restricted key
+                    logger.warning(f"Groq key {used_key[:10]}... restricted or invalid. Set on 24h cooldown.")
+                else:
+                    _key_cooldowns[used_key] = time.time() + 300  # 5 min cooldown for transient 429
             logger.debug(f"Tier 1 LLM skill extraction bypassed/fallback ({type(e).__name__}: {e})")
 
     # Tier 2: Enhanced deterministic regex fallback
