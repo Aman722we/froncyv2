@@ -890,22 +890,22 @@ async def deleteresume_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if db_deleted or local_deleted:
         msg = (
-            "🗑️ *Resume Deleted Successfully*\n\n"
-            "Your resume PDF and parsed text have been permanently purged from our database and storage\\.\n\n"
-            "Your technical skills and profile remain intact\\. You can upload a new resume anytime via `/resume`\\."
+            "🗑️ <b>Resume Deleted Successfully</b>\n\n"
+            "Your resume PDF and parsed text have been permanently purged from our database and storage.\n\n"
+            "Your technical skills and profile remain intact. You can upload a new resume anytime via /resume."
         )
     else:
-        msg = "ℹ️ No stored resume was found for your account\\."
+        msg = "ℹ️ No stored resume was found for your account."
 
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             msg,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]),
-            parse_mode="MarkdownV2"
+            parse_mode="HTML"
         )
     else:
-        await update.message.reply_text(msg, parse_mode="MarkdownV2")
+        await update.message.reply_text(msg, parse_mode="HTML")
 
 
 async def delete_resume_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

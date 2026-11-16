@@ -67,12 +67,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 [InlineKeyboardButton("🛠️ Refresh My Skills", callback_data="refresh_user_skills")]
             ])
             await update.message.reply_text(
-                "👋 *Welcome back\!*\n\n"
-                "⚠️ *Skills Update Recommended*\n"
-                "Your profile skills need a quick refresh so our 100\-point matcher can deliver accurate job alerts\.\n"
-                "Tap below to update them in 30 seconds\:",
+                "👋 <b>Welcome back!</b>\n\n"
+                "⚠️ <b>Skills Update Recommended</b>\n"
+                "Your profile skills need a quick refresh so our 100-point matcher can deliver accurate job alerts.\n"
+                "Tap below to update them in 30 seconds:",
                 reply_markup=review_kb,
-                parse_mode="MarkdownV2"
+                parse_mode="HTML"
             )
             await placeholder.delete()
             return ConversationHandler.END
@@ -232,7 +232,7 @@ async def add_custom_skill_prompt(update: Update, context: ContextTypes.DEFAULT_
 
 async def prompt_experience_step(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> int:
     """Prompt user for years of experience with 1-tap quick buttons or numeric reply."""
-    step3_bar = messages.escape_md("[🟢🟢🟢] Step 3 of 3")
+    step3_bar = "[🟢🟢🟢] Step 3 of 3"
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     exp_kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("Fresher (0-1 yr)", callback_data="onboard_exp_0"),
@@ -241,14 +241,14 @@ async def prompt_experience_step(update: Update, context: ContextTypes.DEFAULT_T
          InlineKeyboardButton("5+ yrs", callback_data="onboard_exp_6")]
     ])
     text = (
-        f"{step3_bar}\n\n"
-        "📅 *What is your experience level?*\n"
-        "Tap a button below or type a number of years \\(e\\.g\\. 0, 2, 5\\):"
+        f"<b>{step3_bar}</b>\n\n"
+        "📅 <b>What is your experience level?</b>\n"
+        "Tap a button below or type a number of years (e.g. 0, 2, 5):"
     )
     if query:
-        await query.edit_message_text(text, reply_markup=exp_kb, parse_mode="MarkdownV2")
+        await query.edit_message_text(text, reply_markup=exp_kb, parse_mode="HTML")
     else:
-        await update.message.reply_text(text, reply_markup=exp_kb, parse_mode="MarkdownV2")
+        await update.message.reply_text(text, reply_markup=exp_kb, parse_mode="HTML")
     return EXPERIENCE
 
 
@@ -259,18 +259,19 @@ async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYP
     # 1. Detect conversational intent asking to upload resume
     if is_resume_intent(text):
         await update.message.reply_text(
-            "📄 *Yes, absolutely\!*\n\n"
-            "Send your resume as a *PDF file* \\(max 5MB\\) right here, and I'll automatically extract your technical skills\.",
-            parse_mode="MarkdownV2",
+            "📄 <b>Yes, absolutely!</b>\n\n"
+            "Send your resume as a <b>PDF file</b> (max 5MB) right here, and I'll automatically extract your technical skills.",
+            parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
 
     # 2. Validate and normalize skills
     is_valid, normalized, err_msg = validate_and_normalize_skills(text, max_skills=15)
     if not is_valid:
+        import html
         await update.message.reply_text(
-            messages.escape_md(err_msg or "Please enter valid technical skills separated by commas."),
-            parse_mode="MarkdownV2",
+            f"⚠️ {html.escape(err_msg or 'Please enter valid technical skills separated by commas.')}",
+            parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
 
@@ -288,9 +289,9 @@ async def onboard_upload_resume_prompt(update: Update, context: ContextTypes.DEF
     await query.answer()
 
     await query.edit_message_text(
-        "📎 *Send me your resume as a PDF file* \\(max 5MB\\) right here\.\n\n"
-        "I will scan it and extract your technical skills for instant job matching\\!",
-        parse_mode="MarkdownV2",
+        "📎 <b>Send me your resume as a PDF file</b> (max 5MB) right here.\n\n"
+        "I will scan it and extract your technical skills for instant job matching!",
+        parse_mode="HTML",
     )
     return WAITING_CUSTOM_SKILL
 
@@ -300,19 +301,19 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
     document = update.message.document
     if not document or not (document.file_name or "").lower().endswith(".pdf"):
         await update.message.reply_text(
-            "⚠️ Please upload a *PDF file* \\(e\\.g\\. resume\\.pdf\\)\.",
-            parse_mode="MarkdownV2",
+            "⚠️ Please upload a <b>PDF file</b> (e.g. resume.pdf).",
+            parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
 
     if document.file_size and document.file_size > 5 * 1024 * 1024:
         await update.message.reply_text(
-            "⚠️ File too large\\. Maximum size is 5MB\\.",
-            parse_mode="MarkdownV2",
+            "⚠️ File too large. Maximum size is 5MB.",
+            parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
 
-    status_msg = await update.message.reply_text("⏳ *Analyzing resume and extracting skills...*", parse_mode="MarkdownV2")
+    status_msg = await update.message.reply_text("⏳ Analyzing resume and extracting skills...")
 
     try:
         file = await document.get_file()
@@ -349,13 +350,14 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("⚡ Continue Without Saving", callback_data="onboard_consent_nosave")]
         ])
 
+        import html
         await update.message.reply_text(
-            f"✅ *Extracted {len(extracted)} Skills\\!* 📄\n\n"
-            f"`{messages.escape_md(skills_preview)}`\n\n"
-            f"🔒 *Would you like Froncy to save your resume?*\n"
-            f"Saving allows 1\\-click tailored cover letters and ATS checks\\. You can delete your resume anytime with `/deleteresume`\\.",
+            f"✅ <b>Extracted {len(extracted)} Skills!</b> 📄\n\n"
+            f"<code>{html.escape(skills_preview)}</code>\n\n"
+            f"🔒 <b>Would you like Froncy to save your resume?</b>\n"
+            f"Saving allows 1-click tailored cover letters and ATS checks. You can delete your resume anytime with /deleteresume.",
             reply_markup=consent_kb,
-            parse_mode="MarkdownV2",
+            parse_mode="HTML",
         )
         return WAITING_RESUME_CONSENT
 
@@ -366,9 +368,9 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             pass
         await update.message.reply_text(
-            "⚠️ Could not extract text from this PDF \\(it may be password-protected or a scanned image\\)\\.\n\n"
-            "Please type your technical skills below separated by commas \\(e\\.g\\. React, Python, AWS\\):",
-            parse_mode="MarkdownV2",
+            "⚠️ Could not extract text from this PDF (it may be password-protected or a scanned image).\n\n"
+            "Please type your technical skills below separated by commas (e.g. React, Python, AWS):",
+            parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
 
@@ -438,17 +440,17 @@ async def refresh_user_skills_callback(update: Update, context: ContextTypes.DEF
     user_id = update.effective_user.id
     await update_user_profile(user_id, skills_need_review=False)
 
-    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    step2_bar = "[🟢🟢⚪] Step 2 of 3"
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
     ])
     await query.edit_message_text(
-        f"{step2_bar}\n\n"
-        "✍️ *What are your top skills?* 🛠️\n\n"
-        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        f"<b>{step2_bar}</b>\n\n"
+        "✍️ <b>What are your top skills?</b> 🛠️\n\n"
+        "💡 <b>Tip:</b> Upload your resume (PDF) to extract your skills automatically, or type them below separated by commas (e.g. React, Node.js, AWS):",
         reply_markup=kb,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
     )
     return WAITING_CUSTOM_SKILL
 
@@ -493,17 +495,17 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await update_user_profile(user_id, role_pref=role)
     context.user_data["role_pref"] = role
 
-    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    step2_bar = "[🟢🟢⚪] Step 2 of 3"
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
     ])
     await query.edit_message_text(
-        f"{step2_bar}\n\n"
-        "✍️ *What are your top skills?* 🛠️\n\n"
-        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        f"<b>{step2_bar}</b>\n\n"
+        "✍️ <b>What are your top skills?</b> 🛠️\n\n"
+        "💡 <b>Tip:</b> Upload your resume (PDF) to extract your skills automatically, or type them below separated by commas (e.g. React, Node.js, AWS):",
         reply_markup=kb,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
     )
     return WAITING_CUSTOM_SKILL
 
@@ -517,18 +519,19 @@ async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update_user_profile(user_id, role_pref=role)
     context.user_data["role_pref"] = role
 
-    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    step2_bar = "[🟢🟢⚪] Step 2 of 3"
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
     ])
+    import html
     await update.message.reply_text(
-        f"✅ Got it - we'll find you *{messages.escape_md(role)}* jobs\\!\n\n"
-        f"{step2_bar}\n\n"
-        "✍️ *What are your top skills?* 🛠️\n\n"
-        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        f"✅ Got it - we'll find you <b>{html.escape(role)}</b> jobs!\n\n"
+        f"<b>{step2_bar}</b>\n\n"
+        "✍️ <b>What are your top skills?</b> 🛠️\n\n"
+        "💡 <b>Tip:</b> Upload your resume (PDF) to extract your skills automatically, or type them below separated by commas (e.g. React, Node.js, AWS):",
         reply_markup=kb,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
     )
     return WAITING_CUSTOM_SKILL
 
