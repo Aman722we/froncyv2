@@ -11,8 +11,10 @@ RFC-008 Compliant:
 """
 import os
 import re
+import json
 import asyncio
 from pathlib import Path
+from collections import defaultdict
 try:
     import pymupdf
     import pymupdf as fitz
@@ -112,12 +114,49 @@ def extract_text_from_pdf(filepath: str) -> str:
     return _extract_text_from_pdf_sync(file_bytes)
 
 
+def _build_canonical_patterns() -> dict[str, re.Pattern]:
+    """Group aliases per canonical skill and compile regex patterns once to eliminate synonym bias."""
+    canonical_to_aliases: dict[str, list[str]] = defaultdict(list)
+    for alias, canonical in CANONICAL_SKILL_MAP.items():
+        canonical_to_aliases[canonical].append(alias)
+
+    compiled: dict[str, re.Pattern] = {}
+    for canonical, aliases in canonical_to_aliases.items():
+        aliases_sorted = sorted(aliases, key=len, reverse=True)
+        regex_parts = []
+        for a in aliases_sorted:
+            if a in ("c++", "c#", ".net"):
+                regex_parts.append(rf"(?<!\w){re.escape(a)}(?!\w)")
+            elif a == "js":
+                # Negative lookbehind for dot so Node.js, Express.js, Next.js don't trigger JavaScript
+                regex_parts.append(r"(?<!\.)\bjs\b")
+            elif a == "r":
+                # Prevent R&D or paths from triggering R language
+                regex_parts.append(r"(?<![\w&/])r(?![\w&/])")
+            else:
+                regex_parts.append(rf"\b{re.escape(a)}\b")
+        compiled[canonical] = re.compile("|".join(regex_parts), re.IGNORECASE)
+    return compiled
+
+
+_CANONICAL_PATTERNS = _build_canonical_patterns()
+_groq_circuit_breaker_until: float = 0.0
+
+ROLE_ALIGNMENT: dict[str, set[str]] = {
+    "frontend": {"react", "next.js", "vue.js", "angular", "javascript", "typescript", "html", "css", "tailwind css", "redux", "vite", "flutter"},
+    "backend": {"python", "node.js", "go", "java", "fastapi", "django", "spring boot", "postgresql", "mysql", "mongodb", "redis", "docker", "rest apis", "microservices", "mcp", "langgraph", "supabase"},
+    "fullstack": {"react", "node.js", "typescript", "python", "postgresql", "docker", "next.js", "rest apis", "aws", "tailwind css", "mongodb"},
+    "devops": {"docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ci/cd", "jenkins", "linux", "ansible", "bash"},
+    "data": {"python", "sql", "machine learning", "deep learning", "pytorch", "tensorflow", "pandas", "numpy", "apache spark", "airflow", "langchain", "langgraph", "rag"},
+}
+
+
 def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skills: int = 15) -> list[str]:
     """
-    Extract canonical technical skills from resume text, ranked by:
+    Tier 2: Extract canonical technical skills from resume text, ranked by:
       - 3x: Mentioned inside a designated 'Skills' section
       - 2x: Aligned with candidate role preference (e.g. frontend, backend)
-      - 1x: Frequency of occurrence across the document
+      - 1x: Frequency of occurrence across the document (grouping aliases to eliminate synonym multiplication)
     Returns top 15 canonical skills. Never logs resume text.
     """
     if not resume_text:
@@ -137,31 +176,14 @@ def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skil
         # Take the next 1500 chars or until next section header
         skills_section_text = text_lower[start_idx:start_idx + 1500]
 
-    # Role stream alignment keywords
-    role_alignment: dict[str, set[str]] = {
-        "frontend": {"react", "next.js", "vue.js", "angular", "javascript", "typescript", "html", "css", "tailwind css", "redux", "vite"},
-        "backend": {"python", "node.js", "go", "java", "fastapi", "django", "spring boot", "postgresql", "mysql", "mongodb", "redis", "docker", "rest apis"},
-        "fullstack": {"react", "node.js", "typescript", "python", "postgresql", "docker", "next.js", "rest apis", "aws", "tailwind css"},
-        "devops": {"docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ci/cd", "jenkins", "linux", "ansible"},
-        "data": {"python", "sql", "machine learning", "deep learning", "pytorch", "tensorflow", "pandas", "numpy", "apache spark", "airflow"},
-    }
-    preferred_skills = role_alignment.get(role_pref.lower(), set())
+    preferred_skills = ROLE_ALIGNMENT.get(role_pref.lower(), set())
 
     # Score each canonical skill
     skill_scores: dict[str, int] = {}
 
-    for alias, canonical in CANONICAL_SKILL_MAP.items():
-        # Match using word boundaries
-        # Special handling for C++, C#, .NET
-        if alias in ("c++", "c#", ".net"):
-            escaped = re.escape(alias)
-            pattern = re.compile(rf"(?:^|[\s,;:(]){escaped}(?:$|[\s,;:)\n])", re.IGNORECASE)
-        else:
-            escaped = re.escape(alias)
-            pattern = re.compile(rf"\b{escaped}\b", re.IGNORECASE)
-
-        # 1. Total occurrences
-        count = len(pattern.findall(text_lower))
+    for canonical, pattern in _CANONICAL_PATTERNS.items():
+        matches = pattern.findall(text_lower)
+        count = len(matches)
         if count == 0:
             continue
 
@@ -172,11 +194,10 @@ def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skil
             score += 3
 
         # 3. Role alignment bonus
-        if canonical.lower() in preferred_skills or alias in preferred_skills:
+        if canonical.lower() in preferred_skills:
             score += 2
 
-        # Accumulate score under the canonical name
-        skill_scores[canonical] = skill_scores.get(canonical, 0) + score
+        skill_scores[canonical] = score
 
     if not skill_scores:
         return []
@@ -184,6 +205,80 @@ def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skil
     # Sort descending by score, tie-break by name
     sorted_skills = sorted(skill_scores.keys(), key=lambda s: (skill_scores[s], s), reverse=True)
     return sorted_skills[:max_skills]
+
+
+async def extract_skills_hybrid(resume_text: str, role_pref: str = "other", max_skills: int = 15) -> list[str]:
+    """
+    Tiered Hybrid Skill Extraction Architecture:
+      Tier 1: Fast LLM (Groq / OpenAI compatible) attempt with strict 2.0s timeout and circuit breaker.
+              Validated and normalized against canonical taxonomy.
+      Tier 2: High-speed, deterministic local Python regex extractor with section weighting
+              and role stream alignment. Zero synonym multiplication bias.
+    Guarantees:
+      - Resilient fallback: Never fails or hangs onboarding if Groq is restricted, rate-limited, or slow.
+      - Returns at most `max_skills` canonical skills.
+      - Respects zero-logging of candidate PII.
+    """
+    global _groq_circuit_breaker_until
+    if not resume_text or not resume_text.strip():
+        return []
+
+    import time
+    now = time.time()
+
+    # Tier 1: Fast LLM attempt (bypassed immediately if circuit breaker is tripped)
+    if now >= _groq_circuit_breaker_until:
+        used_key = None
+        try:
+            from services.llm_service import _get_client, LLMMode, _key_cooldowns
+
+            client, model = _get_client(LLMMode.FAST, timeout=2.0)
+            used_key = getattr(client, "_used_api_key", None)
+
+            # Key-level cooldown check
+            if not used_key or _key_cooldowns.get(used_key, 0.0) <= now:
+                sample_text = resume_text[:3500]
+                system_prompt = (
+                    "You are an expert technical recruiter and resume parser. "
+                    "Extract up to 15 key technical skills, programming languages, databases, cloud tools, frameworks, and AI tools explicitly mentioned in the resume. "
+                    "Return ONLY a valid JSON list of strings, e.g. [\"Python\", \"PostgreSQL\", \"FastAPI\"]. "
+                    "Do not include generic soft skills, buzzwords, or explanations outside the JSON."
+                )
+
+                resp = await asyncio.wait_for(
+                    client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"Resume Text:\n{sample_text}\n\nExtract top technical skills:"}
+                        ],
+                        temperature=0.1,
+                        max_tokens=200,
+                    ),
+                    timeout=2.0,
+                )
+
+                content = (resp.choices[0].message.content or "").strip()
+                json_match = re.search(r"\[.*?\]", content, re.DOTALL)
+                if json_match:
+                    raw_skills = json.loads(json_match.group(0))
+                    if isinstance(raw_skills, list) and len(raw_skills) > 0:
+                        is_valid, normalized, _ = validate_and_normalize_skills(raw_skills, max_skills=max_skills)
+                        if is_valid and len(normalized) >= 3:
+                            logger.info(f"Tier 1 (LLM) extracted {len(normalized)} skills successfully")
+                            return normalized
+        except Exception as e:
+            err_msg = str(e).lower()
+            if any(phrase in err_msg for phrase in ("organization_restricted", "unauthorized", "invalid_api_key", "permission_denied")):
+                _groq_circuit_breaker_until = time.time() + 900  # 15 min global circuit breaker
+                logger.warning(f"Groq API circuit breaker tripped for 15m: {e}")
+            elif used_key:
+                from services.llm_service import _key_cooldowns
+                _key_cooldowns[used_key] = time.time() + 300  # 5 min key cooldown
+            logger.debug(f"Tier 1 LLM skill extraction bypassed/fallback ({type(e).__name__}: {e})")
+
+    # Tier 2: Enhanced deterministic regex fallback
+    return rank_and_extract_skills(resume_text, role_pref=role_pref, max_skills=max_skills)
 
 
 def save_resume_file(telegram_id: int, file_bytes: bytes, filename: str) -> str:

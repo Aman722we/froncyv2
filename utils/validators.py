@@ -57,6 +57,7 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "sass": "SASS",
     "webpack": "Webpack",
     "vite": "Vite",
+    "flutter": "Flutter",
 
     # Backend & Frameworks
     "node": "Node.js",
@@ -84,6 +85,8 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "grpc": "gRPC",
     "websocket": "WebSockets",
     "websockets": "WebSockets",
+    "microservices": "Microservices",
+    "microservice": "Microservices",
 
     # Databases & Caching
     "sql": "SQL",
@@ -99,6 +102,8 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "elasticsearch": "Elasticsearch",
     "dynamodb": "DynamoDB",
     "prisma": "Prisma",
+    "supabase": "Supabase",
+    "pgvector": "pgvector",
     "hibernate": "Hibernate",
 
     # Cloud & DevOps
@@ -120,6 +125,7 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "github actions": "GitHub Actions",
     "gitlab ci": "GitLab CI",
     "linux": "Linux",
+    "bash": "Bash",
     "nginx": "Nginx",
 
     # AI / ML & Data Science
@@ -136,6 +142,12 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "llm": "LLMs",
     "llms": "LLMs",
     "langchain": "LangChain",
+    "langgraph": "LangGraph",
+    "langsmith": "LangSmith",
+    "mcp": "MCP",
+    "prompt engineering": "Prompt Engineering",
+    "agent workflows": "Agent Workflows",
+    "llm applications": "LLM Applications",
     "rag": "RAG",
     "opencv": "OpenCV",
     "data science": "Data Science",
@@ -150,6 +162,7 @@ CANONICAL_SKILL_MAP: dict[str, str] = {
     "github": "GitHub",
     "gitlab": "GitLab",
     "postman": "Postman",
+    "jest": "Jest",
     "jira": "Jira",
     "agile": "Agile",
     "dsa": "DSA",

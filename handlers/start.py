@@ -21,6 +21,7 @@ from services.resume_parser import (
     extract_text_from_pdf,
     extract_text_from_pdf_bytes_safe,
     rank_and_extract_skills,
+    extract_skills_hybrid,
     save_resume_file,
 )
 from utils.validators import is_resume_intent, validate_and_normalize_skills
@@ -323,7 +324,7 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Safe extraction off event loop with concurrency limit
         resume_text = await extract_text_from_pdf_bytes_safe(raw_bytes)
         role = context.user_data.get("role_pref", "other")
-        extracted = rank_and_extract_skills(resume_text, role_pref=role, max_skills=15)
+        extracted = await extract_skills_hybrid(resume_text, role_pref=role, max_skills=15)
 
         if not extracted:
             role_lower = role.lower()
