@@ -99,19 +99,22 @@ async def settings_add_custom_skill_prompt(update: Update, context: ContextTypes
     )
 
 async def settings_custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Receive text input for skills and save to DB."""
-    text = update.message.text
-    raw_skills = [s.strip() for s in text.split(',') if s.strip()]
-    
-    from utils.helpers import normalize_skills
-    normalized = normalize_skills(raw_skills)
-    
+    """Receive text input for skills, validate, and save to DB."""
+    text = (update.message.text or "").strip()
+    from utils.validators import validate_and_normalize_skills
+    is_valid, normalized, err_msg = validate_and_normalize_skills(text, max_skills=15)
+    if not is_valid:
+        await update.message.reply_text(
+            f"⚠️ {err_msg or 'Please enter valid technical skills separated by commas.'}",
+        )
+        return
+
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
-    
+
     # Save directly to DB
     from db.users import update_user_profile, get_user
-    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized])
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized], skills_need_review=False)
     
     # Clear the flag
     context.user_data.pop("awaiting_settings_custom_skill", None)
@@ -452,8 +455,12 @@ async def delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
     from services.resume_parser import delete_resume_file
-    from db.users import soft_delete_user
+    from db.users import soft_delete_user, delete_user_resume
+
+    await delete_user_resume(user_id, bot_id=bot_id)
+    delete_resume_file(user_id)
     
     success = await soft_delete_user(user_id)
     if success:

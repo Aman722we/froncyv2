@@ -19,7 +19,7 @@ from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu, submit_job_link_info_callback
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback, apply_smart_locked_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback, resume_upload_new_callback
+from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback, resume_upload_new_callback, deleteresume_command, delete_resume_callback
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -201,6 +201,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("coverletter", coverletter_menu_handler))
     app.add_handler(CommandHandler("tracker", tracker_dashboard))
     app.add_handler(CommandHandler("resume", view_resume))
+    app.add_handler(CommandHandler("deleteresume", deleteresume_command))
     app.add_handler(CommandHandler("saved", view_saved_jobs))
     app.add_handler(CommandHandler("upgrade", upgrade_command))
     app.add_handler(CommandHandler("settings", settings_command))
@@ -302,6 +303,7 @@ def build_bot(token: str | None = None) -> Application:
 
     # Resume/ATS Callbacks
     app.add_handler(CallbackQueryHandler(replace_resume_prompt, pattern="^resume_upload$"))
+    app.add_handler(CallbackQueryHandler(delete_resume_callback, pattern="^delete_resume_confirm$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
     app.add_handler(CallbackQueryHandler(generate_ats_pdf_callback, pattern="^gen_ats_pdf_"))

@@ -448,6 +448,7 @@ def resume_keyboard(has_resume: bool, plan: str = "free") -> InlineKeyboardMarku
         buttons = [
             [
                 InlineKeyboardButton("🔄 Replace", callback_data="resume_upload"),
+                InlineKeyboardButton("🗑️ Delete", callback_data="delete_resume_confirm"),
             ],
             # Hidden: Request Human Review
             # [

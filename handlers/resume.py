@@ -875,3 +875,40 @@ async def _admin_fixresume_receive(
     except Exception as e:
         logger.error(f"Admin fixresume failed for user {target_user_id}: {e}")
         await update.message.reply_text(f"❌ Failed to process fixed resume: {e}")
+
+
+async def deleteresume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /deleteresume command: purge candidate resume text, storage file, and consent."""
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+
+    from db.users import delete_user_resume
+    from services.resume_parser import delete_resume_file
+
+    db_deleted = await delete_user_resume(user_id, bot_id=bot_id)
+    local_deleted = delete_resume_file(user_id)
+
+    if db_deleted or local_deleted:
+        msg = (
+            "🗑️ *Resume Deleted Successfully*\n\n"
+            "Your resume PDF and parsed text have been permanently purged from our database and storage\\.\n\n"
+            "Your technical skills and profile remain intact\\. You can upload a new resume anytime via `/resume`\\."
+        )
+    else:
+        msg = "ℹ️ No stored resume was found for your account\\."
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            msg,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]),
+            parse_mode="MarkdownV2"
+        )
+    else:
+        await update.message.reply_text(msg, parse_mode="MarkdownV2")
+
+
+async def delete_resume_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'delete_resume_confirm' button click from My Resume screen."""
+    await deleteresume_command(update, context)
+

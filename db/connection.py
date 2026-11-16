@@ -679,6 +679,22 @@ async def init_db() -> asyncpg.Pool:
         except Exception as e:
             logger.warning(f"Failed to apply RFC-005 geo snapshot migrations: {e}")
 
+        # ── RFC-008: Safe Resume Extraction, DPDP Consent & Skills Backup ──
+        try:
+            await conn.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS skills_need_review BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_consent_at TIMESTAMPTZ;
+                CREATE TABLE IF NOT EXISTS user_skills_backup (
+                    telegram_id BIGINT,
+                    bot_id INT DEFAULT 1,
+                    old_skills TEXT[],
+                    cleaned_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (telegram_id, bot_id)
+                );
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply RFC-008 migrations: {e}")
+
     logger.info("Database initialized successfully.")
     return _pool
 

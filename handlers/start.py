@@ -17,13 +17,21 @@ from config import settings
 
 from db.users import get_or_create_user, update_user_profile, update_resume, set_onboarded, get_user
 from db.connection import get_pool
-from services.resume_parser import extract_text_from_pdf, save_resume_file
+from services.resume_parser import (
+    extract_text_from_pdf,
+    extract_text_from_pdf_bytes_safe,
+    rank_and_extract_skills,
+    save_resume_file,
+)
+from utils.validators import is_resume_intent, validate_and_normalize_skills
+from services.storage import upload_resume
+from db.users import record_resume_consent
 from services.pricing_service import start_trial, get_current_pricing
 from utils import keyboards, messages
 from utils.admin_notify import notify_admin
 
 # Conversation states
-WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME, WAITING_CUSTOM_ROLE = range(10)
+WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME, WAITING_CUSTOM_ROLE, WAITING_RESUME_CONSENT = range(11)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -52,6 +60,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
 
     if db_user.get("is_onboarded"):
+        # Check if skills need a refresh
+        if db_user.get("skills_need_review"):
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            review_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🛠️ Refresh My Skills", callback_data="refresh_user_skills")]
+            ])
+            await update.message.reply_text(
+                "👋 *Welcome back\!*\n\n"
+                "⚠️ *Skills Update Recommended*\n"
+                "Your profile skills need a quick refresh so our 100\-point matcher can deliver accurate job alerts\.\n"
+                "Tap below to update them in 30 seconds\:",
+                reply_markup=review_kb,
+                parse_mode="MarkdownV2"
+            )
+            await placeholder.delete()
+            return ConversationHandler.END
+
         # Returning user → main menu
         plan = db_user.get("plan", "free")
         upgrade_price = None
@@ -205,28 +230,227 @@ async def add_custom_skill_prompt(update: Update, context: ContextTypes.DEFAULT_
     return WAITING_CUSTOM_SKILL
 
 
+async def prompt_experience_step(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> int:
+    """Prompt user for years of experience with 1-tap quick buttons or numeric reply."""
+    step3_bar = messages.escape_md("[🟢🟢🟢] Step 3 of 3")
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    exp_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Fresher (0-1 yr)", callback_data="onboard_exp_0"),
+         InlineKeyboardButton("1-3 yrs", callback_data="onboard_exp_2")],
+        [InlineKeyboardButton("3-5 yrs", callback_data="onboard_exp_4"),
+         InlineKeyboardButton("5+ yrs", callback_data="onboard_exp_6")]
+    ])
+    text = (
+        f"{step3_bar}\n\n"
+        "📅 *What is your experience level?*\n"
+        "Tap a button below or type a number of years \\(e\\.g\\. 0, 2, 5\\):"
+    )
+    if query:
+        await query.edit_message_text(text, reply_markup=exp_kb, parse_mode="MarkdownV2")
+    else:
+        await update.message.reply_text(text, reply_markup=exp_kb, parse_mode="MarkdownV2")
+    return EXPERIENCE
+
+
 async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Receive and normalize custom typed skills, then move to experience step."""
-    text = update.message.text
-    raw_skills = [s.strip() for s in text.split(',') if s.strip()]
-    
-    from utils.helpers import normalize_skills
-    normalized = normalize_skills(raw_skills)
-    
+    """Receive, validate, and normalize custom typed skills, or catch conversational intent."""
+    text = (update.message.text or "").strip()
+
+    # 1. Detect conversational intent asking to upload resume
+    if is_resume_intent(text):
+        await update.message.reply_text(
+            "📄 *Yes, absolutely\!*\n\n"
+            "Send your resume as a *PDF file* \\(max 5MB\\) right here, and I'll automatically extract your technical skills\.",
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_SKILL
+
+    # 2. Validate and normalize skills
+    is_valid, normalized, err_msg = validate_and_normalize_skills(text, max_skills=15)
+    if not is_valid:
+        await update.message.reply_text(
+            messages.escape_md(err_msg or "Please enter valid technical skills separated by commas."),
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_SKILL
+
     context.user_data["selected_skills"] = normalized
     user_id = update.effective_user.id
-    
-    # Save skills
     await update_user_profile(user_id, skills=[s.lower() for s in normalized])
-    
-    step3_bar = messages.escape_md("[🟢🟢🟢] Step 3 of 3")
-    await update.message.reply_text(
-        f"{step3_bar}\n\n"
-        "*Your experience level* 📅\n"
-        "How many years of experience do you have? \\(Reply with a number, e\\.g\\. 0, 2, 5\\)",
+    context.user_data["has_resume"] = False
+
+    return await prompt_experience_step(update, context)
+
+
+async def onboard_upload_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Prompt user to send their resume PDF for skill extraction."""
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        "📎 *Send me your resume as a PDF file* \\(max 5MB\\) right here\.\n\n"
+        "I will scan it and extract your technical skills for instant job matching\\!",
         parse_mode="MarkdownV2",
     )
-    return EXPERIENCE
+    return WAITING_CUSTOM_SKILL
+
+
+async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Process uploaded resume PDF during Step 2 of onboarding safely off event loop."""
+    document = update.message.document
+    if not document or not (document.file_name or "").lower().endswith(".pdf"):
+        await update.message.reply_text(
+            "⚠️ Please upload a *PDF file* \\(e\\.g\\. resume\\.pdf\\)\.",
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_SKILL
+
+    if document.file_size and document.file_size > 5 * 1024 * 1024:
+        await update.message.reply_text(
+            "⚠️ File too large\\. Maximum size is 5MB\\.",
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_SKILL
+
+    status_msg = await update.message.reply_text("⏳ *Analyzing resume and extracting skills...*", parse_mode="MarkdownV2")
+
+    try:
+        file = await document.get_file()
+        file_bytes = await file.download_as_bytearray()
+        raw_bytes = bytes(file_bytes)
+
+        # Safe extraction off event loop with concurrency limit
+        resume_text = await extract_text_from_pdf_bytes_safe(raw_bytes)
+        role = context.user_data.get("role_pref", "other")
+        extracted = rank_and_extract_skills(resume_text, role_pref=role, max_skills=15)
+
+        if not extracted:
+            role_lower = role.lower()
+            extracted = ["Python", "REST APIs", "SQL", "Docker"] if "backend" in role_lower else ["React", "JavaScript", "HTML", "CSS"]
+
+        # Save pending state
+        context.user_data["pending_skills"] = extracted
+        context.user_data["pending_resume_text"] = resume_text
+        context.user_data["pending_filename"] = document.file_name
+        context.user_data["pending_bytes"] = raw_bytes
+
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        skills_preview = ", ".join(extracted[:10])
+        if len(extracted) > 10:
+            skills_preview += f" (+{len(extracted) - 10} more)"
+
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        consent_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💾 Save Resume & Continue", callback_data="onboard_consent_save")],
+            [InlineKeyboardButton("⚡ Continue Without Saving", callback_data="onboard_consent_nosave")]
+        ])
+
+        await update.message.reply_text(
+            f"✅ *Extracted {len(extracted)} Skills\\!* 📄\n\n"
+            f"`{messages.escape_md(skills_preview)}`\n\n"
+            f"🔒 *Would you like Froncy to save your resume?*\n"
+            f"Saving allows 1\\-click tailored cover letters and ATS checks\\. You can delete your resume anytime with `/deleteresume`\\.",
+            reply_markup=consent_kb,
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_RESUME_CONSENT
+
+    except Exception as e:
+        logger.warning(f"Resume parsing during onboarding failed: {e}")
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await update.message.reply_text(
+            "⚠️ Could not extract text from this PDF \\(it may be password-protected or a scanned image\\)\\.\n\n"
+            "Please type your technical skills below separated by commas \\(e\\.g\\. React, Python, AWS\\):",
+            parse_mode="MarkdownV2",
+        )
+        return WAITING_CUSTOM_SKILL
+
+
+async def resume_consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle privacy opt-in consent: save resume file or proceed with skills only."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
+    skills = context.user_data.get("pending_skills", [])
+    
+    context.user_data["selected_skills"] = skills
+    await update_user_profile(user_id, skills=[s.lower() for s in skills])
+
+    if query.data == "onboard_consent_save":
+        raw_bytes = context.user_data.get("pending_bytes")
+        resume_text = context.user_data.get("pending_resume_text")
+        filename = context.user_data.get("pending_filename", "resume.pdf")
+
+        if raw_bytes and resume_text:
+            try:
+                resume_url = await upload_resume(user_id, filename, raw_bytes)
+                await update_resume(user_id, resume_text, filename, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
+                await record_resume_consent(user_id, bot_id=bot_id)
+                save_resume_file(user_id, raw_bytes, filename)
+            except Exception as e:
+                logger.warning(f"Failed to persist resume on consent save: {e}")
+
+        context.user_data["has_resume"] = True
+    else:
+        # Continue without saving — discard bytes and text
+        context.user_data["has_resume"] = False
+
+    # Wipe in-memory pending bytes and text
+    context.user_data.pop("pending_bytes", None)
+    context.user_data.pop("pending_resume_text", None)
+    context.user_data.pop("pending_filename", None)
+    context.user_data.pop("pending_skills", None)
+
+    return await prompt_experience_step(update, context, query=query)
+
+
+async def experience_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save experience level from button click and complete onboarding."""
+    query = update.callback_query
+    await query.answer()
+
+    exp_val = query.data.replace("onboard_exp_", "")
+    user_id = update.effective_user.id
+
+    await update_user_profile(user_id, experience_level=exp_val)
+    await update_user_profile(user_id, location_pref="all")
+    context.user_data["experience_level"] = exp_val
+    context.user_data["location"] = "all"
+
+    has_resume = context.user_data.get("has_resume", False)
+    return await _complete_onboarding(update, context, has_resume=has_resume, query=query)
+
+
+async def refresh_user_skills_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle 'Refresh My Skills' callback from returning user banner."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    await update_user_profile(user_id, skills_need_review=False)
+
+    step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
+    ])
+    await query.edit_message_text(
+        f"{step2_bar}\n\n"
+        "✍️ *What are your top skills?* 🛠️\n\n"
+        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        reply_markup=kb,
+        parse_mode="MarkdownV2",
+    )
+    return WAITING_CUSTOM_SKILL
 
 
 async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -270,11 +494,15 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     context.user_data["role_pref"] = role
 
     step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
+    ])
     await query.edit_message_text(
         f"{step2_bar}\n\n"
-        "✍️ *What are your top skills?* 🛠️\n"
-        "Type them below, separated by commas\n"
-        "\\(e\\.g\\. React, Node\\.js, AWS\\):",
+        "✍️ *What are your top skills?* 🛠️\n\n"
+        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        reply_markup=kb,
         parse_mode="MarkdownV2",
     )
     return WAITING_CUSTOM_SKILL
@@ -290,12 +518,16 @@ async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["role_pref"] = role
 
     step2_bar = messages.escape_md("[🟢🟢⚪] Step 2 of 3")
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Extract from Resume (Upload PDF)", callback_data="onboard_upload_resume")]
+    ])
     await update.message.reply_text(
-        f"✅ Got it — we'll find you *{messages.escape_md(role)}* jobs\\!\n\n"
+        f"✅ Got it - we'll find you *{messages.escape_md(role)}* jobs\\!\n\n"
         f"{step2_bar}\n\n"
-        "✍️ *What are your top skills?* 🛠️\n"
-        "Type them below, separated by commas\n"
-        "\\(e\\.g\\. React, Node\\.js, AWS\\):",
+        "✍️ *What are your top skills?* 🛠️\n\n"
+        "💡 *Tip:* Upload your resume \\(PDF\\) to extract your skills automatically, or type them below separated by commas \\(e\\.g\\. React, Node\\.js, AWS\\):",
+        reply_markup=kb,
         parse_mode="MarkdownV2",
     )
     return WAITING_CUSTOM_SKILL
@@ -320,7 +552,8 @@ async def experience_message_handler(update: Update, context: ContextTypes.DEFAU
     context.user_data["experience_level"] = exp_val
     context.user_data["location"] = "all"
 
-    return await _complete_onboarding(update, context, has_resume=False, query=None)
+    has_resume = context.user_data.get("has_resume", False)
+    return await _complete_onboarding(update, context, has_resume=has_resume, query=None)
 
 
 
@@ -500,7 +733,7 @@ async def _complete_onboarding(
         )
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Unlock Pro Alerts — ₹199/mo", callback_data="upgrade_pro")],
+            [InlineKeyboardButton("💳 Unlock Pro Alerts - ₹199/mo", callback_data="upgrade_pro")],
             [
                 InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
                 InlineKeyboardButton("📄 Upload Resume", callback_data="resume_upload"),
@@ -600,7 +833,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 def get_start_handler() -> ConversationHandler:
     """Build the /start ConversationHandler — 3-step onboarding (Skills → Role → Experience)."""
     return ConversationHandler(
-        entry_points=[CommandHandler("start", start_command)],
+        entry_points=[
+            CommandHandler("start", start_command),
+            CallbackQueryHandler(refresh_user_skills_callback, pattern="^refresh_user_skills$"),
+        ],
         states={
             SKILLS: [
                 CallbackQueryHandler(skill_toggle, pattern="^skill_"),
@@ -608,15 +844,22 @@ def get_start_handler() -> ConversationHandler:
                 CallbackQueryHandler(add_custom_skill_prompt, pattern="^add_custom_skill$"),
             ],
             WAITING_CUSTOM_SKILL: [
+                CallbackQueryHandler(onboard_upload_resume_prompt, pattern="^onboard_upload_resume$"),
+                MessageHandler(filters.Document.ALL, resume_doc_receive),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
+            ],
+            WAITING_RESUME_CONSENT: [
+                CallbackQueryHandler(resume_consent_callback, pattern="^onboard_consent_"),
             ],
             ROLE: [
                 CallbackQueryHandler(role_selected, pattern="^onboard_role_"),
+                CallbackQueryHandler(onboard_upload_resume_prompt, pattern="^onboard_upload_resume$"),
             ],
             WAITING_CUSTOM_ROLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_role_receive),
             ],
             EXPERIENCE: [
+                CallbackQueryHandler(experience_callback_handler, pattern="^onboard_exp_\\d+$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, experience_message_handler),
             ],
             # Kept for state-enum validity
