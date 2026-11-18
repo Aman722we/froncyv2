@@ -1265,24 +1265,26 @@ def notification_settings_message(user: dict, bot_name: str = "Froncy") -> str:
             paused_until = paused_until.replace(tzinfo=timezone.utc)
         if paused_until > now:
             ist_time = paused_until.astimezone(ZoneInfo("Asia/Kolkata"))
-            pause_status_line = f"\n⚠️ *Alerts are PAUSED until {ist_time.strftime('%b %d, %I:%M %p')} IST*\n"
+            pause_status_line = f"⚠️ *Alerts are PAUSED until {ist_time.strftime('%b %d, %I:%M %p')} IST*\n\n"
 
     alert_time = user.get("alert_time", "09:00")
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+
+    items = []
     if is_pro:
-        instant_desc = "🚨 *Instant Drops:* Real\\-time alerts when new jobs match your profile\n"
-    else:
-        instant_desc = ""
-    
+        items.append("🚨 *Instant Drops:* Real\\-time alerts when new jobs match your profile")
+    items.append(f"📬 *Daily Morning Feed:* Top curated jobs at {escape_md(alert_time)} IST")
+    items.append(r"🌙 *Silent Night:* Silent delivery between 10 PM to 8 AM IST \(no buzzer\)")
+    items.append("🌆 *Evening Nudge:* 6:30 PM reminder for saved jobs")
+    items.append("📊 *Friday Review:* Weekly application progress & skill insights")
+
+    body_text = "\n\n".join(items)
+
     return (
-        f"🔔 *Notification Preferences*\n"
-        f"{pause_status_line}\n"
+        f"🔔 *Notification Preferences*\n\n"
+        f"{pause_status_line}"
         f"Customize what notifications you receive from {escape_md(bot_name)}:\n\n"
-        f"{instant_desc}"
-        f"📬 *Daily Morning Feed:* Top curated jobs at {escape_md(alert_time)} IST\n"
-        f"🌙 *Silent Night:* Silent delivery between 10 PM to 8 AM IST \\(no buzzer\\)\n"
-        f"🌆 *Evening Nudge:* 6:30 PM reminder for saved jobs\n"
-        f"📊 *Friday Review:* Weekly application progress & skill insights\n\n"
+        f"{body_text}\n\n"
         f"_Tap any button below to toggle on or off:_"
     )
 
