@@ -42,7 +42,7 @@ async def _build_refer_message(user_id: int, bot_username: str, bot_id: int = 1,
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "Know someone planning a job switch?\n\n"
         f"Share {bot_name} with them. When they join and complete their setup, you unlock <b>5 free Pro days!</b>\n\n"
-        "⭐️ <b>What Pro unlocks:</b>\n\n"
+        "💎 <b>What Pro unlocks:</b>\n\n"
         "• 8 personalised, high-match jobs in your Daily Feed\n"
         "• Telegram alerts for new matching opportunities\n"
         "• Jobs discovered directly from 530+ company career pages\n"

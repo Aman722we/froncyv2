@@ -1187,7 +1187,7 @@ def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> st
 
     return (
         f"🚀 *{escape_md(bot_name)} Pro \\(Early Adopter Offer\\)*\n\n"
-        f"⭐ *₹{ea_price}/month* ~₹{reg_price}/month~\n\n"
+        f"◆ *₹{ea_price}/month* ~₹{reg_price}/month~\n\n"
         f"🔒 Lock in ₹{ea_price}/month forever\\.\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
@@ -1210,7 +1210,7 @@ def upgrade_regular_message(pricing: dict, bot_name: str = "Froncy") -> str:
     price = pricing.get('current_price', 499)
     return (
         f"🚀 *{escape_md(bot_name)} Pro*\n\n"
-        f"⭐ *₹{price}/month*\n\n"
+        f"◆ *₹{price}/month*\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
         f"{escape_md(bot_name)} monitors 530\\+ tech company career pages and sends you job opportunities matching your skills and experience directly on Telegram\\.\n\n"

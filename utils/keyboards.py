@@ -261,7 +261,7 @@ def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:
 
     if plan == "free":
         buttons.append([
-            InlineKeyboardButton("⭐ Unlock Instant Drops (Pro)", callback_data="upgrade_pro")
+            InlineKeyboardButton("💎 Unlock Instant Drops (Pro)", callback_data="upgrade_pro")
         ])
 
     buttons.append([

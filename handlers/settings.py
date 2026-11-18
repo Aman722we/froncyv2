@@ -669,7 +669,7 @@ async def settings_instant_locked(update: Update, context: ContextTypes.DEFAULT_
     """Show toast explaining instant alerts are a Pro feature."""
     query = update.callback_query
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
-    await query.answer(f"⭐ Instant alerts require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
+    await query.answer(f"💎 Instant alerts require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
 
 
 async def settings_pause_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

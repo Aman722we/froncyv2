@@ -659,11 +659,13 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     action_row.append(InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{job_cid}"))
 
                 kb_rows = [
-                    [InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url)]
+                    [
+                        InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url),
+                        InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications"),
+                    ]
                 ]
                 if action_row:
                     kb_rows.append(action_row)
-                kb_rows.append([InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications")])
                 kb = InlineKeyboardMarkup(kb_rows)
 
                 sent_msg = await safe_send_message(
@@ -826,7 +828,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     f"🎯 *{best_score}% Match*\n\n"
                     f"⚡ Direct from company careers • Posted {escape_md(freshness)}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"⭐ *Pro members get instant drops like this for every opening.*\n"
+                    f"💎 *Pro members get instant drops like this for every opening.*\n"
                     f"_This high\\-match weekly sample is on us!_"
                 )
 
@@ -852,7 +854,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 if f_action_row:
                     sample_kb_rows.append(f_action_row)
                 sample_kb_rows.extend([
-                    [InlineKeyboardButton("⭐ Get Instant Drops (Pro)", callback_data="upgrade_pro")],
+                    [InlineKeyboardButton("💎 Get Instant Drops (Pro)", callback_data="upgrade_pro")],
                     [InlineKeyboardButton("👥 Get Pro Free (Refer Friends)", callback_data="menu_refer")],
                     [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications")],
                 ])

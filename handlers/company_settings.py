@@ -74,7 +74,7 @@ async def company_action_callback(update: Update, context: ContextTypes.DEFAULT_
         else:
             if plan not in ("pro", "trial", "proplus", "premium"):
                 await query.answer(
-                    "⭐ Free tier limit reached (5/5). Upgrade to Pro to follow unlimited companies!",
+                    "💎 Free tier limit reached (5/5). Upgrade to Pro to follow unlimited companies!",
                     show_alert=True
                 )
                 bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
@@ -82,7 +82,7 @@ async def company_action_callback(update: Update, context: ContextTypes.DEFAULT_
                     await context.bot.send_message(
                         chat_id=user_id,
                         text=(
-                            f"⭐ *Company Watchlist Limit Reached*\n\n"
+                            f"💎 *Company Watchlist Limit Reached*\n\n"
                             f"Free members can follow up to *5 Dream Companies*\\.\n"
                             f"Upgrade to *{escape_md(bot_name)} Pro* to follow *unlimited companies* and unlock Watchlist\\-Only instant drops\\!"
                         ),
@@ -157,7 +157,7 @@ async def _update_alert_keyboard_mute(query, company_id: int, is_muted: bool, co
         for btn in row:
             if btn.callback_data in (f"cf_mt:{company_id}", f"cf_unmt:{company_id}"):
                 if is_muted:
-                    new_row.append(InlineKeyboardButton(f"↩️ Undo Mute {company_name}", callback_data=f"cf_unmt:{company_id}"))
+                    new_row.append(InlineKeyboardButton("↩️ Undo Mute", callback_data=f"cf_unmt:{company_id}"))
                 else:
                     new_row.append(InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{company_id}"))
             else:
@@ -302,7 +302,7 @@ async def settings_comp_mode_toggle(update: Update, context: ContextTypes.DEFAUL
             )
         elif res.get("reason") == "pro_required":
             bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
-            await query.answer(f"⭐ Watchlist-Only mode requires {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
+            await query.answer(f"💎 Watchlist-Only mode requires {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
         else:
             await query.answer("Could not update mode.", show_alert=True)
 
@@ -491,7 +491,7 @@ async def handle_bundle_follow_callback(update: Update, context: ContextTypes.DE
         reason = res.get("reason")
         if reason == "pro_required":
             bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
-            await query.answer(f"⭐ Curated 1-tap bundles require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
+            await query.answer(f"💎 Curated 1-tap bundles require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
         else:
             await query.answer("Could not add bundle.", show_alert=True)
 
