@@ -1,4 +1,4 @@
-﻿import httpx
+import httpx
 from config import settings
 from loguru import logger
 
