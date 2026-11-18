@@ -14,7 +14,7 @@ The software integrates with the following external services via their official 
 * **Supabase / PostgreSQL:** Cloud database hosting with connection pooling (`asyncpg`).
 * **Railway:** Cloud container execution, automated buildpacks, and deployment platform.
 * **Razorpay:** Payment processing, Pro subscriptions, and webhook events.
-* **Public ATS Feeds (Greenhouse, Lever, Ashby):** Direct public REST endpoints for automated career page monitoring across 525+ tech companies.
+* **Public ATS Feeds (Greenhouse, Lever, Ashby):** Direct public REST endpoints for automated career page monitoring across 530+ tech companies.
 
 ## 3. Backend Dependencies (Python)
 All backend dependencies are imported via `pip` and tracked in `requirements.txt`. None are modified or embedded directly into the source code.

@@ -519,7 +519,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 for i, (job, score, _) in enumerate(matched_items[:7], 1):
                     j_title = escape_md(job.get("title", "Job"))
                     j_comp = escape_md(job.get("company", "Company"))
-                    bundle_lines.append(f"{i}\\. *{j_title}* @ *{j_comp}* — 🎯 *{score}% Match*")
+                    bundle_lines.append(f"{i}\\. *{j_title}* @ *{j_comp}* \\(🎯 *{score}% Match*\\)")
 
                 if count > 7:
                     bundle_lines.append(f"\n_...and {count - 7} more positions direct from company careers!_")
@@ -655,15 +655,17 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     if is_following:
                         action_row.append(InlineKeyboardButton("✅ Following", callback_data=f"cf_unfw:{job_cid}"))
                     else:
-                        action_row.append(InlineKeyboardButton(f"⭐ Follow {cname}", callback_data=f"cf_fw:{job_cid}"))
+                        action_row.append(InlineKeyboardButton(f"➕ Follow {cname}", callback_data=f"cf_fw:{job_cid}"))
                     action_row.append(InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{job_cid}"))
 
                 kb_rows = [
-                    [InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url)]
+                    [
+                        InlineKeyboardButton("🔗 Apply Now", url=apply_btn_url),
+                        InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications"),
+                    ]
                 ]
                 if action_row:
                     kb_rows.append(action_row)
-                kb_rows.append([InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications")])
                 kb = InlineKeyboardMarkup(kb_rows)
 
                 sent_msg = await safe_send_message(
@@ -826,7 +828,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     f"🎯 *{best_score}% Match*\n\n"
                     f"⚡ Direct from company careers • Posted {escape_md(freshness)}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"⭐ *Pro members get instant drops like this for every opening.*\n"
+                    f"💎 *Pro members get instant drops like this for every opening.*\n"
                     f"_This high\\-match weekly sample is on us!_"
                 )
 
@@ -843,7 +845,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                     if is_following:
                         f_action_row.append(InlineKeyboardButton("✅ Following", callback_data=f"cf_unfw:{f_job_cid}"))
                     else:
-                        f_action_row.append(InlineKeyboardButton(f"⭐ Follow {cname}", callback_data=f"cf_fw:{f_job_cid}"))
+                        f_action_row.append(InlineKeyboardButton(f"➕ Follow {cname}", callback_data=f"cf_fw:{f_job_cid}"))
                     f_action_row.append(InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{f_job_cid}"))
 
                 sample_kb_rows = [
@@ -852,7 +854,7 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 if f_action_row:
                     sample_kb_rows.append(f_action_row)
                 sample_kb_rows.extend([
-                    [InlineKeyboardButton("⭐ Get Instant Drops (Pro)", callback_data="upgrade_pro")],
+                    [InlineKeyboardButton("💎 Get Instant Drops (Pro)", callback_data="upgrade_pro")],
                     [InlineKeyboardButton("👥 Get Pro Free (Refer Friends)", callback_data="menu_refer")],
                     [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="settings_notifications")],
                 ])

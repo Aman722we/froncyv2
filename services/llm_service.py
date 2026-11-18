@@ -273,7 +273,7 @@ With my experience in frontend development, I believe I would be a strong additi
 
 I would welcome the opportunity to discuss how my background and skills would benefit {company}. I look forward to hearing from you.
 
-[⚠️ This is a template — our AI service is temporarily unavailable. Please personalize this before sending.]"""
+[⚠️ This is a template (our AI service is temporarily unavailable). Please personalize this before sending.]"""
 
 
 def get_mode_display(mode: LLMMode) -> str:

@@ -521,61 +521,9 @@ async def init_db() -> asyncpg.Pool:
                 );
             """)
 
-            # 6. Automatic Backfill: Populate companies from distinct career_sources company_name
-            await conn.execute("""
-                INSERT INTO companies (name)
-                SELECT DISTINCT trim(company_name)
-                FROM career_sources
-                WHERE company_name IS NOT NULL AND trim(company_name) != ''
-                ON CONFLICT (name) DO NOTHING;
-            """)
-
-            # Link career_sources.company_id
-            await conn.execute("""
-                UPDATE career_sources cs
-                SET company_id = c.id
-                FROM companies c
-                WHERE cs.company_id IS NULL AND trim(cs.company_name) = c.name;
-            """)
-
-            # Link manual_jobs.company_id where company matches canonical name
-            await conn.execute("""
-                UPDATE manual_jobs mj
-                SET company_id = c.id
-                FROM companies c
-                WHERE mj.company_id IS NULL AND lower(trim(mj.company)) = lower(c.name);
-            """)
-
-            # 7. Seed Default Curated Bundles
-            bundles_data = [
-                ("FAANG & Global Giants", "🌐", "big-tech", "Tier-1 global tech leaders with large engineering hubs in India"),
-                ("Top Indian Unicorns", "🦄", "unicorns", "India's highest valued consumer & tech startups"),
-                ("DevTools & AI", "🚀", "devtools-ai", "Fast-growing developer infrastructure & AI companies"),
-                ("FinTech & Quant Trading", "🏦", "fintech-quant", "Top fintechs and high-frequency quantitative trading firms"),
-            ]
-            for bname, bemoji, bslug, bdesc in bundles_data:
-                await conn.execute("""
-                    INSERT INTO company_bundles (name, emoji, slug, description)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (slug) DO NOTHING;
-                """, bname, bemoji, bslug, bdesc)
-
-            # 8. Seed Default Bundle Members
-            bundle_members_mapping = [
-                ("big-tech", ["Reddit India", "Discord Tech", "Thoughtworks India", "ZoomInfo India", "Netskope", "Celonis"]),
-                ("unicorns", ["Drivetrain", "Springboard", "AlphaSense", "Owner.com"]),
-                ("devtools-ai", ["PostHog", "GitLab", "Sourcegraph", "Kognitos", "Gather AI", "SingleStore"]),
-                ("fintech-quant", ["Branch International", "Oportun", "Check Technologies", "PolicyMe"]),
-            ]
-            for bslug, cnames in bundle_members_mapping:
-                await conn.execute("""
-                    INSERT INTO company_bundle_members (bundle_id, company_id)
-                    SELECT b.id, c.id
-                    FROM company_bundles b
-                    CROSS JOIN companies c
-                    WHERE b.slug = $1 AND c.name = ANY($2::text[])
-                    ON CONFLICT DO NOTHING;
-                """, bslug, cnames)
+            # 6. Seed Companies Directory & Curated Bundles (RFC-004)
+            from db.companies_catalog import seed_companies_and_bundles
+            await seed_companies_and_bundles(conn)
 
         except Exception as e:
             logger.warning(f"Failed to apply RFC-004 company preference migrations: {e}")
@@ -678,6 +626,42 @@ async def init_db() -> asyncpg.Pool:
             """)
         except Exception as e:
             logger.warning(f"Failed to apply RFC-005 geo snapshot migrations: {e}")
+
+        # ── RFC-008: Safe Resume Extraction, DPDP Consent & Skills Backup ──
+        try:
+            await conn.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS skills_need_review BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_consent_at TIMESTAMPTZ;
+                CREATE TABLE IF NOT EXISTS user_skills_backup (
+                    telegram_id BIGINT,
+                    bot_id INT DEFAULT 1,
+                    old_skills TEXT[],
+                    cleaned_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (telegram_id, bot_id)
+                );
+            """)
+        except Exception as e:
+            logger.warning(f"Failed to apply RFC-008 migrations: {e}")
+
+        # ── RFC-009: Ephemeral Resume Model — Stored CV Data Purge ──
+        try:
+            purge_res = await conn.execute("""
+                UPDATE users 
+                SET resume_text = NULL, 
+                    resume_filename = NULL, 
+                    resume_url = NULL, 
+                    raw_resume_bytes = NULL,
+                    resume_consent_at = NULL
+                WHERE resume_text IS NOT NULL 
+                   OR resume_filename IS NOT NULL 
+                   OR resume_url IS NOT NULL
+                   OR raw_resume_bytes IS NOT NULL
+                   OR resume_consent_at IS NOT NULL;
+            """)
+            if purge_res and purge_res != "UPDATE 0":
+                logger.info(f"RFC-009 Data Purge: {purge_res} users cleared of legacy stored CV data.")
+        except Exception as e:
+            logger.warning(f"Failed to apply RFC-009 resume purge: {e}")
 
     logger.info("Database initialized successfully.")
     return _pool

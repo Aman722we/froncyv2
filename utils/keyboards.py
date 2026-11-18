@@ -118,22 +118,21 @@ def resume_prompt_keyboard() -> InlineKeyboardMarkup:
     """Step 4: Resume upload prompt."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📎 Upload Resume PDF", callback_data="resume_upload"),
+            InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
             InlineKeyboardButton("⏭ Skip for now", callback_data="resume_skip"),
         ]
     ])
 
 
 def onboarding_complete_keyboard() -> InlineKeyboardMarkup:
-    """Step 5: Post-onboarding actions."""
+    """Post-onboarding actions."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🔍 View Jobs Now", callback_data="menu_jobs"),
-            InlineKeyboardButton("📄 Upload Resume", callback_data="resume_upload"),
+            InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
         ],
         [
-            InlineKeyboardButton("✍️ Get Cover Letter", callback_data="menu_coverletter"),
-            InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
+            InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
         ],
     ])
 
@@ -155,16 +154,16 @@ def main_menu_keyboard(plan: str = "free", upgrade_price: int | None = None) -> 
         ],
     ]
     buttons.append([
-        InlineKeyboardButton("📄 Resume", callback_data="menu_resume"),
-        InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
+        InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
+        InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
     ])
     if plan != "pro":
         buttons.append([
-            InlineKeyboardButton("🎁 Refer a Friend — Earn 5 Free Pro Days!", callback_data="menu_refer"),
+            InlineKeyboardButton("🎁 Refer a Friend (Earn 5 Free Pro Days!)", callback_data="menu_refer"),
         ])
         price_label = f"₹{upgrade_price}/mo" if upgrade_price else "Upgrade"
         buttons.append([
-            InlineKeyboardButton(f"💎 Go Pro — {price_label}", callback_data="menu_upgrade"),
+            InlineKeyboardButton(f"💎 Go Pro ({price_label})", callback_data="menu_upgrade"),
         ])
 
     return InlineKeyboardMarkup(buttons)
@@ -222,7 +221,7 @@ def job_list_keyboard(jobs: list[dict], plan: str, total_count: int = 0, page: i
         count_label = f"{total_active}+ " if total_active else ""
         buttons.append([
             InlineKeyboardButton(
-                f"🔒 Browse all {count_label}jobs — Upgrade to Pro",
+                f"🔒 Browse all {count_label}jobs (Upgrade to Pro)",
                 callback_data="menu_upgrade",
             )
         ])
@@ -262,7 +261,7 @@ def daily_feed_keyboard(jobs: list[dict], plan: str) -> InlineKeyboardMarkup:
 
     if plan == "free":
         buttons.append([
-            InlineKeyboardButton("⭐ Unlock Instant Drops (Pro)", callback_data="upgrade_pro")
+            InlineKeyboardButton("💎 Unlock Instant Drops (Pro)", callback_data="upgrade_pro")
         ])
 
     buttons.append([
@@ -282,12 +281,12 @@ def filter_menu_keyboard(filters: dict) -> InlineKeyboardMarkup:
     f_stream = filters.get("stream", "mine")
 
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("— Stream —", callback_data="ignore")],
+        [InlineKeyboardButton("🎯 Stream", callback_data="ignore")],
         [
             InlineKeyboardButton("✅ My Stream" if f_stream == "mine" else "My Stream", callback_data="filter_stream_mine"),
             InlineKeyboardButton("✅ All Streams" if f_stream == "all" else "All Streams", callback_data="filter_stream_all"),
         ],
-        [InlineKeyboardButton("── Experience ──", callback_data="ignore")],
+        [InlineKeyboardButton("🧠 Experience", callback_data="ignore")],
         [
             InlineKeyboardButton("✅ 0 YOE" if f_exp == "0" else "0 YOE", callback_data="filter_exp_0"),
             InlineKeyboardButton("✅ 1 YOE" if f_exp == "1" else "1 YOE", callback_data="filter_exp_1"),
@@ -355,11 +354,11 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
 
     buttons = []
 
-    # Row 1: Cover Letter (HR Details hidden)
-    buttons.append([
-        InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
-        # InlineKeyboardButton("✅ HR Details Granted", callback_data="ignore") if hr_granted else InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{job['id']}")
-    ])
+    # Row 1: Cover Letter (gated by ENABLE_COVER_LETTER)
+    if getattr(settings, "ENABLE_COVER_LETTER", False):
+        buttons.append([
+            InlineKeyboardButton("✍️ Cover Letter", callback_data=f"{cl_prefix}_generate_{job['id']}"),
+        ])
     
     # Row 3: Mark as Applied (or "✅ Applied" if already applied) + Remind Me
     applied_label = "✅ Applied" if is_applied else "✅ Mark as Applied"
@@ -383,7 +382,7 @@ def job_detail_keyboard(job: dict, plan: str, score: int = -1, from_saved: bool 
     if cid:
         cname = (job.get("company") or "Company")[:15]
         buttons.append([
-            InlineKeyboardButton(f"⭐ Follow {cname}", callback_data=f"cf_fw:{cid}"),
+            InlineKeyboardButton(f"➕ Follow {cname}", callback_data=f"cf_fw:{cid}"),
             InlineKeyboardButton("🔕 Mute", callback_data=f"cf_mt:{cid}"),
         ])
 
@@ -443,26 +442,17 @@ def cover_letter_limit_keyboard() -> InlineKeyboardMarkup:
 # ──────────────────────────────────────────────
 
 def resume_keyboard(has_resume: bool, plan: str = "free") -> InlineKeyboardMarkup:
-    """Resume management actions."""
-    if has_resume:
-        buttons = [
-            [
-                InlineKeyboardButton("🔄 Replace", callback_data="resume_upload"),
-            ],
-            # Hidden: Request Human Review
-            # [
-            #     InlineKeyboardButton("📄 Request Human Review", callback_data="req_resume_review"),
-            # ],
-            [
-                InlineKeyboardButton("🔙 Back", callback_data="back_menu")
-            ]
+    """Resume/Profile actions (RFC-009)."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 Refresh via Resume (PDF)", callback_data="profile_refresh_resume"),
+            InlineKeyboardButton("✏️ Edit Skills", callback_data="settings_skills"),
+        ],
+        [
+            InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
+            InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")
         ]
-    else:
-        buttons = [
-            [InlineKeyboardButton("📎 Upload Resume PDF", callback_data="resume_upload")],
-            [InlineKeyboardButton("🔙 Back", callback_data="back_menu")],
-        ]
-    return InlineKeyboardMarkup(buttons)
+    ])
 
 
 # ──────────────────────────────────────────────
@@ -485,35 +475,49 @@ def upgrade_keyboard() -> InlineKeyboardMarkup:
 # Settings
 # ──────────────────────────────────────────────
 
-def settings_keyboard(is_active_pro: bool = False) -> InlineKeyboardMarkup:
-    """Settings menu."""
+def settings_keyboard(is_active_pro: bool | dict = False, *args, **kwargs) -> InlineKeyboardMarkup:
+    """Settings menu organized logically into profile, preferences, and account controls."""
+    if isinstance(is_active_pro, dict):
+        user = is_active_pro
+        is_pro = (user.get("plan") not in ("free", None) and user.get("subscription_status") == "active")
+    else:
+        is_pro = bool(is_active_pro)
+
     buttons = [
+        # Profile Matching (Stream & Skills)
         [
             InlineKeyboardButton("🏷 Edit Skills", callback_data="settings_skills"),
             InlineKeyboardButton("🎯 Change Stream", callback_data="settings_role"),
         ],
+        # Experience & Batch
         [
-            InlineKeyboardButton("🧠 Edit Experience", callback_data="settings_experience"),
-            InlineKeyboardButton("🎓 Edit Batch Year", callback_data="settings_batch"),
+            InlineKeyboardButton("🧠 Experience", callback_data="settings_experience"),
+            InlineKeyboardButton("🎓 Batch Year", callback_data="settings_batch"),
         ],
+        # Location & Companies (Discovery Filters)
         [
-            InlineKeyboardButton("📍 Change Location", callback_data="settings_location"),
-            InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications"),
-        ],
-        [
+            InlineKeyboardButton("💼 Work Mode", callback_data="settings_location"),
             InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
-            InlineKeyboardButton("📊 My Status", callback_data="settings_status"),
         ],
+        # Alerts & Status
         [
-            InlineKeyboardButton("🗑 Delete Account", callback_data="settings_delete"),
+            InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications"),
+            InlineKeyboardButton("📊 My Status", callback_data="settings_status"),
         ],
     ]
 
-    if is_active_pro:
-        buttons.insert(-1, [
-            InlineKeyboardButton("🛑 Cancel Subscription", callback_data="settings_cancel_sub"),
+    # Account Controls / Danger Zone
+    if is_pro:
+        buttons.append([
+            InlineKeyboardButton("🛑 Cancel Pro", callback_data="settings_cancel_sub"),
+            InlineKeyboardButton("🗑 Delete Account", callback_data="settings_delete"),
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton("🗑 Delete Account", callback_data="settings_delete"),
         ])
 
+    # Navigation
     buttons.append([
         InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
     ])
@@ -526,7 +530,7 @@ def confirm_delete_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⚠️ Yes, Delete Everything", callback_data="confirm_delete_yes"),
-            InlineKeyboardButton("❌ Cancel", callback_data="menu_settings"),
+            InlineKeyboardButton("❌ Cancel", callback_data="menu_profile"),
         ]
     ])
 
@@ -541,7 +545,7 @@ def saved_jobs_keyboard(jobs: list[dict]) -> InlineKeyboardMarkup:
         
         buttons.append([
             InlineKeyboardButton(
-                f"{i}. {job['title'][:30]} — {job.get('company', 'N/A')}",
+                f"{i}. {job['title'][:30]} ({job.get('company', 'N/A')})",
                 callback_data=f"{prefix}_view_{job['id']}_saved",
             ),
             InlineKeyboardButton("🗑", callback_data=unsave_callback),
@@ -573,18 +577,13 @@ def notification_settings_keyboard(user: dict, is_pro: bool = False) -> InlineKe
 
     buttons = []
 
-    # Row 1: Instant Alerts (Pro vs Free Sample - RFC-003)
+    # Row 1: Instant Alerts (Pro only)
     if is_pro:
         inst_btn = InlineKeyboardButton(
             f"🚨 Instant Drops: {'✅ ON' if instant_on else '❌ OFF'}",
             callback_data=f"notif_set_instant_{0 if instant_on else 1}"
         )
-    else:
-        inst_btn = InlineKeyboardButton(
-            f"🎁 Weekly Free Sample: {'✅ ON' if instant_on else '❌ OFF'}",
-            callback_data=f"notif_set_instant_{0 if instant_on else 1}"
-        )
-    buttons.append([inst_btn])
+        buttons.append([inst_btn])
 
     # Row 2: Daily Digest & Silent Night
     buttons.append([
@@ -622,9 +621,8 @@ def notification_settings_keyboard(user: dict, is_pro: bool = False) -> InlineKe
         pause_btn,
     ])
 
-    # Target Companies & Back to Settings
-    buttons.append([InlineKeyboardButton("🏢 Target Company Filters", callback_data="settings_companies")])
-    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    # Back to Profile
+    buttons.append([InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")])
     return InlineKeyboardMarkup(buttons)
 
 

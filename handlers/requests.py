@@ -107,10 +107,10 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         # User has no credits -> show ₹49 purchase option
         buttons = [
-            [InlineKeyboardButton("💳 Request HR Details — ₹49", callback_data=f"buy_hr_{job_id}")],
+            [InlineKeyboardButton("💳 Request HR Details (₹49)", callback_data=f"buy_hr_{job_id}")],
         ]
         if not is_pro:
-            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo) — Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
         buttons.append([InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")])
 
         kb = InlineKeyboardMarkup(buttons)
@@ -162,7 +162,7 @@ async def buy_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         payment_link = client.payment_link.create({
             "amount": 4900,
             "currency": "INR",
-            "description": f"{context.bot.first_name} — HR Contact Request",
+            "description": f"{context.bot.first_name} (HR Contact Request)",
             "notes": {
                 "telegram_id": str(user_id),
                 "purchase_type": "hr_contact",
@@ -179,7 +179,7 @@ async def buy_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Pay ₹49 — Tap Here", url=pay_url)],
+        [InlineKeyboardButton("💳 Pay ₹49 (Tap Here)", url=pay_url)],
         [InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")],
     ])
     await query.edit_message_text(
@@ -257,10 +257,10 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
     else:
         # No credit — show purchase option
         buttons = [
-            [InlineKeyboardButton("💳 Get Resume Review — ₹99", callback_data="buy_resume_review")]
+            [InlineKeyboardButton("💳 Get Resume Review (₹99)", callback_data="buy_resume_review")]
         ]
         if not is_pro:
-            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo) — Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
         buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
         
         kb = InlineKeyboardMarkup(buttons)
@@ -268,7 +268,7 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
         await query.edit_message_text(
             text=(
                 "👤 <b>Human Resume Review</b>\n\n"
-                "A real industry reviewer will review your resume and tell you exactly why you might not be getting callbacks — and actionable steps to fix it.\n\n"
+                "A real industry reviewer will review your resume and tell you exactly why you might not be getting callbacks, plus actionable steps to fix it.\n\n"
                 "💰 <b>One-time: ₹99</b>\n\n"
                 "<i>Please make sure your resume is uploaded under <b>Resume</b> before requesting.</i>"
             ),
@@ -291,7 +291,7 @@ async def buy_resume_review_callback(update: Update, context: ContextTypes.DEFAU
         payment_link = client.payment_link.create({
             "amount": 9900,  # ₹99 in paise
             "currency": "INR",
-            "description": f"{context.bot.first_name} — Human Resume Review",
+            "description": f"{context.bot.first_name} (Human Resume Review)",
             "notes": {
                 "telegram_id": str(user_id),
                 "purchase_type": "resume_review",
@@ -307,7 +307,7 @@ async def buy_resume_review_callback(update: Update, context: ContextTypes.DEFAU
         return
 
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Pay ₹99 — Tap Here", url=pay_url)],
+        [InlineKeyboardButton("💳 Pay ₹99 (Tap Here)", url=pay_url)],
         [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
     ])
     await query.edit_message_text(

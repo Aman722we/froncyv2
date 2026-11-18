@@ -8,18 +8,45 @@ from telegram.warnings import PTBUserWarning
 # Suppress harmless PTB user warnings regarding ConversationHandler per_message setting
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
+from telegram import Update, BotCommand
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, TypeHandler, ContextTypes, filters
 from telegram.error import TelegramError
 from loguru import logger
 from config import settings
 from utils.error_alert import send_error_alert
 
+OFFICIAL_BOT_COMMANDS = [
+    BotCommand("start", "Start Froncy or go to main menu"),
+    BotCommand("jobs", "Browse today's jobs"),
+    BotCommand("daily_feed", "Go to daily feed jobs"),
+    BotCommand("tracker", "View and manage your applications"),
+    BotCommand("refer", "Refer a friend and earn 5 free Pro days"),
+    BotCommand("upgrade", "Upgrade to Pro (₹199/mo)"),
+    BotCommand("profile", "Update your skills and preferences"),
+    BotCommand("feedback", "Give feedback or report any bugs"),
+    BotCommand("delete_account", "Permanently delete all your data"),
+]
+
+async def _post_init_commands(application: Application) -> None:
+    """Set official Telegram menu commands so the Menu popup reflects active commands."""
+    try:
+        await application.bot.set_my_commands(OFFICIAL_BOT_COMMANDS)
+        logger.info("Successfully updated Telegram bot commands via set_my_commands.")
+    except Exception as e:
+        logger.warning(f"Could not set Telegram bot commands: {e}")
+
 from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu, submit_job_link_info_callback
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback, apply_smart_locked_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback, resume_upload_new_callback
+from handlers.resume import (
+    view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback,
+    replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback,
+    get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback,
+    resume_upload_new_callback, deleteresume_command, delete_resume_callback,
+    view_profile, profile_refresh_resume_prompt, profile_skills_merge_callback,
+    profile_skills_replace_callback, profile_skills_undo_callback,
+)
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -137,6 +164,7 @@ def build_bot(token: str | None = None) -> Application:
         .token(token or settings.TELEGRAM_BOT_TOKEN)
         .request(telegram_request)
         .get_updates_request(telegram_request)
+        .post_init(_post_init_commands)
     )
     
     # In production we handle webhooks via FastAPI, so the built-in Updater
@@ -194,20 +222,24 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(get_start_handler())
     app.add_handler(get_feedback_handler())
 
-    # Main Menu & Core Commands
+    # Main Menu & Active Core Commands
     app.add_handler(CommandHandler("menu", menu_command))
     app.add_handler(CommandHandler("jobs", view_jobs))
     app.add_handler(CommandHandler("daily_feed", daily_feed_command))
-    app.add_handler(CommandHandler("coverletter", coverletter_menu_handler))
     app.add_handler(CommandHandler("tracker", tracker_dashboard))
-    app.add_handler(CommandHandler("resume", view_resume))
-    app.add_handler(CommandHandler("saved", view_saved_jobs))
-    app.add_handler(CommandHandler("upgrade", upgrade_command))
-    app.add_handler(CommandHandler("settings", settings_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("delete_account", delete_account_prompt))
     app.add_handler(CommandHandler("refer", refer_command))
+    app.add_handler(CommandHandler("upgrade", upgrade_command))
+    app.add_handler(CommandHandler("profile", view_profile))
+    app.add_handler(CommandHandler("delete_account", delete_account_prompt))
+
+    # Muted/Deactivated commands (kept inactive so unrecognized/typo feedback is triggered):
+    # app.add_handler(CommandHandler("coverletter", coverletter_menu_handler))
+    # app.add_handler(CommandHandler("resume", view_resume))
+    # app.add_handler(CommandHandler("deleteresume", deleteresume_command))
+    # app.add_handler(CommandHandler("saved", view_saved_jobs))
+    # app.add_handler(CommandHandler("settings", settings_command))
+    # app.add_handler(CommandHandler("status", status_command))
+    # app.add_handler(CommandHandler("help", help_command))
 
     # Admin Handlers
     app.add_handler(get_addjob_handler())
@@ -263,7 +295,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(sub_admin_view_callback, pattern=r"^sub_admin_view_\d+$"))
 
     # User: My Submitted Links Dashboard
-    app.add_handler(CommandHandler("my_links", my_links_callback))
+    # app.add_handler(CommandHandler("my_links", my_links_callback))
     app.add_handler(CallbackQueryHandler(my_links_callback, pattern="^my_links$"))
     app.add_handler(CallbackQueryHandler(my_links_page_callback, pattern=r"^my_links_page_\d+$"))
 
@@ -272,9 +304,9 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(submit_job_link_info_callback, pattern="^submit_job_link_info$"))
     app.add_handler(CallbackQueryHandler(view_jobs, pattern="^menu_jobs$"))
     app.add_handler(CallbackQueryHandler(daily_feed_command, pattern="^menu_daily$"))
-    app.add_handler(CallbackQueryHandler(view_resume, pattern="^menu_resume$"))
+    app.add_handler(CallbackQueryHandler(view_profile, pattern="^(menu_resume|menu_profile)$"))
     app.add_handler(CallbackQueryHandler(view_saved_jobs, pattern="^menu_saved$"))
-    app.add_handler(CallbackQueryHandler(settings_command, pattern="^(menu_settings|settings_main)$"))
+    app.add_handler(CallbackQueryHandler(view_profile, pattern="^(menu_settings|settings_main)$"))
     app.add_handler(CallbackQueryHandler(upgrade_command, pattern="^menu_upgrade$"))
     app.add_handler(CallbackQueryHandler(coverletter_menu_handler, pattern="^menu_coverletter$"))
     app.add_handler(CallbackQueryHandler(refer_callback, pattern="^menu_refer$"))
@@ -300,8 +332,13 @@ def build_bot(token: str | None = None) -> Application:
 
 
 
-    # Resume/ATS Callbacks
+    # Resume/ATS & Profile Callbacks
+    app.add_handler(CallbackQueryHandler(profile_refresh_resume_prompt, pattern="^profile_refresh_resume$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_merge_callback, pattern="^profile_skills_merge$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_replace_callback, pattern="^profile_skills_replace$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_undo_callback, pattern="^profile_skills_undo$"))
     app.add_handler(CallbackQueryHandler(replace_resume_prompt, pattern="^resume_upload$"))
+    app.add_handler(CallbackQueryHandler(delete_resume_callback, pattern="^delete_resume_confirm$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_job_callback, pattern="^(manual_)?ats_job_"))
     app.add_handler(CallbackQueryHandler(generate_ats_pdf_callback, pattern="^gen_ats_pdf_"))
@@ -320,6 +357,9 @@ def build_bot(token: str | None = None) -> Application:
         elif context.user_data.get("awaiting_settings_experience"):
             from handlers.settings import settings_experience_receive
             await settings_experience_receive(update, context)
+        elif context.user_data.get("awaiting_settings_role"):
+            from handlers.settings import settings_role_custom_receive
+            await settings_role_custom_receive(update, context)
         elif URL_REGEX.search(text):
             await update.message.reply_text(
                 "ℹ️ <b>Job Link Submissions Paused</b>\n\n"
@@ -330,7 +370,25 @@ def build_bot(token: str | None = None) -> Application:
         else:
             await ats_analyze_result(update, context)
 
-    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, text_router))
+    async def unknown_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle unrecognized or mistyped slash commands."""
+        if not update.message or not update.message.text:
+            return
+        import html
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        cmd = update.message.text.split()[0]
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_menu")]
+        ])
+        await update.message.reply_text(
+            f"⚠️ <b>Command is incorrect</b> (<code>{html.escape(cmd)}</code>)\n\n"
+            "Please check the spelling or tap below to open the main menu:",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+    app.add_handler(MessageHandler(filters.COMMAND | filters.Regex(r"^/"), unknown_command_handler))
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND & ~filters.Regex(r"^/"), text_router))
 
     # Tracker & Analytics
     app.add_handler(CallbackQueryHandler(mark_applied_callback, pattern="^(manual_)?applied_"))

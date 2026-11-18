@@ -62,6 +62,9 @@ async def update_user_profile(
     experience_level: str | None = None,
     batch_year: int | None = None,
     role_pref: str | None = None,
+    bot_id: int | None = None,
+    skills_need_review: bool | None = None,
+    **kwargs,
 ) -> dict:
     """Update user profile fields. Only updates non-None values."""
     pool = get_pool()
@@ -99,11 +102,22 @@ async def update_user_profile(
         updates.append(f"batch_year = ${param_idx}")
         values.append(batch_year)
 
+    if skills_need_review is not None:
+        param_idx += 1
+        updates.append(f"skills_need_review = ${param_idx}")
+        values.append(skills_need_review)
+
     if not updates:
-        return await get_user(telegram_id)
+        return await get_user(telegram_id, bot_id=bot_id or 1)
 
     updates.append("updated_at = NOW()")
-    sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 RETURNING *"
+
+    if bot_id is not None:
+        param_idx += 1
+        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 AND bot_id = ${param_idx} RETURNING *"
+        values.append(bot_id)
+    else:
+        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 RETURNING *"
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(sql, telegram_id, *values)
@@ -130,6 +144,53 @@ async def update_resume(
             resume_url,
         )
         return dict(row) if row else None
+
+
+async def record_resume_consent(telegram_id: int, bot_id: int = 1) -> None:
+    """Record consent timestamp for storing candidate resume per DPDP requirements."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET resume_consent_at = NOW() WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id,
+            bot_id,
+        )
+
+
+async def delete_user_resume(telegram_id: int, bot_id: int = 1) -> bool:
+    """Purge stored resume text, filename, and URL from DB, and delete file from storage."""
+    from services.storage import delete_resume
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT resume_filename FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            telegram_id,
+            bot_id,
+        )
+        if not row:
+            return False
+
+        filename = row.get("resume_filename")
+        if filename:
+            try:
+                await delete_resume(telegram_id, filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete resume file from storage: {e}")
+
+        await conn.execute(
+            """
+            UPDATE users
+            SET resume_text = NULL,
+                resume_filename = NULL,
+                resume_url = NULL,
+                resume_consent_at = NULL,
+                updated_at = NOW()
+            WHERE telegram_id = $1 AND bot_id = $2
+            """,
+            telegram_id,
+            bot_id,
+        )
+        return True
 
 
 async def set_onboarded(telegram_id: int) -> None:

@@ -312,7 +312,7 @@ async def _send_users_page(update: Update, context, page: int, edit: bool = Fals
     lines = [f"{title}  (Page {page}/{total_pages} · {total} total)\n"]
     for row in rows:
         name     = html.escape(row["first_name"] or "Unknown")
-        username = f"@{html.escape(row['username'])}" if row["username"] else "—"
+        username = f"@{html.escape(row['username'])}" if row["username"] else "N/A"
         plan_tag = {"pro": "💎", "free": "🆓"}.get(row["plan"] or "free", "🆓")
         onb_tag  = "✅" if row["is_onboarded"] else "⏳"
         lines.append(
@@ -383,17 +383,17 @@ async def user_detail_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     u = dict(row)
 
     name        = html.escape(u.get("first_name") or "Unknown")
-    username    = f"@{html.escape(u['username'])}" if u.get("username") else "—"
+    username    = f"@{html.escape(u['username'])}" if u.get("username") else "N/A"
     plan        = (u.get("plan") or "free").upper()
     onboarded   = "✅ Yes" if u.get("is_onboarded") else "❌ No"
     has_resume  = "✅ Yes" if u.get("resume_text") else "❌ No"
     skills      = ", ".join(u.get("skills") or []) or "None"
-    location    = html.escape(str(u.get("location_pref") or "—"))
-    role        = html.escape(str(u.get("role_pref") or "—"))
-    exp         = html.escape(str(u.get("experience_level") or "—"))
-    batch       = html.escape(str(u.get("batch_year") or "—"))
-    alert_time  = html.escape(str(u.get("alert_time") or "—"))
-    joined      = u["created_at"].strftime("%d %b %Y, %H:%M UTC") if u.get("created_at") else "—"
+    location    = html.escape(str(u.get("location_pref") or "N/A"))
+    role        = html.escape(str(u.get("role_pref") or "N/A"))
+    exp         = html.escape(str(u.get("experience_level") or "N/A"))
+    batch       = html.escape(str(u.get("batch_year") or "N/A"))
+    alert_time  = html.escape(str(u.get("alert_time") or "N/A"))
+    joined      = u["created_at"].strftime("%d %b %Y, %H:%M UTC") if u.get("created_at") else "N/A"
 
     trial_line = ""
     if u.get("is_trial"):

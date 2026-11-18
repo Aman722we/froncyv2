@@ -24,7 +24,7 @@ def welcome_message(first_name: str = "there", bot_name: str = "Froncy") -> str:
         f"👋 Hey {safe_name}\\!\n\n"
         "Struggling to land your first frontend job?\n\n"
         f"{escape_md(bot_name)} curates the best frontend jobs & internships for freshers, "
-        "writes cover letters that actually get read, and tracks "
+        "delivers instant alerts directly from company career pages, and tracks "
         "every application so nothing falls through the cracks\\.\n\n"
         "*7 days free\\. No card needed\\. Cancel anytime\\.* \n\n"
         "Let's get you interviews, not just applications\\. 🎯\n\n"
@@ -62,7 +62,7 @@ def trial_activated_message(trial_expires_at, bot_name: str = "us") -> str:
     else:
         expires_str = "7 days from now"
     return (
-        "\U0001F680 *7\\-Day Pro Trial — Activated\\!*\n\n"
+        "\U0001F680 *7\\-Day Pro Trial: Activated\\!*\n\n"
         "For the next 7 days, you have full Pro trial access:\n\n"
         "\u26A1 *Instant job alerts*\n"
         "Get notified the moment a relevant job appears directly on company career pages\\.\n\n"
@@ -101,20 +101,10 @@ def onboarding_complete(skills: list[str], location: str, has_resume: bool) -> s
 # Main Menu
 # ──────────────────────────────────────────────
 
-def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
+def main_menu(user: dict | None = None, pricing: dict | None = None, bot_name: str = "Froncy") -> str:
+    user = user or {}
     from utils.helpers import get_effective_plan
     plan = get_effective_plan(user)
-    
-    hr_left = user.get("hr_requests_left", 0) or 0
-    rr_left = user.get("resume_reviews_left", 0) or 0
-    if plan not in ("pro", "proplus", "premium"):
-        rr_left = 0
-    
-    credits_tag = ""
-    if hr_left > 0:
-        credits_tag += f" • HR: {hr_left}"
-    if rr_left > 0:
-        credits_tag += f" • Review: {rr_left}"
 
     if plan in ("pro", "proplus", "premium"):
         expires_at = user.get("plan_expires_at")
@@ -122,7 +112,7 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
         early_tag = " \\(Early Adopter 🚀\\)" if user.get("is_early_adopter") else ""
         return (
             f"🏠 *{escape_md(bot_name)}*\n"
-            rf"Plan: 💎 Pro{early_tag} \(unlimited jobs • Instant Alerts{credits_tag} • Renews: {escape_md(date_str)}\)"
+            rf"Plan: 💎 Pro{early_tag} \(unlimited jobs • Instant Alerts • Renews: {escape_md(date_str)}\)"
         )
 
     is_trial = user.get("is_trial", False) or plan == "trial"
@@ -139,19 +129,19 @@ def main_menu(user: dict, pricing: dict | None = None, bot_name: str = "Froncy")
                 time_str = f"{hours_left}h remaining"
                 return (
                     f"🏠 *{escape_md(bot_name)}*\n"
-                    rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • {escape_md(time_str)}\)"
+                    rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts • {escape_md(time_str)}\)"
                 )
             # If hours_left <= 0, fall through to free plan
         else:
             return (
                 f"🏠 *{escape_md(bot_name)}*\n"
-                rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts{credits_tag} • active\)"
+                rf"Plan: ⭐️ Pro Trial \(unlimited jobs • Instant Alerts • active\)"
             )
 
     # Free plan
     return (
         f"🏠 *{escape_md(bot_name)}*\n"
-        rf"Plan: Free \(limited jobs • no instant alerts{credits_tag}\)"
+        r"Plan: Free \(limited jobs • no instant alerts\)"
     )
 
 def compute_match_details(user_skills: list[str], job_skills: list[str], user_exp: str = "0", job_exp: int | None = None) -> dict:
@@ -162,26 +152,24 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
         skill_pct = 50  # unknown job requirements = neutral
         matched_disp, missing_disp = [], []
     else:
-        user_set = set(s.lower() for s in user_skills)
+        user_set = set()
+        for s in user_skills:
+            s_clean = str(s).lower().strip()
+            if s_clean:
+                user_set.add(s_clean)
+                norm = SKILL_SYNONYMS.get(s_clean)
+                if norm:
+                    user_set.add(norm)
+
         matched_disp, missing_disp = [], []
         matched_count = 0
         
         for raw_jskill in job_skills:
-            jskill_lower = raw_jskill.lower()
-            if "/" in jskill_lower:
-                # Treat as an "OR" condition (e.g. "React/Angular/Vue")
-                sub_skills = [s.strip() for s in jskill_lower.split("/")]
-                if any(sub in user_set for sub in sub_skills):
-                    matched_count += 1
-                    matched_disp.append(raw_jskill)
-                else:
-                    missing_disp.append(raw_jskill)
+            if _matches_skill(user_set, raw_jskill):
+                matched_count += 1
+                matched_disp.append(raw_jskill)
             else:
-                if jskill_lower in user_set:
-                    matched_count += 1
-                    matched_disp.append(raw_jskill)
-                else:
-                    missing_disp.append(raw_jskill)
+                missing_disp.append(raw_jskill)
                     
         skill_pct = int((matched_count / len(job_skills)) * 100) if job_skills else 50
     
@@ -206,10 +194,10 @@ def compute_match_details(user_skills: list[str], job_skills: list[str], user_ex
                 exp_note = f"✅ You meet the {job_exp}+ yr requirement"
         elif gap == -1:
             exp_pct = 60  # close
-            exp_note = f"⚠️ Requires {job_exp}+ yrs — you have {u_exp_years}"
+            exp_note = f"⚠️ Requires {job_exp}+ yrs (you have {u_exp_years})"
         else:
             exp_pct = max(0, 100 + (gap * 25))  # steep penalty
-            exp_note = f"🔴 Requires {job_exp}+ yrs — you have {u_exp_years}"
+            exp_note = f"🔴 Requires {job_exp}+ yrs (you have {u_exp_years})"
     
     # ── Weighted Total ──
     total_score = int(skill_pct * 0.70 + exp_pct * 0.30)
@@ -268,6 +256,18 @@ SKILL_SYNONYMS: dict[str, str] = {
     "restful": "rest apis",
     "rest": "rest apis",
     "rest api": "rest apis",
+    "rest apis": "rest apis",
+    "restful api": "rest apis",
+    "restful apis": "rest apis",
+    "api": "rest apis",
+    "apis": "rest apis",
+    "api integration": "rest apis",
+    "api integrations": "rest apis",
+    "api design": "rest apis",
+    "api development": "rest apis",
+    "api testing": "rest apis",
+    "llms": "llm",
+    "llm": "llm",
     "fast-api": "fastapi",
     "spring": "spring boot",
     "springboot": "spring boot",
@@ -1046,11 +1046,11 @@ def generating_cover_letter(mode_display: str) -> str:
 
 
 def cover_letter_result(job_title: str, company: str, letter: str, footer: str = "") -> str:
-    title = escape_md(f"{job_title} — {company}")
+    title = escape_md(f"{job_title} at {company}")
     body = letter.replace("\\", "\\\\").replace("`", "\\`")
     
     msg = (
-        f"✅ *Your Cover Letter — {title}*\n\n"
+        f"✅ *Your Cover Letter: {title}*\n\n"
         f"```text\n{body}\n```\n\n"
         "👆 *Tap the box above to instantly copy it\\!*\n"
     )
@@ -1064,7 +1064,7 @@ def cover_letter_limit_hit(used: int, max_cl: int, reset_date: str, pricing: dic
     return (
         "You've written your cover letter for today\\.\n\n"
         "Most callbacks come from applications where "
-        "the cover letter is tailored — not copy\\-pasted\\. "
+        "the cover letter is tailored, not copy\\-pasted\\. "
         "With 1/day you can only properly apply to 1 job\\.\n\n"
         "Pro members average 4 tailored applications per day\\. "
         "That's 4x more shots at getting hired\\.\n\n"
@@ -1108,7 +1108,7 @@ def resume_status(filename: str | None, uploaded: bool) -> str:
     return (
         "📄 *Resume*\n\n"
         "You haven't uploaded your resume yet\\.\n\n"
-        "Upload it once — I'll use it for every cover letter "
+        "Upload it once, and I'll use it for every cover letter "
         "and auto\\-apply automatically\\.\n\n"
         "Send me your resume as a PDF file \\(max 5MB\\)\\."
     )
@@ -1182,31 +1182,25 @@ def _pricing_block(pricing: dict | None) -> str:
 
 def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> str:
     """Dynamic upgrade message shown during early adopter period."""
-    ea_price = pricing['early_adopter_price']
-    reg_price = pricing['regular_price']
-    slots_left = pricing.get('slots_remaining', 200)
+    ea_price = pricing.get('early_adopter_price', 199)
+    reg_price = pricing.get('regular_price', 499)
 
     return (
-        f"\U0001F680 *{escape_md(bot_name)} Pro — Early Adopter Offer*\n\n"
-        f"*₹{ea_price}/month*\n"
-        f"Regular price: ~₹{reg_price}/month~\n\n"
-        f"\U0001F512 Lock in your ₹{ea_price}/month price forever\\.\n\n"
-        f"_Only {slots_left} of 200 early\\-adopter slots remaining\\._\n\n"
-        "*Why upgrade?*\n\n"
-        "\u26A1 *Instant Career Page Alerts*\n"
-        f"{escape_md(bot_name)} continuously monitors company career pages 24/7 and alerts you the moment a job matching your skills appears\\.\n\n"
-        "\U0001F4EC *Daily Feed with 8 Curated Jobs*\n"
-        "Receive 8 top matched opportunities delivered to your chat every day \\(free tier gets 5\\)\\.\n\n"
-        "\U0001F3AF *Know Which Jobs Fit You*\n"
-        "Get full match scores and skill gap analysis on every opportunity\\.\n\n"
-        "\U0001F3E2 *Direct\\-Source Opportunities*\n"
-        "Get fresh jobs directly from company career pages before they become saturated on public boards\\.\n\n"
-        "*What you unlock*\n\n"
-        "\u2705 Instant matched career page alerts\n"
-        "\u2705 Curated daily feed \\(8 jobs/day\\)\n"
-        "\u2705 Full job match scores & AI Cover letters\n"
-        "\u2705 Application tracking & follow\\-up reminders\n\n"
-        "💡 _HR Contacts and Resume Reviews available as affordable one\\-time add\\-ons whenever you need them\\._\n\n"
+        f"🚀 *{escape_md(bot_name)} Pro \\(Early Adopter Offer\\)*\n\n"
+        f"◆ *₹{ea_price}/month* ~₹{reg_price}/month~\n\n"
+        f"🔒 Lock in ₹{ea_price}/month forever\\.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
+        f"{escape_md(bot_name)} monitors 530\\+ tech company career pages and sends you job opportunities matching your skills and experience directly on Telegram\\.\n\n"
+        "*What Pro unlocks:*\n\n"
+        "⚡ New\\-match Telegram alerts \\(hourly monitoring\\)\n\n"
+        "📬 8 curated jobs daily \\(Free: 5\\)\n\n"
+        "🎯 Full match scores \\& skill\\-gap analysis\n\n"
+        "🏢 Activate your target company watchlist\n\n"
+        "🔎 Browse all active jobs with advanced filters\n\n"
+        "📋 Application tracking \\& follow\\-up reminders\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"*Keep using LinkedIn and Naukri\\. {escape_md(bot_name)} gives you another source of relevant opportunities\\.*\n\n"
         "Cancel anytime\\. No hidden charges\\."
     )
 
@@ -1215,20 +1209,21 @@ def upgrade_regular_message(pricing: dict, bot_name: str = "Froncy") -> str:
     """Dynamic upgrade message after early adopter period ends."""
     price = pricing.get('current_price', 499)
     return (
-        f"💸 *{escape_md(bot_name)} Pro — ₹{price}/month*\n\n"
-        "*🚀 What you can do with Pro:*\n\n"
-        "✅ 10 Apply Smart kits/day — one click generates:\n"
-        "   📄 Tailored Resume PDF\n"
-        "   ✍️ Cover Letter\n"
-        "   💬 LinkedIn DM \\+ Connection Note\n"
-        "   📧 Cold email to the hiring manager\n\n"
-        "✅ Unlimited job alerts daily\n"
-        "✅ Full match scores on every listing\n"
-        "✅ 10 AI cover letters/day\n"
-        "✅ Browse all active jobs in database\n"
-        "✅ Application tracker \\+ 3\\-day follow\\-up reminders\n"
-        "✅ Llama 3 70B \\(better AI quality\\)\n\n"
-        "Less than one dinner out\\. ☕"
+        f"🚀 *{escape_md(bot_name)} Pro*\n\n"
+        f"◆ *₹{price}/month*\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
+        f"{escape_md(bot_name)} monitors 530\\+ tech company career pages and sends you job opportunities matching your skills and experience directly on Telegram\\.\n\n"
+        "*What Pro unlocks:*\n\n"
+        "⚡ New\\-match Telegram alerts \\(hourly monitoring\\)\n\n"
+        "📬 8 curated jobs daily \\(Free: 5\\)\n\n"
+        "🎯 Full match scores \\& skill\\-gap analysis\n\n"
+        "🏢 Activate your target company watchlist\n\n"
+        "🔎 Browse all active jobs with advanced filters\n\n"
+        "📋 Application tracking \\& follow\\-up reminders\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"*Keep using LinkedIn and Naukri\\. {escape_md(bot_name)} gives you another source of relevant opportunities\\.*\n\n"
+        "Cancel anytime\\. No hidden charges\\."
     )
 
 
@@ -1239,7 +1234,7 @@ def upgrade_plans(current_plan: str) -> str:
         "*What you unlock:*\n"
         "✅ Unlimited web dev jobs daily\n"
         "✅ Full match scores on every listing\n"
-        "✅ 10 tailored cover letters/day\n"
+        "✅ Curated daily feed of top matching jobs\n"
         "✅ Browse all active jobs in database\n"
         "✅ Application tracker \\+ 7\\-day reminders\n\n"
         "All for less than a cup of chai\\. ☕"
@@ -1251,10 +1246,13 @@ def upgrade_plans(current_plan: str) -> str:
 # ──────────────────────────────────────────────
 
 def settings_menu() -> str:
-    return "⚙️ *Settings*\n\nWhat would you like to change?"
+    return (
+        "⚙️ *Settings & Preferences*\n\n"
+        "Manage your job matching profile, target companies, and alert settings below:"
+    )
 
 
-def notification_settings_message(user: dict) -> str:
+def notification_settings_message(user: dict, bot_name: str = "Froncy") -> str:
     """Renders user-facing Notification Preferences overview."""
     from datetime import datetime, timezone
     from zoneinfo import ZoneInfo
@@ -1267,24 +1265,26 @@ def notification_settings_message(user: dict) -> str:
             paused_until = paused_until.replace(tzinfo=timezone.utc)
         if paused_until > now:
             ist_time = paused_until.astimezone(ZoneInfo("Asia/Kolkata"))
-            pause_status_line = f"\n⚠️ *Alerts are PAUSED until {ist_time.strftime('%b %d, %I:%M %p')} IST*\n"
+            pause_status_line = f"⚠️ *Alerts are PAUSED until {ist_time.strftime('%b %d, %I:%M %p')} IST*\n\n"
 
     alert_time = user.get("alert_time", "09:00")
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
+
+    items = []
     if is_pro:
-        instant_desc = "🚨 *Instant Drops:* Real\\-time alerts when new jobs match your profile\n"
-    else:
-        instant_desc = "🎁 *Weekly Free Sample:* 1 silent high\\-match drop/week \\(upgrade for instant drops\\)\n"
-    
+        items.append("🚨 *Instant Drops:* Real\\-time alerts when new jobs match your profile")
+    items.append(f"📬 *Daily Morning Feed:* Top curated jobs at {escape_md(alert_time)} IST")
+    items.append(r"🌙 *Silent Night:* Silent delivery between 10 PM to 8 AM IST \(no buzzer\)")
+    items.append("🌆 *Evening Nudge:* 6:30 PM reminder for saved jobs")
+    items.append("📊 *Friday Review:* Weekly application progress & skill insights")
+
+    body_text = "\n\n".join(items)
+
     return (
-        f"🔔 *Notification Preferences*\n"
-        f"{pause_status_line}\n"
-        f"Customize what notifications you receive from Froncy:\n\n"
-        f"{instant_desc}"
-        f"📬 *Daily Morning Feed:* Top curated jobs at {escape_md(alert_time)} IST\n"
-        f"🌙 *Silent Night:* Silent delivery between 10 PM – 8 AM IST \\(no buzzer\\)\n"
-        f"🌆 *Evening Nudge:* 6:30 PM reminder for saved jobs\n"
-        f"📊 *Friday Review:* Weekly application progress & skill insights\n\n"
+        f"🔔 *Notification Preferences*\n\n"
+        f"{pause_status_line}"
+        f"Customize what notifications you receive from {escape_md(bot_name)}:\n\n"
+        f"{body_text}\n\n"
         f"_Tap any button below to toggle on or off:_"
     )
 
@@ -1303,15 +1303,15 @@ def user_status(user: dict) -> str:
         date_str = expires_at.strftime("%b %d, %Y") if expires_at else "Unknown"
         sub_status = user.get("subscription_status", "")
         if sub_status == "cancelled":
-            plan_label = escape_md(f"💎 Pro{early_tag} — active till {date_str} (Cancelled)")
+            plan_label = escape_md(f"💎 Pro{early_tag} (active till {date_str}, Cancelled)")
         else:
-            plan_label = escape_md(f"💎 Pro{early_tag} — renews {date_str}")
+            plan_label = escape_md(f"💎 Pro{early_tag} (renews {date_str})")
     elif is_trial and trial_expires:
         now = datetime.now(timezone.utc)
         remaining = trial_expires - now
         hours = max(0, int(remaining.total_seconds() / 3600))
         if hours > 0:
-            plan_label = escape_md(f"⭐️ Pro Trial — {hours}h left")
+            plan_label = escape_md(f"⭐️ Pro Trial ({hours}h left)")
         else:
             plan_label = escape_md("🆓 Free (trial ended)")
             plan = "free"  # treat as free for limit display
@@ -1339,32 +1339,12 @@ def user_status(user: dict) -> str:
 
     # ── Experience ──
     exp_raw = user.get("experience_level", "0") or "0"
-    exp_display_map = {"0": "Fresher (0 yrs)", "1": "1 Year", "2": "2 Years", "3_5": "3–5 Years", "5_plus": "5+ Years", "5+": "5+ Years"}
+    exp_display_map = {"0": "Fresher (0 yrs)", "1": "1 Year", "2": "2 Years", "3_5": "3-5 Years", "5_plus": "5+ Years", "5+": "5+ Years"}
     exp_display = escape_md(exp_display_map.get(str(exp_raw), str(exp_raw)))
 
     # ── Batch year ──
     batch_year = user.get("batch_year")
     batch_display = escape_md(str(batch_year)) if batch_year else "Not set"
-
-    # ── Cover letters ──
-    cl_used = user.get("cover_letters_today", 0) or 0
-    if plan in ("proplus", "premium"):
-        cl_label = f"{cl_used}/∞ today"
-    elif plan == "pro" or is_trial:
-        cl_label = f"{cl_used}/10 today"
-    else:
-        cl_label = f"{cl_used}/1 today"
-
-    # ── ATS checks ──
-    ats_used = user.get("ats_checks_today", 0) or 0
-    if plan in ("proplus", "premium"):
-        ats_label = f"{ats_used}/∞ today"
-    elif plan == "pro" or is_trial:
-        ats_label = f"{ats_used}/5 today"
-    else:
-        ats_label = f"{ats_used}/1 today"
-
-    resume_status = "✅ Uploaded" if user.get("resume_text") else "❌ Not uploaded"
 
     return (
         f"📊 *Your Status*\n\n"
@@ -1373,11 +1353,8 @@ def user_status(user: dict) -> str:
         f"*Skills:* {skills}\n"
         f"*Location:* {location}\n"
         f"*Alert Time:* {alert_time} IST\n"
-        f"*Resume:* {resume_status}\n"
         f"*YOE:* {exp_display}\n"
-        f"*Batch:* {batch_display}\n\n"
-        f"*Cover Letters:* {escape_md(cl_label)}\n"
-        f"*ATS Checks:* {escape_md(ats_label)}"
+        f"*Batch:* {batch_display}"
     )
 
 
@@ -1386,8 +1363,7 @@ def confirm_delete() -> str:
         "⚠️ *Delete Account*\n\n"
         "This will permanently delete:\n"
         "• Your profile and preferences\n"
-        "• Saved jobs and application history\n"
-        "• Uploaded resume\n\n"
+        "• Saved jobs and application history\n\n"
         "*This action cannot be undone\\!*"
     )
 
@@ -1401,7 +1377,7 @@ def account_deleted() -> str:
 # ──────────────────────────────────────────────
 
 def error_ai_failed() -> str:
-    return "❌ Sorry, I couldn't generate your cover letter right now\\. Please try again in a minute\\. \\(/coverletter\\)"
+    return "❌ Sorry, an unexpected error occurred\\. Please try again in a moment\\."
 
 
 def error_job_not_found() -> str:
@@ -1418,18 +1394,17 @@ def error_subscription_expired() -> str:
 
 def help_message(bot_name: str = "Froncy") -> str:
     return (
-        "ℹ️ *{escape_md(bot_name)} Help*\n\n"
+        f"ℹ️ *{escape_md(bot_name)} Help*\n\n"
         "*Commands:*\n"
-        "/start — Open bot / main menu\n"
-        "/menu — Show main menu\n"
-        "/jobs — View today's job listings\n"
-        "/coverletter — Generate a cover letter\n"
-        "/resume — Manage your resume\n"
-        "/saved — View saved jobs\n"
-        "/settings — Change preferences\n"
-        "/upgrade — View subscription plans\n"
-        "/status — Your plan \\& usage stats\n"
-        "/help — This help message\n"
-        "/cancel — Cancel current flow\n"
-        "/delete\\_account — Delete all your data"
+        "/start: Open bot / main menu\n"
+        "/menu: Show main menu\n"
+        "/jobs: View today's job listings\n"
+        "/profile: View & update your matching profile\n"
+        "/saved: View saved jobs\n"
+        "/settings: Change preferences\n"
+        "/upgrade: View subscription plans\n"
+        "/status: Your plan \\& usage stats\n"
+        "/help: This help message\n"
+        "/cancel: Cancel current flow\n"
+        "/delete\\_account: Delete all your data"
     )

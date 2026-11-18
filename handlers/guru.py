@@ -48,9 +48,9 @@ async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     await update.message.reply_text(
         "🎛️ <b>Creator Dashboard Commands</b>\n\n"
-        "/dashboard — View your audience stats and estimated payout\n"
-        "/broadcast &lt;message&gt; — Send a message to all your bot's users\n"
-        "/creator — Show this help menu",
+        "/dashboard: View your audience stats and estimated payout\n"
+        "/broadcast &lt;message&gt;: Send a message to all your bot's users\n"
+        "/creator: Show this help menu",
         parse_mode="HTML",
     )
 
@@ -91,7 +91,7 @@ async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     payout_str = f"₹{guru_payout:.2f}" if guru_payout != int(guru_payout) else f"₹{int(guru_payout)}"
 
     msg = (
-        f"📊 <b>{guru_name} — Creator Dashboard</b>\n"
+        f"📊 <b>{guru_name} (Creator Dashboard)</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "👥 <b>Users</b>\n"
         f"  • Total registered  : <b>{total}</b>\n"

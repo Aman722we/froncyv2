@@ -79,11 +79,9 @@ async def handle_url_submission(update: Update, context: ContextTypes.DEFAULT_TY
         if duplicate_state.get("status") == "live":
             job_id = duplicate_state.get("job_id")
             kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
-            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
-            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
-        ])
+                [InlineKeyboardButton("🔗 Apply Now", url=url)],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+            ])
             await update.message.reply_text(
                 "🎯 <b>Great find!</b>\n\n"
                 "This exact role is already live on our board.\n"
@@ -183,7 +181,7 @@ async def sub_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     kb = _build_checklist_keyboard(submission_id, context.user_data[f"sub_checks_{submission_id}"])
     await query.edit_message_text(
-        f"🔍 <b>Legitimacy Check</b> — Submission #{submission_id}\n\n"
+        f"🔍 <b>Legitimacy Check:</b> Submission #{submission_id}\n\n"
         f"URL: {sub['url']}\n\n"
         "Toggle each item, then submit your decision:",
         parse_mode="HTML",
@@ -465,10 +463,8 @@ async def parse_and_add_submitted_job(update: Update, context: ContextTypes.DEFA
             f"🎯 <b>{title} @ {company}</b> is now live."
         )
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
-            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
-            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
+            [InlineKeyboardButton("🔗 Apply Now", url=url)],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
         ])
         try:
             await context.bot.send_message(
@@ -531,7 +527,7 @@ async def sub_duplicate_callback(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["pending_submission_user"] = sub["telegram_id"]
 
     await query.edit_message_text(
-        f"🔗 <b>Mark as Duplicate</b> — Submission #{submission_id}\n\n"
+        f"🔗 <b>Mark as Duplicate:</b> Submission #{submission_id}\n\n"
         "What is the Job ID of the existing live job on the platform?\n\n"
         "<i>(Type the numeric ID below, or /cancelsubmission to abort)</i>",
         parse_mode="HTML"
@@ -572,11 +568,9 @@ async def process_duplicate_job_id(update: Update, context: ContextTypes.DEFAULT
 
     # Send the user the Apply Smart link for the duplicate
     kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001F517 Apply Now", url=url)],
-            [InlineKeyboardButton("\u270D\uFE0F Cover Letter", callback_data=f"gen_coverletter_{job_id}")],
-            # [InlineKeyboardButton("\U0001F464 Request HR Details", callback_data=f"req_hr_{job_id}")],
-            [InlineKeyboardButton("\u2B05\uFE0F Back to Menu", callback_data="back_menu")]
-        ])
+        [InlineKeyboardButton("🔗 Apply Now", url=url)],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
+    ])
     msg = (
         "🎯 <b>Great find!</b>\n\n"
         "This exact role was already added to our board from another platform.\n"
@@ -717,7 +711,7 @@ async def sub_admin_view_callback(update: Update, context: ContextTypes.DEFAULT_
     kb = InlineKeyboardMarkup(new_keyboard)
 
     await query.edit_message_text(
-        f"🔍 <b>Legitimacy Check</b> — Submission #{submission_id}\n\n"
+        f"🔍 <b>Legitimacy Check:</b> Submission #{submission_id}\n\n"
         f"URL: {sub['url']}\n\n"
         "Toggle each item, then submit your decision:",
         parse_mode="HTML",
@@ -770,16 +764,12 @@ async def _render_my_links(update: Update, context: ContextTypes.DEFAULT_TYPE, p
             lines.append(f"{icon} <b>{sub['job_title']}</b> @ {sub.get('job_company', '?')} <i>({date_str})</i>")
             buttons.append([
                 InlineKeyboardButton(
-                    f"🔗 Apply Now — {sub['job_title'][:15]}",
+                    f"🔗 Apply Now ({sub['job_title'][:15]})",
                     url=sub['url'] or "https://getfroncy.com"
                 )
             ])
-            buttons.append([
-                InlineKeyboardButton("✍️ Cover Letter", callback_data=f"gen_coverletter_{sub['manual_job_id']}"),
-                # InlineKeyboardButton("👤 Request HR Details", callback_data=f"req_hr_{sub['manual_job_id']}")
-            ])
         else:
-            lines.append(f"{icon} {domain} <i>({date_str}) — {sub['status'].capitalize()}</i>")
+            lines.append(f"{icon} {domain} <i>({date_str}) • {sub['status'].capitalize()}</i>")
 
     text = "\n".join(lines)
 

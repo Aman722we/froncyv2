@@ -12,27 +12,9 @@ from utils.helpers import escape_md
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /settings."""
-    user_id = update.effective_user.id
-    bot_id = context.bot_data.get('bot_id', 1)
-    user = await get_user(user_id, bot_id=bot_id)
-    is_active_pro = False
-    if user and user.get("plan") != "free" and user.get("subscription_status") == "active":
-        is_active_pro = True
-
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            messages.settings_menu(),
-            reply_markup=keyboards.settings_keyboard(is_active_pro),
-            parse_mode="MarkdownV2"
-        )
-    else:
-        await update.message.reply_text(
-            messages.settings_menu(),
-            reply_markup=keyboards.settings_keyboard(is_active_pro),
-            parse_mode="MarkdownV2"
-        )
+    """Handle /settings — routes to unified Profile & Preferences dashboard."""
+    from handlers.resume import view_profile
+    await view_profile(update, context)
 
 
 # ──────────────────────────────────────────────
@@ -40,18 +22,49 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # ──────────────────────────────────────────────
 
 async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Prompt user for comma-separated skills."""
-    query = update.callback_query
-    await query.answer()
-    
+    """Prompt user for comma-separated skills, displaying current skills in an easy tap-to-copy code block."""
+    import html
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    user = await get_user(user_id, bot_id=bot_id)
+
     context.user_data["awaiting_settings_custom_skill"] = True
-    
-    await query.edit_message_text(
-        "📝 <b>Edit Skills</b>\n\n"
-        "Please type your core skills, separated by commas.\n"
-        "<i>Example: Python, React, PostgreSQL, Docker</i>",
-        parse_mode="HTML"
-    )
+
+    skills = (user.get("skills") if user else []) or []
+
+    if skills:
+        from utils.validators import CANONICAL_SKILL_MAP
+        skills_str = ", ".join([CANONICAL_SKILL_MAP.get(s.lower(), s.title() if len(s) > 3 and not s.isupper() else s) for s in skills])
+        msg = (
+            "🏷 <b>Edit Skills</b>\n\n"
+            "<b>Your Current Skills:</b>\n"
+            f"<code>{html.escape(skills_str)}</code>\n\n"
+            "💡 <i>Tap the code box above to copy your skills, edit them in the message bar, and send.</i>\n\n"
+            "Or send a resume (PDF) to auto-extract skills instantly."
+        )
+    else:
+        msg = (
+            "🏷 <b>Edit Skills</b>\n\n"
+            "<i>No skills configured yet.</i>\n\n"
+            "Please type your skills separated by commas below:\n"
+            "<i>Example: Python, React, TypeScript, Docker, SQL</i>\n\n"
+            "Or send a resume (PDF) to auto-extract skills instantly."
+        )
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📄 Extract from Resume (PDF)", callback_data="profile_refresh_resume"),
+        ],
+        [
+            InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile"),
+        ]
+    ])
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="HTML")
+    else:
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode="HTML")
 
 
 async def settings_skill_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -99,30 +112,73 @@ async def settings_add_custom_skill_prompt(update: Update, context: ContextTypes
     )
 
 async def settings_custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Receive text input for skills and save to DB."""
-    text = update.message.text
-    raw_skills = [s.strip() for s in text.split(',') if s.strip()]
-    
-    from utils.helpers import normalize_skills
-    normalized = normalize_skills(raw_skills)
-    
+    """Receive text input for skills, validate, backup, and save to DB."""
+    import html
+    text = (update.message.text or "").strip()
+    from utils.validators import validate_and_normalize_skills
+    is_valid, normalized, err_msg = validate_and_normalize_skills(text, max_skills=15)
+    if not is_valid:
+        await update.message.reply_text(
+            f"⚠️ {err_msg or 'Please enter valid technical skills separated by commas.'}\n\n"
+            "Try again, or tap below to extract from resume:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📄 Extract from Resume (PDF)", callback_data="profile_refresh_resume")],
+                [InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")],
+            ]),
+        )
+        return
+
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
+
+    # 1. Backup existing skills in user_skills_backup for Undo support
+    try:
+        from db.connection import get_pool
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            curr_skills = await conn.fetchval(
+                "SELECT skills FROM users WHERE telegram_id = $1 AND bot_id = $2",
+                user_id, bot_id
+            ) or []
+            if curr_skills:
+                await conn.execute(
+                    """
+                    INSERT INTO user_skills_backup (telegram_id, bot_id, previous_skills, updated_at)
+                    VALUES ($1, $2, $3, NOW())
+                    ON CONFLICT (telegram_id, bot_id) DO UPDATE 
+                    SET previous_skills = EXCLUDED.previous_skills, updated_at = NOW()
+                    """,
+                    user_id, bot_id, curr_skills
+                )
+    except Exception as e:
+        logger.warning(f"Failed to backup skills for user {user_id}: {e}")
+
+    # 2. Save directly to DB
+    from db.users import update_user_profile
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized], skills_need_review=False)
     
-    # Save directly to DB
-    from db.users import update_user_profile, get_user
-    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized])
-    
-    # Clear the flag
+    # 3. Clear the flag
     context.user_data.pop("awaiting_settings_custom_skill", None)
     
-    # Show settings menu again
-    user = await get_user(user_id, bot_id=bot_id)
-    plan = user.get("plan", "free") if user else "free"
+    # 4. Show success with clean actionable buttons
+    skills_display = ", ".join(normalized)
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("↩️ Undo", callback_data="profile_skills_undo"),
+            InlineKeyboardButton("✏️ Edit Again", callback_data="settings_skills"),
+        ],
+        [
+            InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
+            InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
+        ],
+    ])
     
     await update.message.reply_text(
-        "✅ <b>Skills updated successfully!</b>\n\nHere are your current settings:",
-        reply_markup=keyboards.settings_keyboard(user, plan),
+        f"✅ <b>Skills updated successfully!</b>\n\n"
+        f"<b>Active Skills ({len(normalized)}):</b>\n"
+        f"<code>{html.escape(skills_display)}</code>\n\n"
+        f"💡 <i>Your alerts and feed are now aligned with these skills.</i>",
+        reply_markup=kb,
         parse_mode="HTML",
     )
 
@@ -139,7 +195,7 @@ async def settings_skills_done(update: Update, context: ContextTypes.DEFAULT_TYP
     skills_text = escape_md(", ".join(selected)) if selected else "None"
     await query.edit_message_text(
         f"✅ Skills updated: {skills_text}\n",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
         parse_mode="MarkdownV2",
     )
 
@@ -203,7 +259,7 @@ async def settings_change_batch(update: Update, context: ContextTypes.DEFAULT_TY
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    rows.append([InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")])
 
     await query.edit_message_text(
         "🎓 *Edit Batch Year*\n\nSelect your graduation year:",
@@ -223,7 +279,7 @@ async def settings_batch_save(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await query.edit_message_text(
         f"✅ Batch year updated to: *{batch_val}*",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
         parse_mode="MarkdownV2",
     )
 
@@ -233,31 +289,31 @@ async def settings_batch_save(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ──────────────────────────────────────────────
 
 async def settings_change_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show location selection."""
+    """Show work mode selection."""
     query = update.callback_query
     await query.answer()
 
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🏠 Remote Only", callback_data="setloc_remote"),
+            InlineKeyboardButton("🌏 Remote Only", callback_data="setloc_remote"),
             InlineKeyboardButton("🏢 Onsite Only", callback_data="setloc_onsite"),
         ],
         [
             InlineKeyboardButton("🌍 Hybrid Only", callback_data="setloc_hybrid"),
-            InlineKeyboardButton("🔄 All", callback_data="setloc_all"),
+            InlineKeyboardButton("🔄 All Work Modes", callback_data="setloc_all"),
         ],
-        [InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")],
+        [InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")],
     ])
 
     await query.edit_message_text(
-        "📍 *Change Location*\n\nWhere are you looking for work?",
+        "💼 *Change Work Mode*\n\nSelect your preferred work mode:",
         reply_markup=kb,
         parse_mode="MarkdownV2",
     )
 
 
 async def settings_location_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Save updated location preference."""
+    """Save updated work mode preference."""
     query = update.callback_query
     await query.answer()
 
@@ -265,50 +321,77 @@ async def settings_location_save(update: Update, context: ContextTypes.DEFAULT_T
     location = loc_map.get(query.data, "remote")
 
     user_id = update.effective_user.id
-    await update_user_profile(user_id, location_pref=location)
+    bot_id = context.bot_data.get('bot_id', 1)
+    await update_user_profile(user_id, location_pref=location, bot_id=bot_id)
 
-    loc_display = {"remote": "🏠 Remote", "onsite": "🏢 Onsite", "hybrid": "🌍 Hybrid", "all": "🔄 All"}
+    loc_display = {"remote": "🌏 Remote Only", "onsite": "🏢 Onsite Only", "hybrid": "🌍 Hybrid Only", "all": "🔄 All Work Modes"}
     await query.edit_message_text(
-        f"✅ Location updated: {escape_md(loc_display.get(location, location))}\n",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        f"✅ Work mode updated: *{escape_md(loc_display.get(location, location))}*\n",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
         parse_mode="MarkdownV2",
     )
 
 
 # ──────────────────────────────────────────────
-# Edit Role from Settings
+# Edit Role / Stream from Settings
 # ──────────────────────────────────────────────
 
 async def settings_edit_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show role selection."""
+    """Show role/stream selection."""
     query = update.callback_query
     await query.answer()
 
     kb = keyboards.role_keyboard(prefix="setrole_")
     # Append back button
     buttons = list(kb.inline_keyboard)
-    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    buttons.append([InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")])
 
     await query.edit_message_text(
-        "💼 *Edit Role Preference*\n\nWhat is your primary role preference?",
+        "🎯 *Change Target Stream*\n\nSelect your stream or type a custom role:",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="MarkdownV2",
     )
 
 
 async def settings_role_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Save updated role preference."""
+    """Save updated role preference or prompt for custom typing."""
     query = update.callback_query
     await query.answer()
 
     role_val = query.data.replace("setrole_", "")
 
+    if role_val == "custom":
+        context.user_data["awaiting_settings_role"] = True
+        await query.edit_message_text(
+            "✍️ *Type your stream / role below* \\(e\\.g\\., Java Developer, Flutter, DevOps, Cybersecurity\\):",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
+            parse_mode="MarkdownV2",
+        )
+        return
+
     user_id = update.effective_user.id
-    await update_user_profile(user_id, role_pref=role_val)
+    bot_id = context.bot_data.get('bot_id', 1)
+    await update_user_profile(user_id, role_pref=role_val, bot_id=bot_id)
 
     await query.edit_message_text(
-        f"✅ Role updated to: *{escape_md(role_val.title())}*\n",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        f"✅ Target Stream updated to: *{escape_md(role_val.title())}*\n",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
+        parse_mode="MarkdownV2",
+    )
+
+
+async def settings_role_custom_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save a custom-typed stream/role from settings."""
+    context.user_data.pop("awaiting_settings_role", None)
+    raw = (update.message.text or "").strip()
+    role = raw[:50]
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    await update_user_profile(user_id, role_pref=role, bot_id=bot_id)
+
+    await update.message.reply_text(
+        f"✅ Target Stream updated to: *{escape_md(role.title())}*",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]]),
         parse_mode="MarkdownV2",
     )
 
@@ -348,7 +431,7 @@ async def settings_alert_time(update: Update, context: ContextTypes.DEFAULT_TYPE
             row = []
     if row:
         buttons.append(row)
-    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    buttons.append([InlineKeyboardButton("🔙 Back to Notifications", callback_data="settings_notifications")])
 
     await query.edit_message_text(
         "⏰ *Alert Time*\n\nWhen should I send daily job alerts? \\(IST\\)",
@@ -368,32 +451,15 @@ async def settings_alert_time_save(update: Update, context: ContextTypes.DEFAULT
 
     await query.edit_message_text(
         f"✅ Alert time updated: {escape_md(time_val)} IST\n",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Notifications", callback_data="settings_notifications")]]),
         parse_mode="MarkdownV2",
     )
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /status and View Status from settings."""
-    user_id = update.effective_user.id
-    bot_id = context.bot_data.get('bot_id', 1)
-    user = await get_user(user_id, bot_id=bot_id)
-
-    if not user:
-        await update.message.reply_text("Please /start first.")
-        return
-
-    msg = messages.user_status(user)
-    
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            msg,
-            reply_markup=keyboards.InlineKeyboardMarkup([[keyboards.InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]]),
-            parse_mode="MarkdownV2"
-        )
-    else:
-        await update.message.reply_text(msg, parse_mode="MarkdownV2")
+    """Handle /status — routes to unified Profile & Preferences dashboard."""
+    from handlers.resume import view_profile
+    await view_profile(update, context)
 
 
 async def view_saved_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -417,7 +483,7 @@ async def view_saved_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     for i, job in enumerate(jobs[:10], 1):
         title = escape_md(job.get("title", "Untitled")[:30])
         company = escape_md(job.get("company") or "N/A")
-        msg += f"{i}\\. *{title}* — {company}\n"
+        msg += f"{i}\\. *{title}* \\({company}\\)\n"
 
     kb = keyboards.saved_jobs_keyboard(jobs)
 
@@ -452,8 +518,12 @@ async def delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
     from services.resume_parser import delete_resume_file
-    from db.users import soft_delete_user
+    from db.users import soft_delete_user, delete_user_resume
+
+    await delete_user_resume(user_id, bot_id=bot_id)
+    delete_resume_file(user_id)
     
     success = await soft_delete_user(user_id)
     if success:
@@ -482,13 +552,14 @@ async def cancel_subscription_prompt(update: Update, context: ContextTypes.DEFAU
     kb = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⚠️ Yes, Cancel My Subscription", callback_data="confirm_cancel_sub"),
-            InlineKeyboardButton("❌ Keep Pro", callback_data="menu_settings"),
+            InlineKeyboardButton("❌ Keep Pro", callback_data="menu_profile"),
         ]
     ])
     
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     await query.edit_message_text(
         "⚠️ *Cancel Subscription*\n\n"
-        "Are you sure you want to cancel your Froncy Pro subscription?\n"
+        f"Are you sure you want to cancel your {escape_md(bot_name)} Pro subscription?\n"
         "• You will not be billed again\\.\n"
         "• You will keep your Pro benefits until the end of your current billing cycle\\.",
         reply_markup=kb,
@@ -503,6 +574,7 @@ async def cancel_subscription_confirm(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     
     db_pool = get_pool()
     bot_id = context.bot_data.get('bot_id', 1)
@@ -512,16 +584,16 @@ async def cancel_subscription_confirm(update: Update, context: ContextTypes.DEFA
         logger.info(f"User {user_id} cancelled their subscription.")
         await query.edit_message_text(
             "✅ *Subscription Cancelled*\n\n"
-            "Your Froncy Pro subscription has been cancelled and will not renew\\.\n"
+            f"Your {escape_md(bot_name)} Pro subscription has been cancelled and will not renew\\.\n"
             "You can continue using Pro features until your current cycle ends\\.",
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]])
         )
     else:
         await query.edit_message_text(
             "❌ Could not cancel your subscription at this time\\. Please contact support\\.",
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]])
         )
 
 
@@ -540,8 +612,9 @@ async def settings_notifications(update: Update, context: ContextTypes.DEFAULT_T
     if not user:
         return
     
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
-    text = messages.notification_settings_message(user)
+    text = messages.notification_settings_message(user, bot_name=bot_name)
     kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
     
     try:
@@ -580,8 +653,9 @@ async def settings_toggle_notification(update: Update, context: ContextTypes.DEF
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
-    text = messages.notification_settings_message(user)
+    text = messages.notification_settings_message(user, bot_name=bot_name)
     kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
 
     try:
@@ -594,7 +668,8 @@ async def settings_toggle_notification(update: Update, context: ContextTypes.DEF
 async def settings_instant_locked(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show toast explaining instant alerts are a Pro feature."""
     query = update.callback_query
-    await query.answer("⭐ Instant alerts require Froncy Pro. Type /upgrade to unlock!", show_alert=True)
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+    await query.answer(f"💎 Instant alerts require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
 
 
 async def settings_pause_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -648,8 +723,9 @@ async def settings_pause_set(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
-    text = messages.notification_settings_message(user)
+    text = messages.notification_settings_message(user, bot_name=bot_name)
     kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
 
     try:
@@ -672,8 +748,9 @@ async def settings_pause_resume(update: Update, context: ContextTypes.DEFAULT_TY
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
-    text = messages.notification_settings_message(user)
+    text = messages.notification_settings_message(user, bot_name=bot_name)
     kb = keyboards.notification_settings_keyboard(user, is_pro=is_pro)
 
     try:
