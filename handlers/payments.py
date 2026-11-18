@@ -46,7 +46,7 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         btn_label = f"💳 Lock in ₹{pricing['current_price']}/mo Now"
     else:
         msg = messages.upgrade_regular_message(pricing, bot_name=context.bot.first_name)
-        btn_label = f"💳 Upgrade to Pro — ₹{pricing['current_price']}/mo"
+        btn_label = f"💳 Upgrade to Pro (₹{pricing['current_price']}/mo)"
 
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton(btn_label, callback_data="upgrade_pro")],
@@ -94,7 +94,7 @@ async def checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if url:
             price_label = f"₹{amount}"
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"💳 Pay {price_label} — Tap Here", url=url)],
+                [InlineKeyboardButton(f"💳 Pay {price_label} (Tap Here)", url=url)],
                 [InlineKeyboardButton("🔙 Back to Plans", callback_data="menu_upgrade")]
             ])
             await query.edit_message_text(

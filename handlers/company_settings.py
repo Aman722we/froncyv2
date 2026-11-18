@@ -64,7 +64,7 @@ async def company_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 await query.answer(f"You are already following {cname}.", show_alert=False)
             else:
                 cap_info = f" ({res['count']}/{res['cap']} used)" if res.get("cap") else f" (Total: {res['count']})"
-                msg_toast = f"⭐ Following {cname}!{cap_info}"
+                msg_toast = f"➕ Following {cname}!{cap_info}"
                 if res.get("converted_from_mute"):
                     msg_toast = f"✅ Unmuted and added {cname} to followed companies."
                 await query.answer(msg_toast, show_alert=False)
@@ -77,16 +77,17 @@ async def company_action_callback(update: Update, context: ContextTypes.DEFAULT_
                     "⭐ Free tier limit reached (5/5). Upgrade to Pro to follow unlimited companies!",
                     show_alert=True
                 )
+                bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
                 try:
                     await context.bot.send_message(
                         chat_id=user_id,
                         text=(
                             f"⭐ *Company Watchlist Limit Reached*\n\n"
                             f"Free members can follow up to *5 Dream Companies*\\.\n"
-                            f"Upgrade to *Froncy Pro* to follow *unlimited companies* and unlock Watchlist\\-Only instant drops\\!"
+                            f"Upgrade to *{escape_md(bot_name)} Pro* to follow *unlimited companies* and unlock Watchlist\\-Only instant drops\\!"
                         ),
                         reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("💎 Upgrade to Pro — ₹199/mo", callback_data="upgrade_pro")],
+                            [InlineKeyboardButton("💎 Upgrade to Pro (₹199/mo)", callback_data="upgrade_pro")],
                             [InlineKeyboardButton("⚙️ Manage Follows", callback_data="settings_comp_edit_follows")]
                         ]),
                         parse_mode="MarkdownV2"
@@ -134,7 +135,7 @@ async def _update_alert_keyboard_row(query, company_id: int, is_following: bool)
                 if is_following:
                     new_row.append(InlineKeyboardButton("✅ Following", callback_data=f"cf_unfw:{company_id}"))
                 else:
-                    new_row.append(InlineKeyboardButton(f"⭐ Follow {cname_short}", callback_data=f"cf_fw:{company_id}"))
+                    new_row.append(InlineKeyboardButton(f"➕ Follow {cname_short}", callback_data=f"cf_fw:{company_id}"))
             else:
                 new_row.append(btn)
         new_rows.append(new_row)
@@ -193,7 +194,11 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
     mutes = prefs["mutes"]
     cap = prefs["cap"]
 
-    mode_label = "🎯 *Watchlist Only* \\(Alerts from followed companies only\\)" if mode == "watchlist" else "🌐 *All Companies* \\(Profile matches across all 1,000\\+ companies\\)"
+    mode_label = (
+        "🎯 *Watchlist Only Mode*\nGet alerts only from companies on your watchlist\\."
+        if mode == "watchlist"
+        else "🌐 *All Companies Mode*\nGet personalised job matches across 530\\+ monitored companies\\."
+    )
 
     # Format followed list
     if active_follows:
@@ -205,7 +210,7 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
 
     frozen_note = ""
     if frozen_follows:
-        frozen_note = f"\n❄️ *{len(frozen_follows)} frozen follows* \\(Upgrade to Pro to unfreeze\\)\n"
+        frozen_note = f"\n❄️ {len(frozen_follows)} saved follows are currently frozen\\. Upgrade to Pro to activate them\\.\n"
 
     # Format muted list
     if mutes:
@@ -216,50 +221,55 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
         m_lines = "_None \\(Mute current employer to prevent alerts\\)_"
 
     if is_pro:
-        follows_header = f"⭐ *Followed Companies* \\({len(active_follows)}\\):"
-        follows_desc = "_⚡ Unlimited company follows with instant alerts \\& feed priority\\._"
+        follows_header = f"⭐️ *Your Target Companies* \\({len(active_follows)}\\)"
+        follows_desc = "📌 Your followed companies are prioritised in your Daily Feed and instant alerts\\."
     else:
-        follows_header = f"⭐ *Followed Companies* \\({len(active_follows)}/5\\):"
-        follows_desc = "_📌 Pinned to top of your Daily Feed \\& prioritized for weekly sample drops\\._"
+        follows_header = f"⭐️ *Your Target Companies* \\({len(active_follows)}/{cap}\\)"
+        follows_desc = "📌 Your followed companies are prioritised in your Daily Feed and weekly sample drops\\."
 
-    mutes_header = f"🚫 *Muted Companies / Current Employer* \\({len(mutes)}\\):"
-    mutes_desc = "_Muted companies are completely hidden across all alerts and browse\\._"
+    mutes_header = "🚫 *Muted Companies / Current Employer*"
+    mutes_desc = "Muted companies are hidden from all job alerts and browsing\\."
+
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
 
     text = (
-        f"🏢 *Target Company Preferences*\n\n"
-        f"Current Mode: {mode_label}\n\n"
-        f"{follows_header}\n"
+        "🏢 *Your Company Watchlist*\n\n"
+        "Want to work at specific companies?\n\n"
+        f"Add them to your watchlist\\. {escape_md(bot_name)} will keep an eye on their career pages and prioritise matching openings for you\\.\n\n"
+        f"{mode_label}\n\n"
+        f"{follows_header}\n\n"
         f"{f_lines}\n"
         f"{frozen_note}\n"
         f"{follows_desc}\n\n"
-        f"{mutes_header}\n"
-        f"{m_lines}\n"
-        f"{mutes_desc}"
+        f"{mutes_header}\n\n"
+        f"{m_lines}\n\n"
+        f"{mutes_desc}\n\n"
+        "💡 You don't need to remember to check your favourite companies' career pages\\. We'll monitor them for you\\."
     )
 
     buttons = [
         [
-            InlineKeyboardButton("🔍 Search & Add Company", callback_data="settings_comp_search"),
+            InlineKeyboardButton("🔍 Search Company", callback_data="settings_comp_search"),
             InlineKeyboardButton("📦 Curated Bundles", callback_data="settings_comp_bundles"),
+        ],
+        [
+            InlineKeyboardButton(f"➕ Following ({len(active_follows)})", callback_data="settings_comp_edit_follows"),
+            InlineKeyboardButton(f"🔕 Muted ({len(mutes)})", callback_data="settings_comp_edit_mutes"),
         ],
     ]
 
-    # Mode toggle for Pro users
+    # Filter Mode Switch
     if is_pro:
-        toggle_btn = (
-            InlineKeyboardButton("🔄 Switch to All Companies", callback_data="settings_comp_mode_all")
+        mode_btn = (
+            InlineKeyboardButton("🎯 Mode: Watchlist Only (Switch)", callback_data="settings_comp_mode_all")
             if mode == "watchlist" else
-            InlineKeyboardButton("🎯 Switch to Watchlist Only", callback_data="settings_comp_mode_watchlist")
+            InlineKeyboardButton("🌐 Mode: All Companies (Switch)", callback_data="settings_comp_mode_watchlist")
         )
-        buttons.append([toggle_btn])
+        buttons.append([mode_btn])
     else:
-        buttons.append([InlineKeyboardButton("⭐ Unlock Watchlist-Only Mode (Pro)", callback_data="upgrade_pro")])
+        buttons.append([InlineKeyboardButton("🔒 Mode: All Companies • Pro for Watchlist", callback_data="upgrade_pro")])
 
-    buttons.append([
-        InlineKeyboardButton(f"✏️ Manage Following ({len(active_follows)})", callback_data="settings_comp_edit_follows"),
-        InlineKeyboardButton(f"🚫 Manage Muted ({len(mutes)})", callback_data="settings_comp_edit_mutes"),
-    ])
-    buttons.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
 
     try:
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="MarkdownV2")
@@ -291,7 +301,8 @@ async def settings_comp_mode_toggle(update: Update, context: ContextTypes.DEFAUL
                 show_alert=True
             )
         elif res.get("reason") == "pro_required":
-            await query.answer("⭐ Watchlist-Only mode requires Froncy Pro. Type /upgrade to unlock!", show_alert=True)
+            bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+            await query.answer(f"⭐ Watchlist-Only mode requires {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
         else:
             await query.answer("Could not update mode.", show_alert=True)
 
@@ -373,7 +384,7 @@ async def handle_company_search_text(update: Update, context: ContextTypes.DEFAU
         if cid in followed_ids:
             row.append(InlineKeyboardButton(f"✅ Following {cname[:12]}", callback_data=f"cf_unfw:{cid}"))
         else:
-            row.append(InlineKeyboardButton(f"⭐ Follow {cname[:12]}", callback_data=f"cf_fw:{cid}"))
+            row.append(InlineKeyboardButton(f"➕ Follow {cname[:12]}", callback_data=f"cf_fw:{cid}"))
 
         if cid in muted_ids:
             row.append(InlineKeyboardButton(f"🔕 Muted", callback_data=f"cf_unmt:{cid}"))
@@ -404,25 +415,58 @@ async def settings_comp_bundles(update: Update, context: ContextTypes.DEFAULT_TY
     pool = get_pool()
     async with pool.acquire() as conn:
         bundles = await conn.fetch("""
-            SELECT b.id, b.name, b.emoji, b.description, COUNT(m.company_id) as member_count
+            SELECT b.id, b.name, b.emoji, b.slug, b.description, COUNT(m.company_id) as member_count
             FROM company_bundles b
             LEFT JOIN company_bundle_members m ON b.id = m.bundle_id
-            GROUP BY b.id, b.name, b.emoji, b.description
-            ORDER BY b.id ASC
+            GROUP BY b.id, b.name, b.emoji, b.slug, b.description
+            ORDER BY 
+                CASE WHEN b.slug = 'developer-favorites' THEN 0 ELSE 1 END,
+                b.id ASC
         """)
 
     lines = [
         "📦 *Curated Company Bundles*\n",
         "Follow entire collections of top\\-tier companies in 1 tap:\n"
     ]
-    buttons = []
+    hero_btn = None
+    category_btns = []
     for b in bundles:
         bid = b["id"]
         bname = b["name"]
-        bemoji = b["emoji"]
+        bemoji = b["emoji"] or "📦"
         cnt = b["member_count"]
         lines.append(f"{bemoji} *{escape_md(bname)}* \\({cnt} companies\\)\n_{escape_md(b['description'] or '')}_\n")
-        buttons.append([InlineKeyboardButton(f"➕ Follow {bname} ({cnt})", callback_data=f"cf_bdl_{bid}")])
+        
+        # Clean, concise button label for mobile
+        short_name = bname
+        for long_txt, short_txt in [
+            ("Developer Favorites (Top 30)", "Developer Favorites (Top 30)"),
+            ("Global Tech Giants", "Global Giants"),
+            (" & Global Giants", " & Giants"),
+            ("Top Indian Unicorns", "Top Unicorns"),
+            (" & Quant Trading", " & Quant"),
+            ("Frontier AI & LLMs", "Frontier AI"),
+            ("DevTools & Cloud Infra", "DevTools & Cloud"),
+            ("High-Growth Product SaaS", "Product SaaS"),
+        ]:
+            short_name = short_name.replace(long_txt, short_txt)
+        
+        btn_label = f"{bemoji} {short_name}" if "Developer Favorites" in short_name else f"{bemoji} {short_name} ({cnt})"
+        btn = InlineKeyboardButton(btn_label, callback_data=f"cf_bdl_{bid}")
+
+        if b["slug"] == "developer-favorites" or "Developer Favorites" in bname:
+            hero_btn = btn
+        else:
+            category_btns.append(btn)
+
+    buttons = []
+    # Featured Hero Row on top
+    if hero_btn:
+        buttons.append([hero_btn])
+
+    # Group category bundle buttons into a clean 2-column grid
+    for i in range(0, len(category_btns), 2):
+        buttons.append(category_btns[i:i+2])
 
     buttons.append([InlineKeyboardButton("🔙 Back to Companies", callback_data="settings_companies")])
 
@@ -446,7 +490,8 @@ async def handle_bundle_follow_callback(update: Update, context: ContextTypes.DE
     else:
         reason = res.get("reason")
         if reason == "pro_required":
-            await query.answer("⭐ Curated 1-tap bundles require Froncy Pro. Type /upgrade to unlock!", show_alert=True)
+            bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+            await query.answer(f"⭐ Curated 1-tap bundles require {bot_name} Pro. Type /upgrade to unlock!", show_alert=True)
         else:
             await query.answer("Could not add bundle.", show_alert=True)
 
@@ -479,7 +524,7 @@ async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAU
             [InlineKeyboardButton("🔍 Search Companies", callback_data="settings_comp_search")],
             [InlineKeyboardButton("🔙 Back to Companies", callback_data="settings_companies")]
         ])
-        await query.edit_message_text("⭐ *Followed Companies*\n\nYou are not following any companies yet\\.", reply_markup=kb, parse_mode="MarkdownV2")
+        await query.edit_message_text("➕ *Followed Companies*\n\nYou are not following any companies yet\\.", reply_markup=kb, parse_mode="MarkdownV2")
         return
 
     total_pages = max(1, (len(follows) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -509,7 +554,7 @@ async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAU
     buttons.append([InlineKeyboardButton("🔙 Back to Companies", callback_data="settings_companies")])
 
     cap_str = f"/{prefs['cap']}" if prefs.get("cap") else ""
-    text = f"⭐ *Manage Followed Companies* \\({len(follows)}{cap_str}\\):\n\n_Tap any company below to unfollow:_"
+    text = f"➕ *Manage Followed Companies* \\({len(follows)}{cap_str}\\):\n\n_Tap any company below to unfollow:_"
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="MarkdownV2")
 
 

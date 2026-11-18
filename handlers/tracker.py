@@ -17,7 +17,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
     
-    plan = user.get("plan", "free")
+    plan = user.get("plan", "free") if user else "free"
     limit = get_limit(plan, "application_tracking_max") or 999
     
     if limit < 999:
@@ -30,7 +30,7 @@ async def mark_applied_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 "Upgrade to Pro \\(₹99/mo\\) for unlimited tracking and follow\\-up reminders\\!"
             )
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("💎 Upgrade — ₹99/mo", callback_data="upgrade_pro")],
+                [InlineKeyboardButton("💎 Upgrade (₹99/mo)", callback_data="upgrade_pro")],
                 [InlineKeyboardButton("🔙 Back to Jobs", callback_data="menu_jobs")]
             ])
             await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")

@@ -21,8 +21,13 @@ WAITING_RESUME = 4
 PRO_PLANS = ("pro", "trial", "proplus", "premium")
 
 
-async def view_resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /resume and Menu -> My Resume."""
+async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /profile, /settings, /status, /resume and Menu -> My Profile."""
+    import html
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    from utils.validators import CANONICAL_SKILL_MAP
+
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
@@ -35,89 +40,186 @@ async def view_resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text("Please /start first.")
         return
 
-    has_resume = bool(user.get("resume_text"))
+    # ── Plan Badge ──
     plan = user.get("plan", "free")
-    filename = user.get("resume_filename")
+    is_trial = user.get("is_trial", False)
+    trial_expires = user.get("trial_expires_at")
+    is_active_pro = False
 
-    msg = messages.resume_status(filename, has_resume)
-    kb = keyboards.resume_keyboard(has_resume, plan)
+    if plan == "pro" and not is_trial:
+        early_tag = " 🔒 Early Adopter" if user.get("is_early_adopter") else ""
+        expires_at = user.get("plan_expires_at")
+        date_str = expires_at.strftime("%b %d, %Y") if expires_at else "Active"
+        sub_status = user.get("subscription_status", "")
+        if sub_status == "cancelled":
+            plan_label = f"💎 Pro{early_tag} (active till {date_str}, Cancelled)"
+        else:
+            is_active_pro = True
+            plan_label = f"💎 Pro{early_tag} (renews {date_str})"
+    elif is_trial and trial_expires:
+        now = datetime.now(timezone.utc)
+        if hasattr(trial_expires, "tzinfo") and trial_expires.tzinfo is None:
+            trial_expires = trial_expires.replace(tzinfo=timezone.utc)
+        remaining = trial_expires - now
+        hours = max(0, int(remaining.total_seconds() / 3600))
+        if hours > 0:
+            plan_label = f"⭐️ Pro Trial ({hours}h left)"
+        else:
+            plan_label = "🆓 Free (trial ended)"
+    elif plan == "proplus":
+        plan_label = "🚀 Pro+"
+        is_active_pro = True
+    elif plan == "premium":
+        plan_label = "💎 Premium"
+        is_active_pro = True
+    else:
+        plan_label = "🆓 Free"
+
+    # ── Tracked Skills ──
+    raw_skills = user.get("skills") or []
+    if raw_skills:
+        canonical_skills = [CANONICAL_SKILL_MAP.get(s.lower(), s.title() if len(s) > 3 and not s.isupper() else s) for s in raw_skills]
+        skills_display = ", ".join(canonical_skills)
+    else:
+        skills_display = "None configured"
+
+    # ── Stream / Role ──
+    role_pref = user.get("role_pref") or "Not set"
+    role_display = str(role_pref).title()
+
+    # ── Experience Level ──
+    exp_raw = str(user.get("experience_level", "0") or "0")
+    exp_display_map = {
+        "0": "Fresher (0 yrs)",
+        "1": "1 Year",
+        "2": "2 Years",
+        "3_5": "3-5 Years",
+        "5_plus": "5+ Years",
+        "5+": "5+ Years"
+    }
+    exp_display = exp_display_map.get(exp_raw, f"{exp_raw} Years" if exp_raw.isdigit() else exp_raw.title())
+
+    # ── Work Mode ──
+    loc_map = {
+        "remote": "🌏 Remote",
+        "india": "🇮🇳 India",
+        "both": "🌐 Both (Remote & In-office)",
+        "onsite": "🏢 Onsite",
+        "hybrid": "🌍 Hybrid",
+        "all": "🔄 All Work Modes"
+    }
+    work_mode_display = loc_map.get(str(user.get("location_pref", "remote")).lower(), "🔄 All Work Modes")
+
+    # ── Daily Feed Schedule ──
+    alert_time = user.get("alert_time", "08:00")
+    paused_until = user.get("alerts_paused_until")
+    now_utc = datetime.now(timezone.utc)
+    if paused_until:
+        if hasattr(paused_until, "tzinfo") and paused_until.tzinfo is None:
+            paused_until = paused_until.replace(tzinfo=timezone.utc)
+        if paused_until > now_utc:
+            ist_time = paused_until.astimezone(ZoneInfo("Asia/Kolkata"))
+            feed_schedule = f"⏸ Paused until {ist_time.strftime('%b %d, %I:%M %p')} IST"
+        else:
+            feed_schedule = f"Daily at {alert_time} IST"
+    else:
+        feed_schedule = f"Daily at {alert_time} IST"
+
+    msg = (
+        "🎯 <b>My Matching Profile</b>\n\n"
+        f"💳 <b>Plan:</b> {plan_label}\n"
+        f"🛠️ <b>Tracked Skills:</b> <code>{html.escape(skills_display)}</code>\n"
+        f"🎯 <b>Target Stream:</b> {html.escape(role_display)}\n"
+        f"🧠 <b>Experience:</b> {html.escape(exp_display)}\n"
+        f"💼 <b>Work Mode:</b> {html.escape(work_mode_display)}\n"
+        f"📅 <b>Daily Feed:</b> {html.escape(feed_schedule)}\n\n"
+        "💡 <i>Your daily feed and matching jobs are personalized using these parameters.</i>"
+    )
+
+    # ── Interactive Buttons Grid ──
+    buttons = [
+        [
+            InlineKeyboardButton("🏷 Edit Skills", callback_data="settings_skills"),
+            InlineKeyboardButton("🎯 Change Stream", callback_data="settings_role"),
+        ],
+        [
+            InlineKeyboardButton("🧠 Experience", callback_data="settings_experience"),
+            InlineKeyboardButton("💼 Work Mode", callback_data="settings_location"),
+        ],
+    ]
+
+    if is_active_pro:
+        buttons.append([
+            InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications"),
+            InlineKeyboardButton("🛑 Cancel Pro", callback_data="settings_cancel_sub"),
+        ])
+        buttons.append([
+            InlineKeyboardButton("🗑 Delete Account", callback_data="settings_delete"),
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications"),
+            InlineKeyboardButton("🗑 Delete Account", callback_data="settings_delete"),
+        ])
+
+    buttons.append([
+        InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"),
+    ])
+
+    kb = InlineKeyboardMarkup(buttons)
 
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+        await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="HTML")
     else:
-        await update.message.reply_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode="HTML")
 
 
-async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Prompt user to send a Job Description text for ATS analysis."""
+# Alias view_resume to view_profile for backwards compatibility
+view_resume = view_profile
+
+
+async def profile_refresh_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prompt user to upload a resume PDF to refresh profile skills."""
     query = update.callback_query
     await query.answer()
 
-    user_id = update.effective_user.id
-    bot_id = context.bot_data.get('bot_id', 1)
-    user = await get_user(user_id, bot_id=bot_id)
-    plan = user.get("plan", "free")
+    context.user_data["waiting_for_profile_resume"] = True
 
-    # Check resume first (regardless of plan)
-    if not user.get("resume_text"):
-        await query.edit_message_text(
-            r"📄 Please upload your resume first with /resume\." "\n"
-            r"I need it to compare against the job description\.",
-            parse_mode="MarkdownV2"
-        )
-        return
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+    msg = (
+        "📄 <b>Refresh Skills via Resume</b>\n\n"
+        "Send me your resume as a <b>PDF file</b> (max 5MB) right here.\n\n"
+        f"💡 {bot_name} extracts your skills locally and never stores your resume file."
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Profile", callback_data="menu_profile")]
+    ])
+    await query.edit_message_text(msg, reply_markup=kb, parse_mode="HTML")
 
-    # Check daily limit
-    can_run, used_today = await check_ats_limit(user_id, plan)
 
-    if not can_run:
-        if plan == "free":
-            await query.edit_message_text(
-                r"*You've used your 1 free ATS check today\.*\n\n"
-                r"Pro users check up to *5 resumes/day* — enough\n"
-                r"for every job worth applying to\.\n\n"
-                r"Also unlocks: unlimited jobs, 10 cover letters/day,\n"
-                r"match scores, and application tracking\.",
-                parse_mode="MarkdownV2",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("💎 All of this for ₹99/mo", callback_data="upgrade_pro")],
-                    [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]
-                ])
-            )
-        else:
-            # Pro limit (5/day)
-            await query.edit_message_text(
-                r"*You've used all 5 ATS checks for today\.*" "\n\n"
-                r"Your daily limit resets at midnight\. Come back tomorrow\!",
-                parse_mode="MarkdownV2",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]
-                ])
-            )
-        return
+async def ats_analyze_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sunset notice for ATS analysis."""
+    query = update.callback_query
+    if query:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"ATS Resume checks are no longer available in {bot_name}.", show_alert=False)
 
-    # Show message — free users see preview notice, pro/trial see remaining checks
-    if plan == "free":
-        await query.edit_message_text(
-            r"📊 *ATS Resume Analyzer* \— Free Preview" "\n\n"
-            r"This is your *1 free check today*\. Paste the full Job Description below and I'll analyze your resume against it with AI\.",
-            parse_mode="MarkdownV2"
-        )
-    else:
-        # Pro/Trial: show remaining checks (proplus/premium have unlimited so no counter)
-        if plan in ("proplus", "premium"):
-            checks_text = "unlimited checks"
-        else:
-            checks_left = 5 - used_today
-            checks_text = f"{checks_left} checks remaining today"
-        await query.edit_message_text(
-            r"📊 *ATS Resume Analyzer*" "\n\n"
-            f"Paste the full Job Description below\\. \\({checks_text}\\)",
-            parse_mode="MarkdownV2"
-        )
 
-    context.user_data["waiting_for_ats_jd"] = True
+async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sunset notice for ATS job checks."""
+    query = update.callback_query
+    if query:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"ATS Resume checks are no longer available in {bot_name}.", show_alert=False)
+
+
+async def generate_ats_pdf_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sunset notice for ATS PDF generation."""
+    query = update.callback_query
+    if query:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"Tailored ATS PDFs are no longer available in {bot_name}.", show_alert=False)
 
 
 async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -135,7 +237,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         resume_text = user.get("resume_text", "")
         jd_text = (update.message.text or update.message.caption or "").strip()
 
-        await update.message.reply_text(r"⏳ Analyzing your resume with AI — this takes about 20 seconds\.\.\.", parse_mode="MarkdownV2")
+        await update.message.reply_text(r"⏳ Analyzing your resume with AI \(takes about 20 seconds\)\.\.\.", parse_mode="MarkdownV2")
 
         # Always use QUALITY (70B) for ATS — 8B doesn’t reliably output strict JSON
         result = await analyze_resume_match(resume_text, jd_text, mode=LLMMode.QUALITY)
@@ -148,7 +250,7 @@ async def ats_analyze_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Build keyboard — upsell for free users, always show Back button
         if plan not in PRO_PLANS:
             result_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
+                [InlineKeyboardButton("💎 Get 5 checks/day (Pro ₹99/mo)", callback_data="upgrade_pro")],
                 [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
             ])
         else:
@@ -191,7 +293,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             msg = ("🔒 *ATS Analyzer Limit Reached*\n\n"
                    "You've used your 5 ATS checks for today\\.\n"
                    "Resets at midnight\\! 🔄\n\n"
-                   "While you wait — want me to find more\n"
+                   "While you wait, want me to find more\n"
                    "jobs matching your updated resume?")
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔍 Find Matching Jobs", callback_data="menu_jobs")],
@@ -201,7 +303,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
             msg = ("🔒 *ATS Analyzer Limit Reached*\n\n"
                    "You've used your 1 free check today\\. Upgrade to Pro for 5 checks/day, "
                    "Pro\\+ for unlimited\\.\n\n"
-                   "\\[ 💎 Pro — ₹99/mo \\| Unlimited Apps \\]")
+                   "\\[ 💎 Pro (₹99/mo) \\| Unlimited Apps \\]")
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("💎 Upgrade to Pro", callback_data="upgrade_pro")],
                 [InlineKeyboardButton("🔙 Back to Job", callback_data=back_cb)]
@@ -302,7 +404,7 @@ async def ats_analyze_job_callback(update: Update, context: ContextTypes.DEFAULT
         if plan not in PRO_PLANS:
             back_kb = KB([
                 [IKB("✨ Create ATS-Optimized Resume", callback_data=pdf_cb)],
-                [IKB("💎 Get 5 checks/day — Pro for ₹99/mo", callback_data="upgrade_pro")],
+                [IKB("💎 Get 5 checks/day (Pro ₹99/mo)", callback_data="upgrade_pro")],
                 [IKB("🔙 Back to Job", callback_data=back_cb)]
             ])
         else:
@@ -566,150 +668,250 @@ async def explore_loading_jobs_callback(update: Update, context: ContextTypes.DE
 
 
 async def replace_resume_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle 'Replace' button from /resume menu — prompt user to send a new PDF."""
-    query = update.callback_query
-    await query.answer()
-    context.user_data["waiting_for_replace_resume"] = True
-    await query.edit_message_text(
-        "📎 Send me your new resume as a PDF file (max 5MB)."
-    )
+    """Redirect legacy resume_upload callbacks to profile_refresh_resume_prompt."""
+    return await profile_refresh_resume_prompt(update, context)
 
 
 async def replace_resume_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Process the new PDF when replacing an existing resume.
-
-    Design principle: NEVER show a generic error. If anything fails at any step,
-    we fall through to showing the Complex Layout Detected screen so the user
-    always has a path forward (re-upload or request manual fix).
+    """RFC-009: Process uploaded PDF during Profile Refresh ephemerally.
+    Extracts skills using local deterministic regex, never persists the PDF or text.
     """
     if not context.user_data.get("waiting_for_replace_resume") and \
+       not context.user_data.get("waiting_for_profile_resume") and \
+       not context.user_data.get("awaiting_settings_custom_skill") and \
        not context.user_data.get("waiting_for_fixresume_upload"):
         return
 
     document = update.message.document
-    if not document or not document.file_name.lower().endswith(".pdf"):
-        await update.message.reply_text("⚠️ Please upload a PDF file.", parse_mode="HTML")
+    if not document or not (document.file_name or "").lower().endswith(".pdf"):
+        await update.message.reply_text("⚠️ Please upload a <b>PDF file</b>.", parse_mode="HTML")
         return
 
-    if document.file_size > 5 * 1024 * 1024:
+    if document.file_size and document.file_size > 5 * 1024 * 1024:
         await update.message.reply_text("⚠️ File too large. Maximum size is 5MB.", parse_mode="HTML")
         return
 
-    # ── Admin uploading a fixed resume on behalf of a user ────────────
+    # Admin uploading a fixed resume
     if context.user_data.get("waiting_for_fixresume_upload"):
         await _admin_fixresume_receive(update, context, document)
         return
 
     context.user_data["waiting_for_replace_resume"] = False
-
-    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-    from services.resume_parser import save_resume_file, extract_text_from_pdf
-    from services.llm_service import check_resume_parseable
-    from db.users import update_resume
+    context.user_data["waiting_for_profile_resume"] = False
+    context.user_data["awaiting_settings_custom_skill"] = False
 
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
 
-    # ── Step 1: Show progress indicator ───────────────────────────────
-    progress_msg = None
-    try:
-        progress_msg = await update.message.reply_text(
-            "⏳ Checking your resume... (~5 seconds)"
-        )
-    except Exception:
-        pass  # Progress message is cosmetic, never fail here
+    progress_msg = await update.message.reply_text("⏳ Extracting skills from resume locally...")
 
-    # ── Step 2: Download & save the PDF file ──────────────────────────
-    raw_bytes = None
-    saved_path = None
     try:
         file = await document.get_file()
         file_bytes = await file.download_as_bytearray()
         raw_bytes = bytes(file_bytes)
-        saved_path = save_resume_file(user_id, raw_bytes, document.file_name)
-    except Exception as e:
-        logger.error(f"PDF download/save failed for user {user_id}: {e}")
-        # Can't even save the file — show a real error (network issue, not user fault)
-        if progress_msg:
-            try: await progress_msg.delete()
-            except Exception: pass
-        await update.message.reply_text(
-            "⚠️ Failed to download your file. Please check your connection and try again."
-        )
-        return
 
-    # ── Step 3: Extract text from PDF ─────────────────────────────────
-    resume_text = ""
-    try:
-        resume_text = extract_text_from_pdf(saved_path) or ""
-        resume_text = resume_text.encode("utf-8", errors="ignore").decode("utf-8")
-        resume_text = resume_text.replace("\x00", "")
-    except Exception as e:
-        logger.warning(f"PDF text extraction failed for user {user_id}: {e}")
-        resume_text = ""  # Extraction failure → force complex layout path below
+        from services.resume_parser import extract_text_from_pdf_bytes_safe, rank_and_extract_skills
+        resume_text = await extract_text_from_pdf_bytes_safe(raw_bytes)
+        del raw_bytes
 
-    # ── Step 4: AI parseability check ─────────────────────────────────
-    is_parseable = False
-    try:
-        if resume_text.strip():
-            is_parseable = True
-        else:
-            is_parseable = False  # Empty text → definitely not parseable
-    except Exception as e:
-        logger.warning(f"AI parseability check failed for user {user_id}: {e}")
-        is_parseable = False  # Any AI failure → assume complex layout
+        user = await get_user(user_id, bot_id=bot_id)
+        role = (user.get("role_pref") if user else "other") or "other"
+        extracted = rank_and_extract_skills(resume_text, role_pref=role, max_skills=15)
+        del resume_text
 
-    # ── Step 5: Delete progress message ───────────────────────────────
-    if progress_msg:
-        try: await progress_msg.delete()
-        except Exception: pass
-
-    # ── Step 6: Branch on result ──────────────────────────────────────
-    if is_parseable:
-        # ✅ Resume is clean — save to DB and confirm
         try:
-            bot_id = context.bot_data.get('bot_id', 1)
-            from services.storage import upload_resume, delete_resume
-            from db.users import get_user
-            old_user = await get_user(user_id, bot_id=bot_id)
-            if old_user and old_user.get("resume_filename") and old_user.get("resume_filename") != document.file_name:
-                await delete_resume(user_id, old_user["resume_filename"])
-            resume_url = await upload_resume(user_id, document.file_name, raw_bytes)
-            await update_resume(user_id, resume_text, document.file_name, bot_id=bot_id, raw_bytes=raw_bytes, resume_url=resume_url)
-        except Exception as e:
-            logger.error(f"update_resume DB write failed for user {user_id}: {e}")
+            await progress_msg.delete()
+        except Exception:
+            pass
+
+        if not extracted or len(extracted) < 3:
             await update.message.reply_text(
-                "❌ Your resume was read successfully but we had a database error saving it. Please try again."
+                "⚠️ We couldn't recognize enough technical skills from this PDF.\n\n"
+                "Please type your skills separated by commas or edit them manually in Profile.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Back to Profile", callback_data="menu_profile")]]),
+                parse_mode="HTML"
             )
             return
 
-        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]])
+        context.user_data["pending_refresh_skills"] = extracted
+        import html
+        skills_preview = ", ".join(extracted[:10])
+        if len(extracted) > 10:
+            skills_preview += f" (+{len(extracted) - 10} more)"
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Merge with current skills", callback_data="profile_skills_merge")],
+            [InlineKeyboardButton("🔄 Replace all skills", callback_data="profile_skills_replace")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="menu_profile")],
+        ])
+
         await update.message.reply_text(
-            messages.resume_uploaded_success(document.file_name),
-            parse_mode="MarkdownV2",
-            reply_markup=back_kb,
+            f"📄 <b>Extracted {len(extracted)} Skills:</b>\n\n"
+            f"<code>{html.escape(skills_preview)}</code>\n\n"
+            "How would you like to update your matching profile?",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.warning(f"Resume parsing during profile refresh failed for user {user_id}: {e}")
+        try:
+            await progress_msg.delete()
+        except Exception:
+            pass
+        await update.message.reply_text(
+            "⚠️ Could not read this PDF. Please ensure it is an unprotected PDF and try again.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Back to Profile", callback_data="menu_profile")]]),
+            parse_mode="HTML"
+        )
+
+
+async def profile_skills_merge_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Merge extracted resume skills with user's current profile skills."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    new_skills = context.user_data.pop("pending_refresh_skills", [])
+    if not new_skills:
+        await query.edit_message_text("No pending skills to merge. Please upload your resume again.")
+        return
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        current_skills = await conn.fetchval(
+            "SELECT skills FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            user_id, bot_id
+        ) or []
+
+        # Save old skills to backup table for undo
+        await conn.execute("""
+            INSERT INTO user_skills_backup (telegram_id, bot_id, old_skills, cleaned_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (telegram_id, bot_id)
+            DO UPDATE SET old_skills = $3, cleaned_at = NOW()
+        """, user_id, bot_id, current_skills)
+
+        # Deduplicate and cap at 15
+        combined = list(dict.fromkeys([s.title() for s in current_skills] + [s.title() for s in new_skills]))[:15]
+        await conn.execute(
+            "UPDATE users SET skills = $3 WHERE telegram_id = $1 AND bot_id = $2",
+            user_id, bot_id, [s.lower() for s in combined]
+        )
+
+    import html
+    preview = ", ".join(combined[:10])
+    if len(combined) > 10:
+        preview += f" (+{len(combined) - 10} more)"
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("↩️ Undo", callback_data="profile_skills_undo")],
+        [InlineKeyboardButton("🎯 View Profile", callback_data="menu_profile")],
+    ])
+    await query.edit_message_text(
+        f"✅ <b>Skills Merged Successfully!</b>\n\n"
+        f"Active skills ({len(combined)}):\n<code>{html.escape(preview)}</code>",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+
+
+async def profile_skills_replace_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Replace user's profile skills with the newly extracted resume skills."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+    new_skills = context.user_data.pop("pending_refresh_skills", [])
+    if not new_skills:
+        await query.edit_message_text("No pending skills to replace. Please upload your resume again.")
+        return
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        current_skills = await conn.fetchval(
+            "SELECT skills FROM users WHERE telegram_id = $1 AND bot_id = $2",
+            user_id, bot_id
+        ) or []
+
+        # Save old skills to backup table for undo
+        await conn.execute("""
+            INSERT INTO user_skills_backup (telegram_id, bot_id, old_skills, cleaned_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (telegram_id, bot_id)
+            DO UPDATE SET old_skills = $3, cleaned_at = NOW()
+        """, user_id, bot_id, current_skills)
+
+        await conn.execute(
+            "UPDATE users SET skills = $3 WHERE telegram_id = $1 AND bot_id = $2",
+            user_id, bot_id, [s.lower() for s in new_skills[:15]]
+        )
+
+    import html
+    preview = ", ".join(new_skills[:10])
+    if len(new_skills) > 10:
+        preview += f" (+{len(new_skills) - 10} more)"
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("↩️ Undo", callback_data="profile_skills_undo")],
+        [InlineKeyboardButton("🎯 View Profile", callback_data="menu_profile")],
+    ])
+    await query.edit_message_text(
+        f"✅ <b>Skills Replaced Successfully!</b>\n\n"
+        f"Active skills ({len(new_skills[:15])}):\n<code>{html.escape(preview)}</code>",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+
+
+async def profile_skills_undo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Restore previous skills from backup table."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get('bot_id', 1)
+
+    from db.connection import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        old_skills = await conn.fetchval(
+            "SELECT old_skills FROM user_skills_backup WHERE telegram_id = $1 AND bot_id = $2",
+            user_id, bot_id
+        )
+        if old_skills is not None:
+            await conn.execute(
+                "UPDATE users SET skills = $3 WHERE telegram_id = $1 AND bot_id = $2",
+                user_id, bot_id, old_skills
+            )
+            await conn.execute(
+                "DELETE FROM user_skills_backup WHERE telegram_id = $1 AND bot_id = $2",
+                user_id, bot_id
+            )
+
+    if old_skills is not None:
+        import html
+        preview = ", ".join([s.title() for s in old_skills[:10]]) if old_skills else "None"
+        if len(old_skills) > 10:
+            preview += f" (+{len(old_skills) - 10} more)"
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎯 View Profile", callback_data="menu_profile")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")],
+        ])
+        await query.edit_message_text(
+            f"↩️ <b>Restored Previous Skills!</b>\n\n"
+            f"Active skills:\n<code>{html.escape(preview)}</code>",
+            reply_markup=kb,
+            parse_mode="HTML"
         )
     else:
-        # ❌ Complex layout (or any failure) — show choice to user
-        logger.warning(f"User {user_id} resume flagged as complex: {document.file_name}")
-
-        # Stash raw bytes and text in context for the callback handlers
-        context.user_data["pending_raw_resume_bytes"] = raw_bytes
-        context.user_data["pending_resume_filename"] = document.file_name
-        context.user_data["pending_resume_text"] = resume_text
-
-        choice_kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📤 I'll upload a standard PDF", callback_data="resume_upload_new")],
-            [InlineKeyboardButton("⏳ Request Free Manual Fix (2–4 hrs)", callback_data="resume_manual_fix")],
-        ])
-        await update.message.reply_text(
-            "⚠️ <b>Complex Layout Detected</b>\n\n"
-            "Our AI couldn't fully read your resume structure. "
-            "This usually happens with multi-column layouts, tables, or graphics.\n\n"
-            "<b>Why does this matter?</b> Features like Apply Smart, ATS Resume, and Cover Letter "
-            "work best when we can read every bullet point in your resume.\n\n"
-            "<b>What would you like to do?</b>",
-            parse_mode="HTML",
-            reply_markup=choice_kb,
+        await query.edit_message_text(
+            "ℹ️ No previous skills found to undo.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 View Profile", callback_data="menu_profile")]]),
+            parse_mode="HTML"
         )
 
 
@@ -773,8 +975,8 @@ async def resume_manual_fix_callback(update: Update, context: ContextTypes.DEFAU
         # Notify the user
         await query.edit_message_text(
             "✅ <b>Got it! Your resume is in the queue.</b>\n\n"
-            "Our team will manually parse and optimize your resume within <b>2–4 hours</b>.\n"
-            "You'll receive a notification here once it's ready — then you can use Apply Smart, "
+            "Our team will manually parse and optimize your resume within <b>2-4 hours</b>.\n"
+            "You'll receive a notification here once it's ready, so you can use Apply Smart, "
             "ATS Resume, and Cover Letter with full accuracy!\n\n"
             "In the meantime, you can still browse jobs and save ones you like 🔍",
             parse_mode="HTML",
@@ -855,7 +1057,7 @@ async def _admin_fixresume_receive(
                 text=(
                     "🎉 <b>Great news! Your resume is ready.</b>\n\n"
                     "Our team has manually parsed and optimized your resume. "
-                    "You can now use all features — <b>Apply Smart, ATS Resume, Cover Letter</b> — with full accuracy!\n\n"
+                    "You can now use all features (<b>Apply Smart, ATS Resume, Cover Letter</b>) with full accuracy!\n\n"
                     "Tap below to get started:"
                 ),
                 parse_mode="HTML",
@@ -888,14 +1090,19 @@ async def deleteresume_command(update: Update, context: ContextTypes.DEFAULT_TYP
     db_deleted = await delete_user_resume(user_id, bot_id=bot_id)
     local_deleted = delete_resume_file(user_id)
 
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     if db_deleted or local_deleted:
         msg = (
             "🗑️ <b>Resume Deleted Successfully</b>\n\n"
             "Your resume PDF and parsed text have been permanently purged from our database and storage.\n\n"
-            "Your technical skills and profile remain intact. You can upload a new resume anytime via /resume."
+            "Your technical skills and profile remain intact for job alerts."
         )
     else:
-        msg = "ℹ️ No stored resume was found for your account."
+        msg = (
+            "ℹ️ <b>No Stored Resume Found</b>\n\n"
+            f"{bot_name} operates on an ephemeral model and does not store your resume file or text on our servers.\n\n"
+            "Your technical skills and profile remain intact for job matching."
+        )
 
     if update.callback_query:
         await update.callback_query.answer()

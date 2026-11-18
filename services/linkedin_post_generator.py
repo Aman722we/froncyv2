@@ -650,7 +650,7 @@ A lot of candidates spend months improving their skills...
 Very few spend the same energy applying early before 500+ people flood the portal.
 
 That is why we built FroncyBot.
-We monitor 525+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
+We monitor 530+ direct company career pages (Greenhouse, Lever, Ashby) with continuous hourly sweeps.
 When a company publishes a fresh opening, you catch it in the first wave, hours before it hits public job boards.
 
 ⚡ What you get on Telegram:
@@ -682,7 +682,7 @@ When a company publishes a fresh opening, you catch it in the first wave, hours 
     first_comment = (
         f"🚀 Here is the direct 1-tap link to launch FroncyBot on Telegram:\n"
         f"👉 https://t.me/FroncyJobsBot\n\n"
-        f"⚡ First-wave direct alerts for fresh junior {config['name']} jobs from 525+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
+        f"⚡ First-wave direct alerts for fresh junior {config['name']} jobs from 530+ company career pages (Greenhouse, Lever, Ashby) hours before they hit LinkedIn.\n"
         f"🎯 Upload your resume to see your live ATS match score in 10 seconds!"
     )
     first_comment = first_comment.replace("—", " - ").replace("–", "-")

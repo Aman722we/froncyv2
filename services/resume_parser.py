@@ -316,3 +316,17 @@ def delete_resume_file(telegram_id: int) -> bool:
         except Exception:
             pass
     return deleted
+
+
+def purge_all_local_resumes() -> int:
+    """RFC-009: Purge all residual stored resume PDF files from local disk."""
+    ensure_resumes_dir()
+    count = 0
+    for f in RESUMES_DIR.glob("*"):
+        if f.is_file():
+            try:
+                f.unlink()
+                count += 1
+            except Exception:
+                pass
+    return count

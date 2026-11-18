@@ -38,7 +38,7 @@ async def addjob_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "🎓 2025/2026 | 2-4 YOE  (batches optional, YOE can be range like 2-4 or single like 1+)\n"
         "🏷 Typescript, React, Next.Js, CSS, Git\n"
         "⏰ 22d ago  (Optional)\n"
-        "👤 Founder | John Doe | john@company.com | https://linkedin.com/in/johndoe  (Optional — for Apply Smart)\n\n"
+        "👤 Founder | John Doe | john@company.com | https://linkedin.com/in/johndoe  (Optional, for Apply Smart)\n\n"
         "<b>👤 Format:</b> Role | Name | Email | LinkedIn URL\n"
         "All 👤 fields after Name are optional. Include as many as you have.\n\n"
         "Type /cancel to abort.",
@@ -366,7 +366,7 @@ async def badresumes_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-    lines = [f"🛠 <b>Manual Resume Fix Queue</b> — {len(queue)} user(s)\n"]
+    lines = [f"🛠 <b>Manual Resume Fix Queue</b> ({len(queue)} user(s))\n"]
     for i, u in enumerate(queue, 1):
         uname = f"@{u['username']}" if u.get("username") else "(no username)"
         name = u.get("first_name", "Unknown")
@@ -1226,7 +1226,7 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         icon = "👔" if req_type == "HR_CONTACT" else "📄"
         type_str = "HR Contact" if req_type == "HR_CONTACT" else "Resume Review"
         
-        line = f"\n{icon} <b>#{req_id} — {type_str}</b>\n"
+        line = f"\n{icon} <b>#{req_id} ({type_str})</b>\n"
         line += f"👤 User: <code>{uid}</code>\n"
         line += f"🕒 {date}"
         if notes:
@@ -1801,7 +1801,7 @@ async def pitchjob_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         url = job["url"] or "https://t.me/FroncyJobsBot"
         skills_str = ", ".join(job["skills"][:5]) if job["skills"] else "General Development"
 
-        yoe_str = f"{job['min_yoe']}–{job['max_yoe']} YOE" if job["max_yoe"] else f"{job['min_yoe'] or 0}+ YOE"
+        yoe_str = f"{job['min_yoe']}-{job['max_yoe']} YOE" if job["max_yoe"] else f"{job['min_yoe'] or 0}+ YOE"
         if not job["min_yoe"] and not job["max_yoe"]:
             yoe_str = "Fresher / Any"
 
@@ -1816,7 +1816,7 @@ async def pitchjob_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
 
         msg_body = (
-            f"<b>Option {idx}: {html.escape(company)} — {html.escape(title)}</b>\n"
+            f"<b>Option {idx}: {html.escape(company)} ({html.escape(title)})</b>\n"
             f"🟢 <b>Experience:</b> {html.escape(yoe_str)}\n"
             f"📍 <b>Location:</b> {html.escape(location)}\n"
             f"🛠 <b>Skills:</b> {html.escape(skills_str)}\n"
@@ -1911,18 +1911,19 @@ async def grantpro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     msg_status = "🤫 Silent (No message sent)"
     if not is_silent:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
         if custom_msg:
             dm_text = (
                 f"{custom_msg}\n\n"
-                f"✨ <i>Your Froncy Pro access is active until {exp_str}. Use /menu to explore your Pro perks!</i>"
+                f"✨ <i>Your {bot_name} Pro access is active until {exp_str}. Use /menu to explore your Pro perks!</i>"
             )
         else:
             dm_text = (
-                f"🎉 <b>Froncy Pro Activated!</b>\n\n"
-                f"Hey {user_name}! You've been granted <b>{days} days</b> of Froncy Pro access (valid until <b>{exp_str}</b>).\n\n"
+                f"🎉 <b>{bot_name} Pro Activated!</b>\n\n"
+                f"Hey {user_name}! You've been granted <b>{days} days</b> of {bot_name} Pro access (valid until <b>{exp_str}</b>).\n\n"
                 f"⚡ <b>What you get:</b>\n"
-                f"• Direct alerts from 500+ company career pages as soon as they go live\n"
-                f"• Full ATS resume match scores and keyword breakdowns\n"
+                f"• Direct alerts from 530+ company career pages as soon as they go live\n"
+                f"• Full job match scores and skill gap breakdowns\n"
                 f"• Direct application links without delays\n\n"
                 f"Use /menu or /jobs to start exploring!"
             )
@@ -1939,7 +1940,7 @@ async def grantpro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             msg_status = f"⚠️ Updated DB, but DM failed: {html.escape(str(e))}"
 
     await update.message.reply_text(
-        f"💎 <b>Froncy Pro Granted Successfully!</b>\n\n"
+        f"💎 <b>{bot_name} Pro Granted Successfully!</b>\n\n"
         f"👤 <b>User:</b> {user_name} (<code>{target_id}</code>)\n"
         f"⏳ <b>Duration:</b> {days} days\n"
         f"📅 <b>Expires At:</b> <code>{exp_str}</code>\n"
@@ -2032,16 +2033,17 @@ async def granttrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     msg_status = "🤫 Silent (No message sent)"
     if not is_silent:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
         if custom_msg:
             dm_text = (
                 f"{custom_msg}\n\n"
-                f"✨ <i>Your trial access is active until {exp_str}. Use /menu to explore!</i>"
+                f"✨ <i>Your {bot_name} trial access is active until {exp_str}. Use /menu to explore!</i>"
             )
         else:
             dm_text = (
-                f"🎉 <b>Froncy Pro Trial Activated!</b>\n\n"
+                f"🎉 <b>{bot_name} Pro Trial Activated!</b>\n\n"
                 f"Hey {user_name}! You've been granted a <b>{days}-day Pro Trial</b> (valid until <b>{exp_str}</b>).\n\n"
-                f"⚡ You will now receive instant alerts from 500+ tech company career pages as new jobs matching your profile go live.\n\n"
+                f"⚡ You will now receive instant alerts from 530+ tech company career pages as new jobs matching your profile go live.\n\n"
                 f"Use /menu to explore your trial features!"
             )
 
@@ -2057,7 +2059,7 @@ async def granttrial_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             msg_status = f"⚠️ Updated DB, but DM failed: {html.escape(str(e))}"
 
     await update.message.reply_text(
-        f"⏳ <b>Froncy Trial Granted Successfully!</b>\n\n"
+        f"⏳ <b>{bot_name} Trial Granted Successfully!</b>\n\n"
         f"👤 <b>User:</b> {user_name} (<code>{target_id}</code>)\n"
         f"⏳ <b>Duration:</b> {days} days\n"
         f"📅 <b>Expires At:</b> <code>{exp_str}</code>\n"

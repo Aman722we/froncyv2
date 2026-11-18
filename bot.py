@@ -19,7 +19,14 @@ from handlers.start import get_start_handler
 from handlers.menu import menu_command, back_to_menu, submit_job_link_info_callback
 from handlers.jobs import view_jobs, view_job_detail, save_job_callback, unsave_job_callback, save_manual_job_callback, unsave_manual_job_callback, jobs_filter_menu, handle_filter_toggle, daily_feed_command, remind_me_callback, remind_me_manual_callback, apply_smart_callback, apply_smart_locked_callback
 from handlers.cover_letter import generate_cover_letter_callback, copy_cover_letter, coverletter_menu_handler
-from handlers.resume import view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback, replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback, get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback, resume_upload_new_callback, deleteresume_command, delete_resume_callback
+from handlers.resume import (
+    view_resume, ats_analyze_prompt, ats_analyze_result, ats_analyze_job_callback,
+    replace_resume_prompt, replace_resume_receive, generate_ats_pdf_callback,
+    get_latex_code_callback, explore_loading_jobs_callback, resume_manual_fix_callback,
+    resume_upload_new_callback, deleteresume_command, delete_resume_callback,
+    view_profile, profile_refresh_resume_prompt, profile_skills_merge_callback,
+    profile_skills_replace_callback, profile_skills_undo_callback,
+)
 from handlers.settings import (
     settings_command, status_command, view_saved_jobs,
     delete_account_prompt, delete_account_confirm,
@@ -200,7 +207,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CommandHandler("daily_feed", daily_feed_command))
     app.add_handler(CommandHandler("coverletter", coverletter_menu_handler))
     app.add_handler(CommandHandler("tracker", tracker_dashboard))
-    app.add_handler(CommandHandler("resume", view_resume))
+    app.add_handler(CommandHandler(["profile", "resume"], view_resume))
     app.add_handler(CommandHandler("deleteresume", deleteresume_command))
     app.add_handler(CommandHandler("saved", view_saved_jobs))
     app.add_handler(CommandHandler("upgrade", upgrade_command))
@@ -273,7 +280,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(submit_job_link_info_callback, pattern="^submit_job_link_info$"))
     app.add_handler(CallbackQueryHandler(view_jobs, pattern="^menu_jobs$"))
     app.add_handler(CallbackQueryHandler(daily_feed_command, pattern="^menu_daily$"))
-    app.add_handler(CallbackQueryHandler(view_resume, pattern="^menu_resume$"))
+    app.add_handler(CallbackQueryHandler(view_resume, pattern="^(menu_resume|menu_profile)$"))
     app.add_handler(CallbackQueryHandler(view_saved_jobs, pattern="^menu_saved$"))
     app.add_handler(CallbackQueryHandler(settings_command, pattern="^(menu_settings|settings_main)$"))
     app.add_handler(CallbackQueryHandler(upgrade_command, pattern="^menu_upgrade$"))
@@ -301,7 +308,11 @@ def build_bot(token: str | None = None) -> Application:
 
 
 
-    # Resume/ATS Callbacks
+    # Resume/ATS & Profile Callbacks
+    app.add_handler(CallbackQueryHandler(profile_refresh_resume_prompt, pattern="^profile_refresh_resume$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_merge_callback, pattern="^profile_skills_merge$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_replace_callback, pattern="^profile_skills_replace$"))
+    app.add_handler(CallbackQueryHandler(profile_skills_undo_callback, pattern="^profile_skills_undo$"))
     app.add_handler(CallbackQueryHandler(replace_resume_prompt, pattern="^resume_upload$"))
     app.add_handler(CallbackQueryHandler(delete_resume_callback, pattern="^delete_resume_confirm$"))
     app.add_handler(CallbackQueryHandler(ats_analyze_prompt, pattern="^ats_analyze$"))
@@ -322,6 +333,9 @@ def build_bot(token: str | None = None) -> Application:
         elif context.user_data.get("awaiting_settings_experience"):
             from handlers.settings import settings_experience_receive
             await settings_experience_receive(update, context)
+        elif context.user_data.get("awaiting_settings_role"):
+            from handlers.settings import settings_role_custom_receive
+            await settings_role_custom_receive(update, context)
         elif URL_REGEX.search(text):
             await update.message.reply_text(
                 "ℹ️ <b>Job Link Submissions Paused</b>\n\n"

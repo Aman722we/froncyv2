@@ -337,7 +337,7 @@ async def razorpay_webhook(request: Request):
                     await primary.bot.send_message(
                         chat_id=telegram_id,
                         text=(
-                            "✅ <b>Payment received — HR Contact Request queued!</b>\n\n"
+                            "✅ <b>Payment received: HR Contact Request queued!</b>\n\n"
                             "We'll find the relevant hiring contact and send it to you shortly."
                         ),
                         parse_mode="HTML",
@@ -368,7 +368,7 @@ async def razorpay_webhook(request: Request):
                     await primary.bot.send_message(
                         chat_id=telegram_id,
                         text=(
-                            "✅ <b>Payment received — Resume Review queued!</b>\n\n"
+                            "✅ <b>Payment received: Resume Review queued!</b>\n\n"
                             "A human reviewer will go through your resume and send you detailed feedback shortly.\n\n"
                             "💡 Make sure your resume is uploaded under <b>My Resume</b>."
                         ),

@@ -62,6 +62,9 @@ async def update_user_profile(
     experience_level: str | None = None,
     batch_year: int | None = None,
     role_pref: str | None = None,
+    bot_id: int | None = None,
+    skills_need_review: bool | None = None,
+    **kwargs,
 ) -> dict:
     """Update user profile fields. Only updates non-None values."""
     pool = get_pool()
@@ -99,11 +102,22 @@ async def update_user_profile(
         updates.append(f"batch_year = ${param_idx}")
         values.append(batch_year)
 
+    if skills_need_review is not None:
+        param_idx += 1
+        updates.append(f"skills_need_review = ${param_idx}")
+        values.append(skills_need_review)
+
     if not updates:
-        return await get_user(telegram_id)
+        return await get_user(telegram_id, bot_id=bot_id or 1)
 
     updates.append("updated_at = NOW()")
-    sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 RETURNING *"
+
+    if bot_id is not None:
+        param_idx += 1
+        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 AND bot_id = ${param_idx} RETURNING *"
+        values.append(bot_id)
+    else:
+        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 RETURNING *"
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(sql, telegram_id, *values)

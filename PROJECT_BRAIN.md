@@ -11,16 +11,16 @@
 * **Platform:** Python 3.11/3.12 Telegram Bot (`python-telegram-bot` v21 async) + FastAPI microservice (`main.py`) + Next.js web portal (`applixy-web`).
 * **Target Audience:** Software engineers across **all experience tiers (0 to 5+ YOE)**, from freshers to mid-level and senior engineers looking to switch into product companies.
 * **Core Value Proposition:**
-  1. **Sub-15 Minute Career-Page Alerts:** Ingests jobs directly from 525+ official company ATS portals (Greenhouse, Lever, Ashby) before they are syndicated to public job boards like LinkedIn or Naukri.
+  1. **Sub-15 Minute Career-Page Alerts:** Ingests jobs directly from 530+ official company ATS portals (Greenhouse, Lever, Ashby) before they are syndicated to public job boards like LinkedIn or Naukri.
   2. **100-Point Smart Matching:** Replaces spam with a transparent matching score (Skills + Taxonomy Expansion + YOE Gap + Role Preference).
-  3. **Multi-Tenant White-Labeling:** Allows creators, communities, and tech influencers to launch their own branded career bot (`bot_id`) sharing the underlying 525+ company ingestion pipeline.
+  3. **Multi-Tenant White-Labeling:** Allows creators, communities, and tech influencers to launch their own branded career bot (`bot_id`) sharing the underlying 530+ company ingestion pipeline.
 
 ---
 
 ## 2. Core Architectural Pillars
 
 ### A. Career Page Sync Engine (`services/career_sync.py`, `services/career_fetcher.py`)
-* Monitors **525+ verified company career sources** via direct REST endpoints (Greenhouse, Lever, Ashby).
+* Monitors **530+ verified company career sources** via direct REST endpoints (Greenhouse, Lever, Ashby).
 * **Strict Gatekeeper (`is_relevant_tech_job`)**: Filters out sales, marketing, HR, support, and foreign non-remote roles *before* invoking any LLM, saving database storage and AI token costs.
 * **LLM Metadata Enrichment (`extract_job_metadata`)**: Normalizes raw job descriptions into structured arrays: required skills, minimum YOE, salary ranges, workplace types (Remote/Hybrid/On-site), and normalized role categories.
 

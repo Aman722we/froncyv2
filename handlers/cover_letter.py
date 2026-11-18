@@ -16,14 +16,25 @@ from services.reset_service import check_and_reset_daily
 from utils.limits import get_limit
 from utils import keyboards, messages
 from utils.helpers import escape_md, get_effective_plan
+from config import settings
 
 
 async def coverletter_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle 'Cover Letter' command/button — guide user to pick a job first."""
+    query = update.callback_query
+
+    if not getattr(settings, "ENABLE_COVER_LETTER", False):
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        disabled_msg = f"Cover letters are no longer available in {bot_name}. We are focused on verified tech job alerts."
+        if query:
+            await query.answer()
+            await query.edit_message_text(disabled_msg)
+        else:
+            await update.message.reply_text(disabled_msg)
+        return
+
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    query = update.callback_query
-    
     msg_text = (
         "✍️ *Cover Letter Generator*\n\n"
         "To generate a cover letter, first select a job from the jobs list\\.\n\n"
@@ -52,6 +63,11 @@ async def coverletter_menu_handler(update: Update, context: ContextTypes.DEFAULT
 async def generate_cover_letter_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle generation from a job detail view."""
     query = update.callback_query
+    if not getattr(settings, "ENABLE_COVER_LETTER", False):
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"Cover letters are no longer available in {bot_name}.", show_alert=False)
+        return
+
     await query.answer()
 
     user_id = update.effective_user.id
@@ -75,12 +91,12 @@ async def generate_cover_letter_callback(update: Update, context: ContextTypes.D
                    "Upgrade to Pro for 10 cover letters/day\n"
                    "+ unlimited jobs + match scores.")
             kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Upgrade — ₹99/mo", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("💎 Upgrade (₹99/mo)", callback_data="upgrade_pro")],
                 [keyboards.InlineKeyboardButton("⏰ See you tomorrow", callback_data="back_menu")]
             ])
             await query.edit_message_text(messages.escape_md(msg), reply_markup=kb, parse_mode="MarkdownV2")
         else:
-            await query.message.reply_text("You've generated 10 cover letters today — \nthat's impressive hustle! Resets at midnight. 🔥")
+            await query.message.reply_text("You've generated 10 cover letters today, that's impressive hustle! Resets at midnight. 🔥")
         return
 
     data_parts = query.data.split("_")

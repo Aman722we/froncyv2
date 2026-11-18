@@ -46,9 +46,10 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         except Exception as e:
             logger.error(f"Failed to send feedback to admin {admin_id}: {e}")
 
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     await update.message.reply_text(
         "✅ *Thank you\\!*\n\n"
-        "Your feedback has been sent directly to the developer\\. We appreciate your help in making FroncyBot better\\!",
+        f"Your feedback has been sent directly to the developer\\. We appreciate your help in making {escape_md(bot_name)} better\\!",
         parse_mode="MarkdownV2",
     )
     return ConversationHandler.END

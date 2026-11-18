@@ -179,7 +179,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Upgrade to browse all jobs with personalized match scores and filters\\."
             )
             kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Go Pro — ₹199/mo", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("💎 Go Pro (₹199/mo)", callback_data="upgrade_pro")],
                 [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
             ])
             if update.callback_query:
@@ -525,7 +525,7 @@ async def remind_me_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if saved:
         await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
     else:
-        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)
+        await query.answer("ℹ️ Already in your saved list. I'll remind you at 6:30 PM.", show_alert=True)
 
 
 async def remind_me_manual_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -540,7 +540,7 @@ async def remind_me_manual_callback(update: Update, context: ContextTypes.DEFAUL
     if saved:
         await query.answer("⏳ Saved! I'll remind you to apply at 6:30 PM.", show_alert=True)
     else:
-        await query.answer("ℹ️ Already in your saved list — I'll remind you at 6:30 PM.", show_alert=True)
+        await query.answer("ℹ️ Already in your saved list. I'll remind you at 6:30 PM.", show_alert=True)
 
 
 # ─────────────────────────────────────────────────────────
@@ -556,31 +556,15 @@ APPLY_SMART_LIMITS = {
 
 
 async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle 🚀 Apply Smart button — triggers full async application kit generation."""
+    """Handle 🚀 Apply Smart button — sunset notice."""
     query = update.callback_query
-    user_id = update.effective_user.id
-    job_id = int(query.data.split("_")[-1])
+    if query:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"Apply Smart is no longer available in {bot_name}.", show_alert=False)
+    return
 
-    await query.answer()
-
-    # ── 1. Fetch user & plan ──────────────────────────────
-    bot_id = context.bot_data.get('bot_id', 1)
-    user = await get_user(user_id, bot_id=bot_id)
-    if not user:
-        await query.edit_message_text("⚠️ User not found. Please type /start to set up your profile.")
-        return
-
-    plan = get_effective_plan(user)
-    resume_text = user.get("resume_text")
-
-    if not resume_text:
-        await query.answer()
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="⚠️ *Upload your resume first\\!*\n\nI need your resume to generate personalised cover letters, cold emails etc\\. Go to ⚙️ Settings → Resume to upload it\\.",
-            parse_mode="MarkdownV2"
-        )
-        return
+    if False:
+        pass
 
     # ── 2. Check daily limit ─────────────────────────────────────────────────
     from db.users import get_apply_smart_usage, increment_apply_smart_used
@@ -711,7 +695,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             )
 
             # Step 1: Cover Letter
-            await _refresh_loading("⚙️ Step 1/3 — Writing Cover Letter...")
+            await _refresh_loading("⚙️ Step 1/3: Writing Cover Letter...")
 
             cover_letter = await generate_cover_letter(
                 resume_text=resume_text,
@@ -723,7 +707,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             # Step 2: Outreach (LinkedIn / Cold Email)
             outreach = {}
             if has_linkedin or has_email:
-                await _refresh_loading("⚙️ Step 2/3 — Drafting outreach messages...")
+                await _refresh_loading("⚙️ Step 2/3: Drafting outreach messages...")
                 outreach = await generate_outreach_templates(
                     resume_text=resume_text,
                     job_description=job_desc,
@@ -736,7 +720,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 step_states["outreach"] = "✅"
 
             # Step 3: Sending the kit
-            await _refresh_loading("⚙️ Step 3/3 — Sending your kit...")
+            await _refresh_loading("⚙️ Step 3/3: Sending your kit...")
             await _refresh_loading("✅ All done! Your kit is below 👇")
 
             # ── Deliver Kit ─────────────────────────────────────────────────────
@@ -766,7 +750,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             job_url_esc = escape_md(job_url) if job_url else ""
 
             kit_parts = [
-                f"✍️ *Cover Letter* — tap to copy:",
+                f"✍️ *Cover Letter* \\(tap to copy\\):",
                 f"```\n{cover_letter}\n```",
             ]
             if job_url:
@@ -784,13 +768,13 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 if hm_email:
                     kit_parts.append(f"📧 Email: {escape_md(hm_email)}")
                 if outreach.get("connection_note"):
-                    kit_parts += ["", f"📌 *Connection Note* \\(\\<200 chars\\) — tap to copy:", f"```\n{outreach['connection_note'][:200]}\n```"]
+                    kit_parts += ["", f"📌 *Connection Note* \\(\\<200 chars\\) \\(tap to copy\\):", f"```\n{outreach['connection_note'][:200]}\n```"]
                 if outreach.get("linkedin_dm"):
-                    kit_parts += ["", f"💬 *LinkedIn DM* — tap to copy:", f"```\n{outreach['linkedin_dm']}\n```"]
+                    kit_parts += ["", f"💬 *LinkedIn DM* \\(tap to copy\\):", f"```\n{outreach['linkedin_dm']}\n```"]
                 if outreach.get("cold_email"):
                     kit_parts += [
                         "",
-                        "📧 *Cold Email* — tap to copy:",
+                        "📧 *Cold Email* \\(tap to copy\\):",
                         f"```\n{outreach['cold_email']}\n```",
                     ]
 
@@ -825,7 +809,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 # Split: send cover letter first, then outreach
                 cl_msg = (
-                    "✍️ *Cover Letter* — tap to copy:\n"
+                    "✍️ *Cover Letter* \\(tap to copy\\):\n"
                     f"```\n{cover_letter}\n```"
                 )
                 await context.bot.send_message(
@@ -838,17 +822,17 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     outreach_msg_parts = ["📨 *Outreach Templates*\n"]
                     if outreach.get("connection_note"):
                         outreach_msg_parts += [
-                            "📌 *Connection Note* — tap to copy:",
+                            "📌 *Connection Note* \\(tap to copy\\):",
                             f"```\n{outreach['connection_note'][:200]}\n```\n",
                         ]
                     if outreach.get("linkedin_dm"):
                         outreach_msg_parts += [
-                            "💬 *LinkedIn DM* — tap to copy:",
+                            "💬 *LinkedIn DM* \\(tap to copy\\):",
                             f"```\n{outreach['linkedin_dm']}\n```\n",
                         ]
                     if outreach.get("cold_email"):
                         outreach_msg_parts += [
-                            "📧 *Cold Email* — tap to copy:",
+                            "📧 *Cold Email* \\(tap to copy\\):",
                             f"```\n{outreach['cold_email']}\n```\n",
                         ]
                     outreach_msg_parts += [
@@ -924,7 +908,7 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 err_msg = (
                     "❌ Oops! Something went wrong while generating your Apply Kit.\n"
-                    "Don't worry — your usage credit has been refunded.\n\n"
+                    "Don't worry, your usage credit has been refunded.\n\n"
                     "Tap the button below to try again instantly!"
                 )
 
@@ -938,22 +922,8 @@ async def apply_smart_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def apply_smart_locked_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle clicks on the locked Apply Smart button — show the upgrade selling page."""
+    """Sunset notice."""
     query = update.callback_query
-    await query.answer()
-
-    from services.pricing_service import get_current_pricing
-    from db.connection import get_pool as _get_pool_pricing
-    from utils.messages import upgrade_early_adopter_message, upgrade_regular_message
-
-    pricing = await get_current_pricing(_get_pool_pricing())
-    if pricing.get("is_early_adopter_active"):
-        upgrade_msg = upgrade_early_adopter_message(pricing, bot_name=context.bot.first_name)
-    else:
-        upgrade_msg = upgrade_regular_message(pricing, bot_name=context.bot.first_name)
-
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Upgrade Now", callback_data="upgrade_pro")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="menu_jobs")],
-    ])
-    await query.edit_message_text(upgrade_msg, parse_mode="MarkdownV2", reply_markup=kb)
+    if query:
+        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        await query.answer(f"Apply Smart is no longer available in {bot_name}.", show_alert=False)

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # App Config
     ENVIRONMENT: str = "development"
+    ENABLE_COVER_LETTER: bool = False  # RFC-009: Cover letters deprecated to focus 100% on job discovery
     MAX_COVER_LETTERS_FREE: int = 3
     ENABLE_FREE_TRIAL: bool = False  # Disabled for 1-on-1 sprint: new users start on Free plan
 

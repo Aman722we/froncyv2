@@ -443,15 +443,15 @@ async def _send_evening_digest():
                     for i, job in enumerate(saved_jobs[:10], 1):
                         title   = escape_md(job.get("title",   "Unknown"))
                         company = escape_md(job.get("company", "Unknown"))
-                        lines.append(f"{i}\\. *{title}* — {company}")
+                        lines.append(f"{i}\\. *{title}* \\({company}\\)")
 
                 # ── Section 2: Follow-ups due ────────────────────────────
                 if followups:
                     lines.append("\n⏰ *Follow\\-ups due today:*")
                     for f in followups:
                         title   = escape_md(f.get("title",   "Unknown"))
-                        company = escape_md(f.get("company", "Unknown"))
-                        lines.append(f"• *{title}* — {company}")
+                        company = escape_md(job.get("company", "Unknown"))
+                        lines.append(f"• *{title}* \\({company}\\)")
                     lines.append("_Consider sending a quick follow\\-up email to stand out\\!_")
 
                 lines.append("\n_Tap a job to view or remove it\\._")
