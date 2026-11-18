@@ -29,6 +29,7 @@ from services.storage import upload_resume
 from db.users import record_resume_consent
 from services.pricing_service import start_trial, get_current_pricing
 from utils import keyboards, messages
+from utils.helpers import escape_md
 from utils.admin_notify import notify_admin
 
 # Conversation states
@@ -716,7 +717,7 @@ async def _complete_onboarding(
         )
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Unlock Pro Alerts (₹199/mo)", callback_data="upgrade_pro")],
+            [InlineKeyboardButton("◆ Upgrade to Pro (₹199/mo)", callback_data="upgrade_pro")],
             [
                 InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
                 InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
