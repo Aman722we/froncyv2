@@ -26,13 +26,20 @@ async def _get_or_create_plan(client: razorpay.Client, db_pool, is_early_adopter
     config = await db_pool.fetchrow("SELECT * FROM pricing_config LIMIT 1")
     
     plan_col = "razorpay_early_plan_id" if is_early_adopter else "razorpay_reg_plan_id"
-    existing_plan_id = config.get(plan_col)
+    existing_plan_id = config.get(plan_col) if config else None
     
     if existing_plan_id:
-        return existing_plan_id
+        try:
+            plan_obj = client.plan.fetch(existing_plan_id)
+            plan_amt = plan_obj.get("item", {}).get("amount", 0)
+            if plan_amt == amount * 100:
+                return existing_plan_id
+            logger.warning(f"Plan {existing_plan_id} amount ({plan_amt} paise) does not match requested {amount * 100} paise. Recreating plan.")
+        except Exception as e:
+            logger.warning(f"Could not verify existing plan {existing_plan_id}: {e}")
         
     # Create the plan on Razorpay
-    plan_name = "FroncyBot Pro (Early Adopter)" if is_early_adopter else "FroncyBot Pro (Regular)"
+    plan_name = "Job Radar Pro (Early Adopter)" if is_early_adopter else "Job Radar Pro (Regular)"
     amount_paise = amount * 100
     
     logger.info(f"Creating Razorpay plan dynamically: {plan_name} for ₹{amount}")
