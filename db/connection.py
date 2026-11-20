@@ -120,6 +120,14 @@ async def init_db() -> asyncpg.Pool:
                 SELECT 99, 99, 200, 0, TRUE, NOW()
                 WHERE NOT EXISTS (SELECT 1 FROM pricing_config);
             """)
+            await conn.execute("""
+                UPDATE pricing_config
+                SET early_adopter_price = 99,
+                    regular_price = 99,
+                    razorpay_early_plan_id = 'plan_U2T5lOksNUXUkB',
+                    razorpay_reg_plan_id = 'plan_U2T5lOksNUXUkB'
+                WHERE early_adopter_price != 99 OR razorpay_early_plan_id = 'plan_SktaMkG3nLAul4';
+            """)
         except Exception as e:
             logger.warning(f"Failed to apply trial/pricing migrations: {e}")
 
