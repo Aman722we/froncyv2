@@ -147,6 +147,9 @@ ROLE_ALIGNMENT: dict[str, set[str]] = {
     "fullstack": {"react", "node.js", "typescript", "python", "postgresql", "docker", "next.js", "rest apis", "aws", "tailwind css", "mongodb"},
     "devops": {"docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ci/cd", "jenkins", "linux", "ansible", "bash"},
     "data": {"python", "sql", "machine learning", "deep learning", "pytorch", "tensorflow", "pandas", "numpy", "apache spark", "airflow", "langchain", "langgraph", "rag"},
+    "data_ml": {"machine learning", "deep learning", "pytorch", "tensorflow", "scikit-learn", "pandas", "numpy", "langchain", "langgraph", "rag", "nlp", "computer vision", "llms", "python"},
+    "data_eng": {"apache spark", "airflow", "kafka", "sql", "python", "pandas", "dbt", "snowflake", "bigquery", "data pipelines", "data warehousing", "postgresql"},
+    "mobile": {"android", "ios", "react native", "flutter", "kotlin", "swift"},
 }
 
 
@@ -175,7 +178,15 @@ def rank_and_extract_skills(resume_text: str, role_pref: str = "other", max_skil
         # Take the next 1500 chars or until next section header
         skills_section_text = text_lower[start_idx:start_idx + 1500]
 
-    preferred_skills = ROLE_ALIGNMENT.get(role_pref.lower(), set())
+    target_role = (role_pref or "other").lower().strip()
+    preferred_skills = ROLE_ALIGNMENT.get(target_role)
+    if preferred_skills is None:
+        try:
+            from utils.constants import resolve_user_stream
+            resolved_stream = resolve_user_stream(target_role)["stream"]
+            preferred_skills = ROLE_ALIGNMENT.get(resolved_stream, set())
+        except Exception:
+            preferred_skills = set()
 
     # Score each canonical skill
     skill_scores: dict[str, int] = {}

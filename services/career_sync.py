@@ -489,13 +489,13 @@ async def _notify_users_for_new_jobs(job_ids: list[int]) -> None:
                 match = compute_manual_job_match(user, job)
                 score = match.get("score", 0)
 
-                # Relax threshold to 40% if company is followed and role category matches user preference
+                # Relax threshold to 40% if company is followed and role alignment is >= 40%
                 job_cid = job.get("company_id")
                 threshold = 50
                 if job_cid and job_cid in u_follows:
-                    u_role = (user.get("role_pref") or "").lower()
-                    j_role = (job.get("role_category") or "").lower()
-                    if u_role and (u_role in j_role or j_role in u_role or "software" in j_role):
+                    from utils.constants import resolve_user_stream, compute_role_alignment
+                    u_role_info = resolve_user_stream(user.get("role_pref") or "other", user.get("skills") or [])
+                    if compute_role_alignment(u_role_info, job) >= 40:
                         threshold = 40
 
                 if score >= threshold:

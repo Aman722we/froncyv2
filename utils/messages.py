@@ -485,34 +485,12 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         exp_pct = 0
         exp_note = f"🔴 Exp gap: needs {min_yoe}+ yrs, you have {u_exp_years}"
 
-    # ── Role Preference (10%) ──
-    role_pref = (user.get("role_pref") or "fullstack").lower()
-    job_title = (job.get("title") or "").lower()
-    job_category = (job.get("role_category") or "").lower()
-    job_skills_lower = [s.lower() for s in (job.get("skills") or [])]
+    # ── Role Alignment (20%) ──
+    from utils.constants import resolve_user_stream, compute_role_alignment
+    user_role_info = resolve_user_stream(user.get("role_pref") or "other", user_skills)
+    role_pct = compute_role_alignment(user_role_info, job)
 
-    TECH_GENERIC = ["engineer", "developer", "sde", "programmer", "software", "coder", "architect"]
-    
-    ROLE_KEYWORDS = {
-        "frontend": ["frontend", "front-end", "front end", "ui", "react", "vue", "angular", "svelte", "html", "css", "typescript", "javascript"] + TECH_GENERIC,
-        "backend": ["backend", "back-end", "back end", "server", "api", "node", "python", "java", "django", "express", "golang", "rust", "php", "integration", "database"] + TECH_GENERIC,
-        "fullstack": ["fullstack", "full-stack", "full stack", "mern", "mean", "next.js", "nextjs"] + TECH_GENERIC,
-    }
-    role_words = ROLE_KEYWORDS.get(role_pref, [])
-    if role_pref == "fullstack":
-        role_words = list(set(ROLE_KEYWORDS["frontend"] + ROLE_KEYWORDS["backend"] + ROLE_KEYWORDS["fullstack"]))
-    title_match = any(kw in job_title for kw in role_words)
-    category_match = any(kw in job_category for kw in role_words if kw not in TECH_GENERIC)
-    skills_match = any(kw in s for kw in role_words for s in job_skills_lower)
-
-    if title_match or category_match:
-        role_pct = 100
-    elif skills_match:
-        role_pct = 70
-    else:
-        role_pct = 20
-
-    # ── Salary Quality (10%) ──
+    # ── Salary Quality ──
     salary = job.get("salary")
     has_salary = bool(salary and str(salary).strip() and str(salary).strip().lower() not in ["null", "none", "not disclosed", "n/a", "-"])
     
@@ -581,33 +559,37 @@ def compute_manual_job_match(user: dict, job: dict) -> dict:
         batch_str = "/".join(str(b) for b in eligible_batches)
         batch_note = f"⚠️ Batch mismatch: Job requires {batch_str}, your batch is {user_batch or 'unknown'}"
 
-    # ?? Final weighted score ??
-    total_score = int(
+    # ── Final Weighted Score (RFC-010 Specification) ──
+    # 40% Skills | 25% Experience | 15% Recency | 20% Role Alignment
+    raw_score = int(
         (skill_pct * 0.40) +
         (exp_pct   * 0.25) +
         (recency_pct * 0.15) +
-        (role_pct  * 0.10) +
-        (salary_pct * 0.10)
+        (role_pct  * 0.20)
     )
 
+    # Non-tech title filter
+    job_title = (job.get("title") or "").lower()
     NON_TECH = ["marketing", "sales", "account executive", "hr ", "human resources", "recruiter", "finance", "legal", "customer", "advocacy", "content", "copywriter", "business", "operations", "vp ", "chief ", "director ", "counsel"]
     if any(kw in job_title for kw in NON_TECH) and not any(kw in job_title for kw in ["engineer", "developer"]):
-        total_score = 0
-        
-    if role_pct == 20 and skill_pct <= 50:
-        total_score = int(total_score * 0.5)
+        raw_score = 0
 
-    # HARD CAP FOR UNREALISTIC EXPERIENCE GAPS:
-    # If the job requires 2 or more years of experience than the user has,
-    # cap the max score at 45% so it NEVER triggers a 50% instant alert,
-    # regardless of how perfect the skills match. (+1 gap is allowed).
+    # Gate 1: Conflicting Title Cap (role_pct == 0) -> Max 25%
+    if role_pct == 0:
+        raw_score = min(raw_score, 25)
+
+    # Gate 2: Zero-Skill Prerequisite (matched_count == 0 when skills/desc present) -> Max 30%
+    if (job_skills or job_desc) and matched_count == 0:
+        raw_score = min(raw_score, 30)
+
+    # Gate 3: Experience Gap Cap (gap >= 2 years) -> Max 45%
     try:
         if float(min_yoe) - float(u_exp_years) >= 2:
-            total_score = min(total_score, 45)
-    except:
+            raw_score = min(raw_score, 45)
+    except Exception:
         pass
 
-    total_score = max(0, min(100, total_score))
+    total_score = max(0, min(100, raw_score))
     return {
         "score": total_score,
         "skill_pct": skill_pct,
