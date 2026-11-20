@@ -179,7 +179,7 @@ async def view_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Upgrade to browse all jobs with personalized match scores and filters\\."
             )
             kb = keyboards.InlineKeyboardMarkup([
-                [keyboards.InlineKeyboardButton("💎 Go Pro (₹199/mo)", callback_data="upgrade_pro")],
+                [keyboards.InlineKeyboardButton("💎 Go Pro (₹99/mo)", callback_data="upgrade_pro")],
                 [keyboards.InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
             ])
             if update.callback_query:

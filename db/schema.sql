@@ -35,8 +35,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- Pricing Configuration
 CREATE TABLE IF NOT EXISTS pricing_config (
     id                   SERIAL PRIMARY KEY,
-    early_adopter_price  INT DEFAULT 199,
-    regular_price        INT DEFAULT 499,
+    early_adopter_price  INT DEFAULT 99,
+    regular_price        INT DEFAULT 99,
     early_adopter_slots  INT DEFAULT 200,
     slots_filled         INT DEFAULT 0,
     early_adopter_active BOOLEAN DEFAULT TRUE,

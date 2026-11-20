@@ -21,7 +21,7 @@ OFFICIAL_BOT_COMMANDS = [
     BotCommand("daily_feed", "Go to daily feed jobs"),
     BotCommand("tracker", "View and manage your applications"),
     BotCommand("refer", "Refer a friend and earn 5 free Pro days"),
-    BotCommand("upgrade", "Upgrade to Pro (₹199/mo)"),
+    BotCommand("upgrade", "Upgrade to Pro (₹99/mo)"),
     BotCommand("profile", "Update your skills and preferences"),
     BotCommand("feedback", "Give feedback or report any bugs"),
     BotCommand("delete_account", "Permanently delete all your data"),

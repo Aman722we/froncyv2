@@ -13,7 +13,7 @@ async def get_current_pricing(db_pool) -> dict:
     """
     Returns current pricing state.
     Early adopter = slots not yet full (200 pro users).
-    Time limit removed — price stays at ₹199 until 200 users subscribe.
+    Time limit removed — price stays at ₹99 until 200 users subscribe.
     """
     config = await db_pool.fetchrow("SELECT * FROM pricing_config LIMIT 1")
 

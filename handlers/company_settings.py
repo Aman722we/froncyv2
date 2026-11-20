@@ -87,7 +87,7 @@ async def company_action_callback(update: Update, context: ContextTypes.DEFAULT_
                             f"Upgrade to *{escape_md(bot_name)} Pro* to follow *unlimited companies* and unlock Watchlist\\-Only instant drops\\!"
                         ),
                         reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("💎 Upgrade to Pro (₹199/mo)", callback_data="upgrade_pro")],
+                            [InlineKeyboardButton("💎 Upgrade to Pro (₹99/mo)", callback_data="upgrade_pro")],
                             [InlineKeyboardButton("⚙️ Manage Follows", callback_data="settings_comp_edit_follows")]
                         ]),
                         parse_mode="MarkdownV2"
