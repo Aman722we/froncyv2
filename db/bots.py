@@ -154,7 +154,7 @@ async def get_guru_stats(bot_id: int) -> dict:
     # ── Payout calculation ─────────────────────────────────────────────────────
     split_pct     = (bot_cfg["split_percentage"] if bot_cfg else 50) / 100
     is_early      = pricing["early_adopter_active"] if pricing else False
-    current_price = pricing["early_adopter_price"] if (pricing and is_early) else (pricing["regular_price"] if pricing else 199)
+    current_price = pricing["early_adopter_price"] if (pricing and is_early) else (pricing["regular_price"] if pricing else 99)
     pro_count     = stats["pro_users"] or 0
 
     hr_sales      = addon_row["hr_sales"] if addon_row else 0

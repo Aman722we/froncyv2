@@ -97,8 +97,8 @@ async def init_db() -> asyncpg.Pool:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS pricing_config (
                     id                   SERIAL PRIMARY KEY,
-                    early_adopter_price  INT DEFAULT 199,
-                    regular_price        INT DEFAULT 499,
+                    early_adopter_price  INT DEFAULT 99,
+                    regular_price        INT DEFAULT 99,
                     early_adopter_slots  INT DEFAULT 200,
                     slots_filled         INT DEFAULT 0,
                     early_adopter_active BOOLEAN DEFAULT TRUE,
@@ -117,7 +117,7 @@ async def init_db() -> asyncpg.Pool:
                     early_adopter_price, regular_price, early_adopter_slots,
                     slots_filled, early_adopter_active, launch_date
                 )
-                SELECT 199, 499, 200, 0, TRUE, NOW()
+                SELECT 99, 99, 200, 0, TRUE, NOW()
                 WHERE NOT EXISTS (SELECT 1 FROM pricing_config);
             """)
         except Exception as e:

@@ -1177,18 +1177,16 @@ def _pricing_block(pricing: dict | None) -> str:
             f"🔥 Early adopter offer: ₹{price}/mo\n"
             f"Regular price after {days} days: ₹{reg}/mo"
         )
-    return f"Pro: ₹{pricing.get('current_price', 499)}/mo"
+    return f"Pro: ₹{pricing.get('current_price', 99)}/mo"
 
 
 def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> str:
-    """Dynamic upgrade message shown during early adopter period."""
-    ea_price = pricing.get('early_adopter_price', 199)
-    reg_price = pricing.get('regular_price', 499)
+    """Dynamic upgrade message for Pro tier."""
+    ea_price = pricing.get('early_adopter_price', 99)
 
     return (
-        f"🚀 *{escape_md(bot_name)} Pro \\(Early Adopter Offer\\)*\n\n"
-        f"◆ *₹{ea_price}/month* ~₹{reg_price}/month~\n\n"
-        f"🔒 Lock in ₹{ea_price}/month forever\\.\n\n"
+        f"🚀 *{escape_md(bot_name)} Pro*\n\n"
+        f"💎 *₹{ea_price}/month*\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
         f"{escape_md(bot_name)} monitors 530\\+ tech company career pages and sends you job opportunities matching your skills and experience directly on Telegram\\.\n\n"
@@ -1207,10 +1205,10 @@ def upgrade_early_adopter_message(pricing: dict, bot_name: str = "Froncy") -> st
 
 def upgrade_regular_message(pricing: dict, bot_name: str = "Froncy") -> str:
     """Dynamic upgrade message after early adopter period ends."""
-    price = pricing.get('current_price', 499)
+    price = pricing.get('current_price', 99)
     return (
         f"🚀 *{escape_md(bot_name)} Pro*\n\n"
-        f"◆ *₹{price}/month*\n\n"
+        f"💎 *₹{price}/month*\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "*Stop searching\\. Get relevant jobs delivered to you\\.*\n\n"
         f"{escape_md(bot_name)} monitors 530\\+ tech company career pages and sends you job opportunities matching your skills and experience directly on Telegram\\.\n\n"

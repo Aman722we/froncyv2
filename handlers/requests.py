@@ -110,7 +110,7 @@ async def request_hr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("💳 Request HR Details (₹49)", callback_data=f"buy_hr_{job_id}")],
         ]
         if not is_pro:
-            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹99/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
         buttons.append([InlineKeyboardButton("🔙 Back to Job", callback_data=f"manual_view_{job_id}" if job_id else "back_menu")])
 
         kb = InlineKeyboardMarkup(buttons)
@@ -260,7 +260,7 @@ async def request_resume_review_callback(update: Update, context: ContextTypes.D
             [InlineKeyboardButton("💳 Get Resume Review (₹99)", callback_data="buy_resume_review")]
         ]
         if not is_pro:
-            buttons.append([InlineKeyboardButton("💎 Go Pro (₹199/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
+            buttons.append([InlineKeyboardButton("💎 Go Pro (₹99/mo): Instant Alerts & 8 Jobs/Day", callback_data="menu_upgrade")])
         buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
         
         kb = InlineKeyboardMarkup(buttons)

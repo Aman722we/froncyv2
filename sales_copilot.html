@@ -63,6 +63,11 @@
       color: #6ee7b7;
       border: 1px solid rgba(16, 185, 129, 0.4);
     }
+    .badge-d {
+      background: rgba(139, 92, 246, 0.2);
+      color: #c4b5fd;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+    }
     .header-actions {
       display: flex;
       gap: 8px;
@@ -163,6 +168,12 @@
       background: #059669;
       color: white;
       border-color: #10b981;
+    }
+    .pill.active-d {
+      background: #6d28d9;
+      color: white;
+      border-color: #8b5cf6;
+      font-weight: 600;
     }
     .prospect-list {
       flex: 1;
@@ -379,6 +390,11 @@
       font-size: 0.82rem;
       font-weight: 600;
     }
+    .flow-btn.active-d {
+      background: #4c1d95;
+      color: #ddd6fe;
+      border-color: #8b5cf6;
+    }
     .flow-btn.active-c {
       background: #064e3b;
       color: #a7f3d0;
@@ -418,6 +434,12 @@
       border-color: var(--card-border);
       font-weight: 700;
     }
+    .tab-btn.active-purple {
+      background: #4c1d95;
+      color: #ddd6fe;
+      border-color: #8b5cf6;
+      font-weight: 700;
+    }
     .tab-btn.active-green {
       background: #064e3b;
       color: #6ee7b7;
@@ -444,6 +466,12 @@
       background: #1e3a5f;
       border-color: var(--primary);
       color: #93c5fd;
+      font-weight: 600;
+    }
+    .chip-btn.active-d {
+      background: #4c1d95;
+      border-color: #8b5cf6;
+      color: #ddd6fe;
       font-weight: 600;
     }
     .chip-btn.active-c {
@@ -591,6 +619,7 @@
     <div class="header-brand">
       <h1>🚀 Froncy V2 Outreach Copilot</h1>
       <span class="badge" id="statsBadge">0 Prospects</span>
+      <span class="badge badge-d" id="cohortDBadge">Cohort D: 0</span>
       <span class="badge badge-c" id="cohortBadge">Cohort C: 0</span>
     </div>
     <div class="header-actions">
@@ -611,6 +640,7 @@
         <input type="text" class="search-input" id="searchBox" placeholder="🔍 Search prospects..." oninput="renderProspectList()">
         <div class="filter-pills">
           <div class="pill active" onclick="setFilter('all', this)">All (<span id="countAll">0</span>)</div>
+          <div class="pill" onclick="setFilter('cohortD', this)">🎯 Cohort D (<span id="countCohortD">0</span>)</div>
           <div class="pill" onclick="setFilter('cohortC', this)">🌱 Cohort C (<span id="countCohortC">0</span>)</div>
           <div class="pill" onclick="setFilter('cohortB', this)">⚡ Cohort B (<span id="countCohortB">0</span>)</div>
           <div class="pill" onclick="setFilter('due', this)">⏰ Due (<span id="countDue">0</span>)</div>
@@ -659,6 +689,7 @@
             <div class="input-group">
               <label>Cohort / Experiment</label>
               <select class="input-field" id="pCohort" onchange="updateCurrentProspect('cohort', this.value)">
+                <option value="Cohort D (Passive Discovery)" selected>🎯 Cohort D (Passive Discovery)</option>
                 <option value="Cohort C (Natural Conversation)">🌱 Cohort C (Natural Warm Flow)</option>
                 <option value="Cohort B (Next 36)">⚡ Cohort B (Direct 3-Stage)</option>
                 <option value="Cohort A (Original 36)">🏛️ Cohort A (Original 5-Stage)</option>
@@ -680,7 +711,7 @@
                 <option value="Level 1: Problem Aware">🟡 Level 1: Problem Aware</option>
                 <option value="Level 2: Solution Interested">🔵 Level 2: Solution Interested</option>
                 <option value="Level 3: Purchase Intent">🟢 Level 3: Purchase Intent (Link asked)</option>
-                <option value="Paid Subscriber">💎 Paid ₹199 Subscriber</option>
+                <option value="Paid Subscriber">💎 Paid ₹99 Subscriber</option>
               </select>
             </div>
             <div class="input-group">
@@ -690,7 +721,7 @@
                 <option value="Opener Sent">Opener Sent</option>
                 <option value="Replied">Replied / In Conversation</option>
                 <option value="Demo Shown">Demo Job Shown</option>
-                <option value="Offer Made">Pro Offer Made (₹199)</option>
+                <option value="Offer Made">Pro Offer Made (₹99)</option>
                 <option value="Paid">Paid Pro 💎</option>
                 <option value="Lost">Lost / Closed</option>
               </select>
@@ -735,7 +766,7 @@
               </div>
               <div class="metric-pill success-pill">
                 <span class="m-val" id="metricPaid">0</span>
-                <span class="m-lbl">Paid ₹199 (L3)</span>
+                <span class="m-lbl">Paid ₹99 (L3)</span>
               </div>
             </div>
           </div>
@@ -745,8 +776,11 @@
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700;">Workflow:</span>
               <div class="flow-pills">
-                <button class="flow-btn active-c" id="btnFlowNaturalC" onclick="setFlowMode('natural_c')">
-                  🌱 Cohort C: Natural Warm Flow (Recommended)
+                <button class="flow-btn active-d" id="btnFlowIntentD" onclick="setFlowMode('intent_d')">
+                  🎯 Cohort D: Passive Discovery (Recommended)
+                </button>
+                <button class="flow-btn" id="btnFlowNaturalC" onclick="setFlowMode('natural_c')">
+                  🌱 Cohort C: Natural Warm Flow
                 </button>
                 <button class="flow-btn" id="btnFlowFast3" onclick="setFlowMode('fast3')">
                   ⚡ Cohort B: Direct 3-Stage
@@ -830,6 +864,7 @@
       <div class="input-group">
         <label>Cohort / Experiment Group</label>
         <select class="input-field" id="newPCohort">
+          <option value="Cohort D (Passive Discovery)" selected>🎯 Cohort D (Passive Discovery)</option>
           <option value="Cohort C (Natural Conversation)">🌱 Cohort C (Natural Warm Flow)</option>
           <option value="Cohort B (Next 36)">⚡ Cohort B (Direct 3-Stage)</option>
           <option value="Cohort A (Original 36)">🏛️ Cohort A (Original 5-Stage)</option>
@@ -854,16 +889,42 @@
 
   <!-- Qualification Matrix Cheat Sheet Modal -->
   <div class="modal-overlay" id="matrixModal">
-    <div class="modal-content wide">
+    <div class="modal-content wide" style="max-height:88vh; overflow-y:auto;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="font-size: 1.15rem; color:#93c5fd;">📋 Qualification Rules & Validation Matrix</h3>
+        <h3 style="font-size: 1.15rem; color:#c4b5fd;">🎯 Cohort D Playbook & Qualification Cheat Sheet</h3>
         <button class="btn-outline btn-sm" onclick="closeMatrixModal()">✖</button>
       </div>
       
-      <p style="font-size:0.83rem; color:var(--text-muted);">
-        Don't spend 15 minutes debating a ₹199/month product. Use this simple matrix to qualify or disqualify fast:
+      <p style="font-size:0.83rem; color:var(--text-muted); margin-top:6px;">
+        Core Principle: <strong>Find developers who are a good fit, ask whether they're open to opportunities, and sell only to those who show interest.</strong>
       </p>
 
+      <!-- 10-Second Lead Scoring -->
+      <div style="background:#1e1b4b; border:1px solid #4338ca; border-radius:6px; padding:12px; margin-top:10px;">
+        <h4 style="font-size:0.88rem; color:#a5b4fc; margin-bottom:6px;">⏱️ Part 1: 10-Second Lead Scoring</h4>
+        <div style="font-size:0.8rem; color:#e0e7ff; line-height:1.5;">
+          <table style="width:100%; border-collapse:collapse; margin-bottom:8px;">
+            <tr style="border-bottom:1px solid #3730a3;"><th style="text-align:left; padding:4px 0;">Signal</th><th style="text-align:right;">Points</th></tr>
+            <tr><td style="padding:3px 0;">Currently employed in software engineering</td><td style="text-align:right;">+2</td></tr>
+            <tr><td style="padding:3px 0;">2–8 years of experience</td><td style="text-align:right;">+2</td></tr>
+            <tr><td style="padding:3px 0;">Relevant tech stack</td><td style="text-align:right;">+2</td></tr>
+            <tr><td style="padding:3px 0;">Explicitly open to opportunities (#OpenToWork / post)</td><td style="text-align:right;">+2</td></tr>
+            <tr><td style="padding:3px 0;">Location supported (India / Remote)</td><td style="text-align:right;">+1</td></tr>
+            <tr><td style="padding:3px 0;">Recently active on LinkedIn</td><td style="text-align:right;">+1</td></tr>
+          </table>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; font-weight:600; font-size:0.78rem;">
+            <span style="color:#6ee7b7;">🟢 8–10 pts: High Priority (Message First)</span>
+            <span style="color:#93c5fd;">🔵 6–7 pts: Contact & Qualify</span>
+            <span style="color:#fca5a5;">🔴 &lt;6 pts: Skip for now</span>
+          </div>
+          <div style="margin-top:6px; font-size:0.75rem; color:#cbd5e1;">
+            <em>*Note: Being employed at TCS, Wipro, Infosys etc. does NOT mean someone wants to switch. Intent matters more than employer!</em>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cohort D Response Matrix -->
+      <h4 style="font-size:0.88rem; color:#38bdf8; margin-top:14px; margin-bottom:6px;">💬 Part 3: Prospect Response Quick-Guide</h4>
       <table class="matrix-table">
         <thead>
           <tr>
@@ -874,54 +935,62 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>Open / thinking about exploring</strong></td>
-            <td><span class="tag-green">🟢 High Priority</span></td>
-            <td>Ask about manual career page checking + Intro Froncy</td>
+            <td><strong>"Yes, I'm looking"</strong></td>
+            <td><span class="tag-green">🟢 High Intent</span></td>
+            <td>Explain passive discovery + offer real alert (Case 1)</td>
           </tr>
           <tr>
-            <td><strong>Manually checks career pages</strong></td>
-            <td><span class="tag-green">🟢 High Priority</span></td>
-            <td>Send Qualify Pain question (Message 2)</td>
+            <td><strong>"Maybe, casually exploring"</strong></td>
+            <td><span class="tag-green">🟢 Warm Intent</span></td>
+            <td>Highlight zero-effort background alerts (Case 2)</td>
           </tr>
           <tr>
-            <td><strong>Misses relevant openings / LinkedIn is late</strong></td>
-            <td><span class="tag-green">🟢 High Priority</span></td>
-            <td>Present Froncy 500+ hourly alerts</td>
+            <td><strong>"I already use LinkedIn/Naukri"</strong></td>
+            <td><span class="tag-yellow">🟡 Additive</span></td>
+            <td>Validate them! Position as additional discovery channel (Case 4)</td>
           </tr>
           <tr>
-            <td><strong>Interested in automated alerts</strong></td>
-            <td><span class="tag-green">🟢 High Priority</span></td>
-            <td>Send Message 3 (₹199 Pro Offer + Bot Link)</td>
+            <td><strong>"Why do I need this?"</strong></td>
+            <td><span class="tag-yellow">🟡 Core Pitch</span></td>
+            <td>Explain 520+ career page monitoring + Target Watchlist (Case 5/Hook)</td>
           </tr>
           <tr>
-            <td><strong>LinkedIn is sufficient</strong></td>
-            <td><span class="tag-yellow">🟡 Low Priority</span></td>
-            <td>Check if they ever check top tier career pages, else close loop</td>
+            <td><strong>"I don't check career pages"</strong></td>
+            <td><span class="tag-green">🟢 Flip Objection</span></td>
+            <td>"That's the point! We monitor them so you don't have to" (Case 6)</td>
           </tr>
           <tr>
-            <td><strong>Not exploring opportunities / Settled</strong></td>
-            <td><span class="tag-yellow">🟡 Low Priority</span></td>
-            <td><em>Important:</em> Test passive alerts interest before disqualifying!</td>
+            <td><strong>"Send me details / How much?"</strong></td>
+            <td><span class="tag-green">🟢 Ready to Buy</span></td>
+            <td>Send 6 bullet highlights + ₹99/mo + Telegram Bot link</td>
           </tr>
           <tr>
-            <td><strong>Doesn't see value in ₹199</strong></td>
+            <td><strong>"I'm not looking / Not interested"</strong></td>
             <td><span class="tag-red">🔴 Disqualify</span></td>
-            <td>Offer free daily feed and move to the next prospect</td>
+            <td>"No problem! Thanks for letting me know." Move on immediately!</td>
           </tr>
         </tbody>
       </table>
 
-      <div style="background:#131d2e; border:1px solid #1e3a5f; border-radius:6px; padding:12px; margin-top:8px;">
-        <h4 style="font-size:0.85rem; color:#38bdf8; margin-bottom:6px;">🎯 The 3 Levels of Validation (Do Not Confuse!)</h4>
-        <div style="font-size:0.8rem; line-height:1.5; color:#cbd5e1; display:flex; flex-direction:column; gap:6px;">
-          <div><strong>1. Problem Awareness:</strong> "Yes, checking career pages is annoying." <em>(They acknowledge the pain, but might not buy).</em></div>
-          <div><strong>2. Solution Interest:</strong> "That sounds useful." <em>(They like the idea, but haven't committed).</em></div>
-          <div><strong>3. Purchase Intent (True Goal):</strong> "Send me the link. I'll try it." <em>(They open the bot and subscribe at ₹199/mo).</em></div>
+      <!-- 10 Rules for Selling -->
+      <div style="background:#131d2e; border:1px solid #1e3a5f; border-radius:6px; padding:12px; margin-top:12px;">
+        <h4 style="font-size:0.88rem; color:#f59e0b; margin-bottom:6px;">⚖️ Part 5: 10 Rules for Selling</h4>
+        <div style="font-size:0.78rem; line-height:1.5; color:#cbd5e1; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>1. Don't explain technical architecture / scrapers.</div>
+          <div>2. Don't start with "Do you check career pages?"</div>
+          <div>3. Don't claim LinkedIn/Naukri post late.</div>
+          <div>4. Don't promise guaranteed interviews.</div>
+          <div>5. Don't dump entire feature list in msg 1.</div>
+          <div>6. Don't discount before understanding objection.</div>
+          <div>7. Don't pitch people who clearly aren't looking.</div>
+          <div>8. Always show a real alert when demonstrating.</div>
+          <div>9. Make message relevant to their role & stack.</div>
+          <div>10. Never pretend someone is looking if not said so.</div>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button class="btn-primary" onclick="closeMatrixModal()">Got It</button>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-primary" onclick="closeMatrixModal()">Close Cheat Sheet</button>
       </div>
     </div>
   </div>
@@ -935,8 +1004,174 @@
     let prospects = [];
     let currentProspectId = null;
     let activeFilter = 'all';
-    let currentFlowMode = localStorage.getItem(FLOW_MODE_KEY) || 'natural_c'; // 'natural_c', 'fast3', 'classic5'
-    let activeScriptTab = currentFlowMode === 'natural_c' ? 'c_icebreaker' : (currentFlowMode === 'fast3' ? 'f3_opener' : 'openers');
+    let currentFlowMode = localStorage.getItem(FLOW_MODE_KEY) || 'intent_d'; // 'intent_d', 'natural_c', 'fast3', 'classic5'
+    let activeScriptTab = currentFlowMode === 'intent_d' ? 'd_openers' : (currentFlowMode === 'natural_c' ? 'c_icebreaker' : (currentFlowMode === 'fast3' ? 'f3_opener' : 'openers'));
+
+    // --- COHORT D: Intent-First Passive Discovery Scripts ---
+    const COHORT_D_SCRIPTS = {
+      d_openers: [
+        {
+          id: 'd_op_preferred',
+          label: 'Option 1: Preferred Opening (Recommended)',
+          desc: 'Direct, polite intent qualification. Ask whether they are open to opportunities before pitching anything.',
+          template: "Hi {Name}, noticed you're working as a {Role} at {Company}.\n\nQuick question: Are you currently open to exploring new software engineering opportunities, or are you not looking to switch right now?"
+        },
+        {
+          id: 'd_op_casual',
+          label: 'Option 2: Slightly More Casual',
+          desc: 'Casual tech stack and company opener.',
+          template: "Hey {Name}, noticed your experience in{TechStackIn}.\n\nAre you currently exploring opportunities outside {Company}, or are you happy where you are?"
+        },
+        {
+          id: 'd_op_explicit',
+          label: 'Option 3: Explicit Job Hunter (Open to Work / Post)',
+          desc: 'Use when the prospect has #OpenToWork or publicly posted looking for opportunities.',
+          template: "Hey {Name}, noticed you're exploring new opportunities in {Role}.\n\nI'm building a tool that sends personalised software job alerts directly to Telegram. Thought it might be relevant to your search.\n\nWould you be interested in checking it out?"
+        }
+      ],
+      d_replies: [
+        {
+          id: 'd_rep_yes',
+          label: 'Case 1: "Yes, I\'m looking" (High Intent)',
+          desc: 'Direct explanation of passive discovery + ask to show an actual job alert.',
+          template: "Great!\n\nI'm actually building a platform specifically for working software developers who don't want to spend their time searching for jobs every day.\n\nIt monitors 520+ tech company career pages and sends relevant openings directly to Telegram, filtered by experience, tech stack and location.\n\nYou also get direct application links and can track specific companies.\n\nWould you like to see an actual job alert?"
+        },
+        {
+          id: 'd_rep_maybe',
+          label: 'Case 2: "Maybe / Casually exploring" (Warm)',
+          desc: 'Highlight that the tool is designed specifically for passive, zero-effort exploration.',
+          template: "That's exactly the kind of situation this tool is designed for.\n\nYou don't need to actively search every day. Set your preferences once, and relevant opportunities are delivered directly to your Telegram whenever they're detected.\n\nYou can continue focusing on your current job without missing opportunities.\n\nWant me to show you an example?"
+        },
+        {
+          id: 'd_rep_not_looking',
+          label: 'Case 3: "I\'m not looking right now" (Disqualify)',
+          desc: 'Polite, zero pressure. Do not pitch further. Move to the next prospect.',
+          template: "No problem at all! Thanks for letting me know."
+        },
+        {
+          id: 'd_rep_details',
+          label: 'Case 8: "Send me details" (Send Spec + Link)',
+          desc: 'Clean 6-bullet summary of capabilities + Telegram setup link.',
+          template: "Sure!\n\nHere's what it does:\n\n• Monitors 520+ technology company career pages.\n• Checks for new openings every hour.\n• Matches jobs to your experience and tech stack.\n• Sends personalised Telegram notifications.\n• Provides direct company application links.\n• Lets you track your own target companies.\n\nThe idea is to make job discovery passive instead of something you have to do every day.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot"
+        }
+      ],
+      d_objections: [
+        {
+          id: 'd_obj_why_need',
+          label: 'Case 5: "Why do I need this?" (Core Value)',
+          desc: 'Position as an additional discovery channel alongside LinkedIn & Naukri.',
+          template: "Fair question! You should absolutely continue using LinkedIn and Naukri.\n\nBut think of this as an additional channel for discovering opportunities.\n\nWe monitor 520+ tech companies directly from their career pages. You set your tech stack, experience and location once, and matching openings arrive directly on your Telegram.\n\nSome jobs will overlap with LinkedIn and Naukri, but you also get another source of opportunities without having to manually check hundreds of companies.\n\nBasically, you continue your regular job search, while we keep looking for relevant openings in the background.\n\nYou don't have to replace anything. Just add another channel to avoid missing opportunities."
+        },
+        {
+          id: 'd_obj_target_watchlist',
+          label: 'Target Company Watchlist (Strongest Hook)',
+          desc: 'When prospect mentions dream companies or asks what makes this unique.',
+          template: "That's exactly where this becomes useful.\n\nYou can add your target companies to your personal watchlist. Instead of visiting their career pages every few days, we'll monitor them and notify you whenever a matching opening appears.\n\nYou don't have to remember to check 15 different companies."
+        },
+        {
+          id: 'd_obj_linkedin_naukri',
+          label: 'Case 4: "I already use LinkedIn and Naukri"',
+          desc: 'Validate them and position as an additive discovery channel, not a replacement.',
+          template: "Absolutely, and you should continue using them.\n\nThis isn't meant to replace LinkedIn or Naukri. It's an additional discovery channel.\n\nInstead of spending time scrolling through job feeds, you get relevant openings directly on Telegram from the company career pages we monitor.\n\nYou can use both simultaneously."
+        },
+        {
+          id: 'd_obj_no_career_pages',
+          label: 'Case 6: "I don\'t check company career pages"',
+          desc: 'Flip the objection into the core benefit.',
+          template: "That's actually the point!\n\nYou don't need to check them. We monitor them for you and notify you when a relevant position appears."
+        },
+        {
+          id: 'd_obj_linkedin_alerts',
+          label: 'Case 7: "I already have LinkedIn job alerts"',
+          desc: 'Show how career pages complement LinkedIn alerts without another feed to scroll.',
+          template: "That's great!\n\nOur service works alongside those alerts. We also monitor company career pages directly and deliver personalised matches through Telegram.\n\nThink of it as another channel for discovering opportunities, without another job feed to scroll through."
+        }
+      ],
+      d_closing: [
+        {
+          id: 'd_close_price',
+          label: 'Case 9: "How much?" (₹99/month Offer)',
+          desc: 'Direct ₹99/month pricing quote with setup link.',
+          template: "It's ₹99/month.\n\nYou get personalised job alerts, company tracking and direct application links.\n\nWould you like to get started?\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot"
+        },
+        {
+          id: 'd_close_think',
+          label: 'Case 10: "I\'ll think about it"',
+          desc: 'Zero pressure, encourage checking out alerts to judge relevance.',
+          template: "Sure, no pressure!\n\nThe best way to judge it is to see whether the alerts are actually relevant to your profile.\n\nYou can check it out and decide whether it's worth continuing:\nhttps://t.me/FroncyJobsBot?start=li_pilot"
+        },
+        {
+          id: 'd_close_guarantee',
+          label: 'Case 11: "Will it guarantee that I\'ll get a job?"',
+          desc: 'Honest answer setting realistic expectations.',
+          template: "No, it doesn't guarantee a job or interview.\n\nIt helps you discover relevant openings more conveniently and apply directly through the company's application link."
+        },
+        {
+          id: 'd_close_how_many',
+          label: 'Case 12: "How many jobs will I receive?"',
+          desc: 'Emphasize relevance over noise.',
+          template: "It depends on your tech stack, experience, location and preferred companies.\n\nWe prioritise relevance rather than sending you hundreds of unrelated vacancies."
+        },
+        {
+          id: 'd_close_later',
+          label: 'Case 13: "I\'m interested, but not now"',
+          desc: 'Ask for permission to stay in touch.',
+          template: "No problem!\n\nWould it be okay if I reached out again when you're actively exploring opportunities?"
+        },
+        {
+          id: 'd_close_not_interested',
+          label: 'Case 14: "Not interested"',
+          desc: 'Polite, clean exit. Move on immediately.',
+          template: "No worries. Thanks for your time!"
+        }
+      ],
+      d_followups: [
+        {
+          id: 'd_fu_accepted_no_reply',
+          label: 'Follow-up 1: Accepted connection but didn\'t reply (Day 2-3)',
+          desc: 'Gentle re-qualification check-in.',
+          template: "Hey {Name}, just following up on my earlier message.\n\nAre you currently open to exploring new software engineering opportunities, or not looking at the moment?"
+        },
+        {
+          id: 'd_fu_interested_no_try',
+          label: 'Follow-up 2: Showed interest but didn\'t try the product (Day 3)',
+          desc: 'Re-engage and offer to show Telegram alerts.',
+          template: "Hey {Name}, just checking whether you got a chance to look at the job-alert platform I mentioned.\n\nHappy to show you how the personalised Telegram alerts work:\nhttps://t.me/FroncyJobsBot?start=li_pilot"
+        },
+        {
+          id: 'd_fu_price_no_buy',
+          label: 'Follow-up 3: Saw pricing but didn\'t purchase (Day 4-5)',
+          desc: 'Ask for honest feedback with zero pressure.',
+          template: "Hey {Name}, just checking in.\n\nWas there anything about the product or pricing that made you hesitant?\n\nNo pressure. Just looking for honest feedback."
+        },
+        {
+          id: 'd_fu_close_loop',
+          label: 'Follow-up 4: Final Close Loop / Breakup (Day 7)',
+          desc: 'Polite closing of the loop.',
+          template: "Hey {Name}, closing the loop here so I don't clutter your inbox. Best of luck with your work at {Company}!"
+        }
+      ],
+      d_playbook: [
+        {
+          id: 'd_pb_checklist',
+          label: '📋 10-Second Lead Scoring & Checklist',
+          desc: 'Reference checklist before reaching out to any LinkedIn profile.',
+          template: "🎯 10-SECOND LINKEDIN PROSPECT CHECKLIST:\n\nMust-Have Criteria:\n✓ Currently employed in software engineering / dev\n✓ 2–8 years of experience\n✓ Supported tech stack & India location\n\nLead Scoring (Max 10 pts):\n• Employed in software: +2 pts\n• 2–8 YOE: +2 pts\n• Relevant tech stack: +2 pts\n• Explicitly open to opportunities (#OpenToWork / post): +2 pts\n• Location supported: +1 pt\n• Recently active on LinkedIn: +1 pt\n\nPriority:\n• 8–10 pts: High priority (Message first)\n• 6–7 pts: Contact and qualify\n• Below 6: Skip for now\n\n*Note: TCS/Wipro/Infosys is a pool of talent, NOT proof of intent. Intent matters more than employer!"
+        },
+        {
+          id: 'd_pb_rules',
+          label: '⚖️ 10 Rules for Selling',
+          desc: 'The cardinal rules to keep conversations high-converting.',
+          template: "🚨 10 RULES FOR SELLING (COHORT D):\n\n1. Don't explain technical architecture / scrapers.\n2. Don't start with 'Do you check company career pages?'\n3. Don't claim LinkedIn or Naukri always post jobs late.\n4. Don't promise fewer competitors or guaranteed interviews.\n5. Don't send the entire feature list in the first message.\n6. Don't discount before understanding the objection.\n7. Don't pitch people who clearly aren't looking.\n8. Always show a real, relevant notification when demonstrating.\n9. Make message relevant to their actual role and experience.\n10. Never pretend to know that somebody is job hunting when they haven't said so."
+        },
+        {
+          id: 'd_pb_targets',
+          label: '🎯 Daily Targets & The 3 Core Rules',
+          desc: 'Daily activity metrics and core operating principles.',
+          template: "📊 DAILY PROSPECTING TARGETS:\n• 40 Profiles Reviewed\n• 20–30 Connection Requests Sent\n• 15–20 Personalised Opening Messages\n• 5–10 Meaningful Conversations\n• 2–5 Product Demos / Alerts Shown\n• Goal: Measure paid conversions per 100 relevant prospects contacted.\n\n💡 THE 3 MOST IMPORTANT RULES:\n1. Don't use the company name as the buying signal. Intent matters.\n2. Separate good prospects (profile fit) from interested prospects (buying intent).\n3. Your first message should QUALIFY, not sell. Ask if they're open to opportunities!"
+        }
+      ]
+    };
 
     // --- COHORT C: Verified Natural Conversation Scripts ---
     const COHORT_C_SCRIPTS = {
@@ -1035,15 +1270,15 @@
       c_convert: [
         {
           id: 'c_c_offer',
-          label: 'Present Pro Offer (₹199/mo)',
+          label: 'Present Pro Offer (₹99/mo)',
           desc: 'Direct pitch when they express genuine interest.',
-          template: "Makes sense. Froncy does exactly that. You can set your role and preferences, and it monitors 500+ company career pages for matching opportunities. The subscription is just ₹199/month.\n\nWould you be interested in trying it?\n\nHere's the link to set it up: https://t.me/FroncyJobsBot?start=li_pilot"
+          template: "Makes sense. Froncy does exactly that. You can set your role and preferences, and it monitors 500+ company career pages for matching opportunities. The subscription is just ₹99/month.\n\nWould you be interested in trying it?\n\nHere's the link to set it up: https://t.me/FroncyJobsBot?start=li_pilot"
         },
         {
           id: 'c_c_price_asked',
           label: 'Direct Price Inquiry Reply',
           desc: 'When prospect asks: "What is the price?"',
-          template: "Froncy is ₹199/month.\n\nIt monitors 500+ company career pages on an hourly crawl and sends matching alerts directly to Telegram based on your role and preferences.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know once you try it out!"
+          template: "Froncy is ₹99/month.\n\nIt monitors 500+ company career pages on an hourly crawl and sends matching alerts directly to Telegram based on your role and preferences.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know once you try it out!"
         },
         {
           id: 'c_c_send_link',
@@ -1053,9 +1288,9 @@
         },
         {
           id: 'c_c_discount',
-          label: 'Reply to: "Any discount / why ₹199?"',
+          label: 'Reply to: "Any discount / why ₹99?"',
           desc: 'Anchor value over price.',
-          template: "₹199/month is less than the price of a coffee a week, and it saves 10+ hours of manually refreshing company career pages every month.\n\nYou can test out the feed first here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know what you think!"
+          template: "₹99/month is less than ₹3.50 a day, and it saves 10+ hours of manually refreshing company career pages every month.\n\nYou can test out the feed first here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know what you think!"
         }
       ],
       c_followups: [
@@ -1143,15 +1378,15 @@
       f3_convert: [
         {
           id: 'f3_c_offer',
-          label: 'Step 3: Present Pro Offer (₹199/mo)',
+          label: 'Step 3: Present Pro Offer (₹99/mo)',
           desc: 'Direct pitch when they express genuine interest.',
-          template: "Makes sense. Froncy does exactly that. You can set your role and preferences, and it monitors 500+ company career pages for matching opportunities. The subscription is just ₹199/month.\n\nWould you be interested in trying it?\n\nHere's the link to set it up: https://t.me/FroncyJobsBot?start=li_pilot"
+          template: "Makes sense. Froncy does exactly that. You can set your role and preferences, and it monitors 500+ company career pages for matching opportunities. The subscription is just ₹99/month.\n\nWould you be interested in trying it?\n\nHere's the link to set it up: https://t.me/FroncyJobsBot?start=li_pilot"
         },
         {
           id: 'f3_c_price_asked',
           label: 'Direct Price Inquiry Reply',
           desc: 'When prospect asks: "What is the price?"',
-          template: "Froncy is ₹199/month.\n\nIt monitors 500+ company career pages on an hourly crawl and sends matching alerts directly to Telegram based on your role and preferences.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know once you try it out!"
+          template: "Froncy is ₹99/month.\n\nIt monitors 500+ company career pages on an hourly crawl and sends matching alerts directly to Telegram based on your role and preferences.\n\nYou can set up your preferences here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know once you try it out!"
         },
         {
           id: 'f3_c_send_link',
@@ -1161,9 +1396,9 @@
         },
         {
           id: 'f3_c_discount',
-          label: 'Reply to: "Any discount / why ₹199?"',
+          label: 'Reply to: "Any discount / why ₹99?"',
           desc: 'Anchor value over price.',
-          template: "₹199/month is less than the price of a coffee a week, and it saves 10+ hours of manually refreshing company career pages every month.\n\nYou can test out the feed first here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know what you think!"
+          template: "₹99/month is less than ₹3.50 a day, and it saves 10+ hours of manually refreshing company career pages every month.\n\nYou can test out the feed first here: https://t.me/FroncyJobsBot?start=li_pilot\n\nLet me know what you think!"
         }
       ],
       f3_followups: [
@@ -1191,7 +1426,7 @@
           id: 'f3_m_summary',
           label: '📋 Fast Qualification Rules Summary',
           desc: 'Decision rules overview.',
-          template: "QUALIFICATION RULES:\n\n🟢 HIGH PRIORITY (Pursue):\n• Manually checks career pages\n• Misses relevant openings on career sites\n• Interested in automated Telegram alerts\n\n🟡 LOW PRIORITY (Keep warm / low effort):\n• LinkedIn is sufficient for them\n• Not exploring opportunities (check if passive alerts appeal)\n\n🔴 DISQUALIFY (Save your time):\n• Argues about ₹199 value after 1 explanation\n• Refuses to use Telegram or automated alerts"
+          template: "QUALIFICATION RULES:\n\n🟢 HIGH PRIORITY (Pursue):\n• Manually checks career pages\n• Misses relevant openings on career sites\n• Interested in automated Telegram alerts\n\n🟡 LOW PRIORITY (Keep warm / low effort):\n• LinkedIn is sufficient for them\n• Not exploring opportunities (check if passive alerts appeal)\n\n🔴 DISQUALIFY (Save your time):\n• Argues about ₹99 value after 1 explanation\n• Refuses to use Telegram or automated alerts"
         },
         {
           id: 'f3_m_levels',
@@ -1201,9 +1436,9 @@
         },
         {
           id: 'f3_m_obj_price',
-          label: 'SOS: "₹199 is too high"',
+          label: 'SOS: "₹99 is too high"',
           desc: 'Quick objection handle.',
-          template: "Fair enough! If checking company career pages manually doesn't take much of your time, ₹199/month might not make sense. But if it saves 10+ hours of searching every month, it pays for itself on day one. You can test it out here: https://t.me/FroncyJobsBot?start=li_pilot"
+          template: "Fair enough! If checking company career pages manually doesn't take much of your time, ₹99/month might not make sense. But if it saves 10+ hours of searching every month, it pays for itself on day one. You can test it out here: https://t.me/FroncyJobsBot?start=li_pilot"
         },
         {
           id: 'f3_m_obj_free',
@@ -1292,13 +1527,13 @@
         },
         {
           id: 'offer_pro_pitch',
-          label: 'Step 4: Present Pro Offer (₹199/mo)',
-          template: "That's exactly what Froncy is built for.\n\nInstead of manually checking multiple company career pages, Froncy monitors 530+ supported tech company career pages on an hourly crawl, matches new openings against your profile, and sends relevant alerts directly to Telegram.\n\nThe Pro plan also gives you access to the full job database.\n\nIt's ₹199/month.\n\nHere's the bot link: https://t.me/FroncyJobsBot?start=li_pilot\n\nYou can explore the free daily feed first and activate Pro inside the bot. Let me know once you set it up!"
+          label: 'Step 4: Present Pro Offer (₹99/mo)',
+          template: "That's exactly what Froncy is built for.\n\nInstead of manually checking multiple company career pages, Froncy monitors 530+ supported tech company career pages on an hourly crawl, matches new openings against your profile, and sends relevant alerts directly to Telegram.\n\nThe Pro plan also gives you access to the full job database.\n\nIt's ₹99/month.\n\nHere's the bot link: https://t.me/FroncyJobsBot?start=li_pilot\n\nYou can explore the free daily feed first and activate Pro inside the bot. Let me know once you set it up!"
         },
         {
           id: 'offer_price_inquiry',
           label: 'Direct Price Inquiry Reply',
-          template: "Froncy Pro is ₹199/month.\n\nIt unlocks automated hourly job alerts based on your profile across 530+ supported company career pages, plus access to the full job database.\n\nYou can also explore the free daily job feed first before deciding whether to upgrade.\n\nHere's the bot: https://t.me/FroncyJobsBot?start=li_pilot"
+          template: "Froncy Pro is ₹99/month.\n\nIt unlocks automated hourly job alerts based on your profile across 530+ supported company career pages, plus access to the full job database.\n\nYou can also explore the free daily job feed first before deciding whether to upgrade.\n\nHere's the bot: https://t.me/FroncyJobsBot?start=li_pilot"
         }
       ],
       followups: [
@@ -1332,8 +1567,8 @@
       objections: [
         {
           id: 'obj_price',
-          label: '1. "₹199 is expensive / too high"',
-          template: "Fair enough! I don't want you to pay for something that won't be useful.\n\nThe main question is whether automated hourly monitoring and relevant alerts across 530+ company career pages would save you enough time to justify ₹199/month.\n\nIf it doesn't, I'd rather you stick with the free daily job feed."
+          label: '1. "₹99 is expensive / too high"',
+          template: "Fair enough! I don't want you to pay for something that won't be useful.\n\nThe main question is whether automated hourly monitoring and relevant alerts across 530+ company career pages would save you enough time to justify ₹99/month.\n\nIf it doesn't, I'd rather you stick with the free daily job feed."
         },
         {
           id: 'obj_free_pages',
@@ -1365,6 +1600,7 @@
 
     // Helper to get active script repo
     function getActiveScripts() {
+      if (currentFlowMode === 'intent_d') return COHORT_D_SCRIPTS;
       if (currentFlowMode === 'natural_c') return COHORT_C_SCRIPTS;
       if (currentFlowMode === 'fast3') return FAST3_SCRIPTS;
       return CLASSIC_SCRIPTS;
@@ -1425,7 +1661,9 @@
       currentFlowMode = mode;
       localStorage.setItem(FLOW_MODE_KEY, mode);
       updateFlowModeUI();
-      if (mode === 'natural_c') {
+      if (mode === 'intent_d') {
+        activeScriptTab = 'd_openers';
+      } else if (mode === 'natural_c') {
         activeScriptTab = 'c_icebreaker';
       } else if (mode === 'fast3') {
         activeScriptTab = 'f3_opener';
@@ -1437,33 +1675,44 @@
     }
 
     function updateFlowModeUI() {
+      const btnD = document.getElementById('btnFlowIntentD');
       const btnC = document.getElementById('btnFlowNaturalC');
       const btnFast = document.getElementById('btnFlowFast3');
       const btnClassic = document.getElementById('btnFlowClassic');
       
-      btnC.className = 'flow-btn' + (currentFlowMode === 'natural_c' ? ' active-c' : '');
-      btnFast.className = 'flow-btn' + (currentFlowMode === 'fast3' ? ' active-b' : '');
-      btnClassic.className = 'flow-btn' + (currentFlowMode === 'classic5' ? ' active-a' : '');
+      if (btnD) btnD.className = 'flow-btn' + (currentFlowMode === 'intent_d' ? ' active-d' : '');
+      if (btnC) btnC.className = 'flow-btn' + (currentFlowMode === 'natural_c' ? ' active-c' : '');
+      if (btnFast) btnFast.className = 'flow-btn' + (currentFlowMode === 'fast3' ? ' active-b' : '');
+      if (btnClassic) btnClassic.className = 'flow-btn' + (currentFlowMode === 'classic5' ? ' active-a' : '');
     }
 
     function renderScriptTabs() {
       const container = document.getElementById('scriptTabsContainer');
 
       let tabDefs = [];
-      if (currentFlowMode === 'natural_c') {
+      if (currentFlowMode === 'intent_d') {
+        tabDefs = [
+          { key: 'd_openers', label: '🎯 1. Qualify Opener' },
+          { key: 'd_replies', label: '💬 2. Reply Handling' },
+          { key: 'd_objections', label: '🛡️ 3. Objections & Discovery' },
+          { key: 'd_closing', label: '💰 4. Pricing & Closing' },
+          { key: 'd_followups', label: '⏳ 5. Follow-Ups' },
+          { key: 'd_playbook', label: '📋 6. Playbook & Rules' }
+        ];
+      } else if (currentFlowMode === 'natural_c') {
         tabDefs = [
           { key: 'c_icebreaker', label: '🌱 1. Warm Icebreaker' },
           { key: 'c_explore', label: '💬 2. Explore / Transition' },
           { key: 'c_pitch', label: '🎯 3. Pain & Froncy Intro' },
           { key: 'c_qualify', label: '🔍 4. Qualify Pain (Replies)' },
-          { key: 'c_convert', label: '💰 5. Convert (₹199 Pro Offer)' },
+          { key: 'c_convert', label: '💰 5. Convert (₹99 Pro Offer)' },
           { key: 'c_followups', label: '⏳ 6. Follow-Ups & SOS' }
         ];
       } else if (currentFlowMode === 'fast3') {
         tabDefs = [
           { key: 'f3_opener', label: '⚡ 1. Opener (Pain + Intro)' },
           { key: 'f3_qualify', label: '🎯 2. Qualify Pain (Replies)' },
-          { key: 'f3_convert', label: '💰 3. Convert (₹199 Pro Offer)' },
+          { key: 'f3_convert', label: '💰 3. Convert (₹99 Pro Offer)' },
           { key: 'f3_followups', label: '⏳ 4. Fast Follow-Ups' },
           { key: 'f3_matrix', label: '📋 5. Qualification Matrix & SOS' }
         ];
@@ -1482,7 +1731,7 @@
         activeScriptTab = tabDefs[0].key;
       }
 
-      const activeTabClass = currentFlowMode === 'natural_c' ? 'active-green' : 'active';
+      const activeTabClass = currentFlowMode === 'intent_d' ? 'active-purple' : (currentFlowMode === 'natural_c' ? 'active-green' : 'active');
       container.innerHTML = tabDefs.map(t => `
         <button class="tab-btn ${t.key === activeScriptTab ? activeTabClass : ''}" onclick="setScriptTab('${t.key}', this)">
           ${escapeHtml(t.label)}
@@ -1495,7 +1744,7 @@
     function setScriptTab(tabKey, el) {
       activeScriptTab = tabKey;
       if (el) {
-        const activeTabClass = currentFlowMode === 'natural_c' ? 'active-green' : 'active';
+        const activeTabClass = currentFlowMode === 'intent_d' ? 'active-purple' : (currentFlowMode === 'natural_c' ? 'active-green' : 'active');
         document.querySelectorAll('.script-tabs .tab-btn').forEach(btn => btn.className = 'tab-btn');
         el.classList.add(activeTabClass);
       }
@@ -1506,7 +1755,7 @@
       const chipsContainer = document.getElementById('scriptChipsContainer');
       const scriptsObj = getActiveScripts();
       const scripts = scriptsObj[activeScriptTab] || [];
-      const activeChipClass = currentFlowMode === 'natural_c' ? 'chip-btn active-c' : 'chip-btn active';
+      const activeChipClass = currentFlowMode === 'intent_d' ? 'chip-btn active-d' : (currentFlowMode === 'natural_c' ? 'chip-btn active-c' : 'chip-btn active');
 
       chipsContainer.innerHTML = scripts.map((s, idx) => `
         <button class="${idx === 0 ? activeChipClass : 'chip-btn'}" onclick="selectScript('${s.id}', this)">
@@ -1523,7 +1772,7 @@
     function selectScript(scriptId, el) {
       activeScriptId = scriptId;
       if (el) {
-        const activeChipClass = currentFlowMode === 'natural_c' ? 'chip-btn active-c' : 'chip-btn active';
+        const activeChipClass = currentFlowMode === 'intent_d' ? 'chip-btn active-d' : (currentFlowMode === 'natural_c' ? 'chip-btn active-c' : 'chip-btn active');
         document.querySelectorAll('.script-options .chip-btn').forEach(btn => btn.className = 'chip-btn');
         el.className = activeChipClass;
       }
@@ -1562,11 +1811,11 @@
       // Handle Tech Stack smoothly if provided or omitted
       if (stack) {
         text = text.replace(/{TechStackClause}/g, ` and have experience with ${stack}`)
-                   .replace(/{TechStackIn}/g, ` in ${stack}`)
+                   .replace(/{TechStackIn}/g, ` ${stack}`)
                    .replace(/{TechStack}/g, stack);
       } else {
         text = text.replace(/{TechStackClause}/g, '')
-                   .replace(/{TechStackIn}/g, '')
+                   .replace(/{TechStackIn}/g, ' software engineering')
                    .replace(/{TechStack}/g, 'software development');
       }
 
@@ -1586,12 +1835,15 @@
     }
 
     function updateCounts() {
+      const cohortDProspects = prospects.filter(p => p.cohort === 'Cohort D (Passive Discovery)');
       const cohortCProspects = prospects.filter(p => p.cohort === 'Cohort C (Natural Conversation)');
       const cohortBProspects = prospects.filter(p => p.cohort === 'Cohort B (Next 36)');
       
       document.getElementById('statsBadge').textContent = `${prospects.length} Total Prospects`;
+      document.getElementById('cohortDBadge').textContent = `Cohort D: ${cohortDProspects.length}`;
       document.getElementById('cohortBadge').textContent = `Cohort C: ${cohortCProspects.length}`;
       document.getElementById('countAll').textContent = prospects.length;
+      document.getElementById('countCohortD').textContent = cohortDProspects.length;
       document.getElementById('countCohortC').textContent = cohortCProspects.length;
       document.getElementById('countCohortB').textContent = cohortBProspects.length;
       document.getElementById('countDue').textContent = prospects.filter(isDueForFollowup).length;
@@ -1600,10 +1852,24 @@
       document.getElementById('countDNC').textContent = prospects.filter(p => p.do_not_contact).length;
 
       // Dynamic Funnel Card based on active Flow Mode
-      const targetCohort = (currentFlowMode === 'fast3') ? cohortBProspects : cohortCProspects;
-      const cohortName = (currentFlowMode === 'fast3') ? 'Cohort B (Direct 3-Stage)' : 'Cohort C (Natural Conversation)';
+      let targetCohort = cohortDProspects;
+      let cohortName = 'Cohort D (Passive Discovery)';
+      let cohortEmoji = '🎯';
+      if (currentFlowMode === 'natural_c') {
+        targetCohort = cohortCProspects;
+        cohortName = 'Cohort C (Natural Conversation)';
+        cohortEmoji = '🌱';
+      } else if (currentFlowMode === 'fast3') {
+        targetCohort = cohortBProspects;
+        cohortName = 'Cohort B (Direct 3-Stage)';
+        cohortEmoji = '⚡';
+      } else if (currentFlowMode === 'classic5') {
+        targetCohort = prospects.filter(p => p.cohort === 'Cohort A (Original 36)');
+        cohortName = 'Cohort A (Classic 5-Stage)';
+        cohortEmoji = '🏛️';
+      }
 
-      document.getElementById('expCardTitle').textContent = `🌱 ${cohortName} Validation Funnel`;
+      document.getElementById('expCardTitle').textContent = `${cohortEmoji} ${cohortName} Validation Funnel`;
 
       const messaged = targetCohort.filter(p => p.stage !== 'New').length;
       document.getElementById('expCohortProgress').textContent = `${messaged} Messaged`;
@@ -1634,6 +1900,7 @@
                              (p.tech_stack || '').toLowerCase().includes(query);
         if (!matchesQuery) return false;
 
+        if (activeFilter === 'cohortD') return p.cohort === 'Cohort D (Passive Discovery)';
         if (activeFilter === 'cohortC') return p.cohort === 'Cohort C (Natural Conversation)';
         if (activeFilter === 'cohortB') return p.cohort === 'Cohort B (Next 36)';
         if (activeFilter === 'due') return isDueForFollowup(p);
@@ -1713,8 +1980,11 @@
       document.querySelectorAll('.filter-pills .pill').forEach(p => {
         p.classList.remove('active');
         p.classList.remove('active-c');
+        p.classList.remove('active-d');
       });
-      if (filter === 'cohortC') {
+      if (filter === 'cohortD') {
+        el.classList.add('active-d');
+      } else if (filter === 'cohortC') {
         el.classList.add('active-c');
       } else {
         el.classList.add('active');
@@ -1801,7 +2071,40 @@
       p.last_contact_date = new Date().toISOString();
 
       // Stage progression logic
-      if (currentFlowMode === 'natural_c') {
+      if (currentFlowMode === 'intent_d') {
+        if (activeScriptTab === 'd_openers') {
+          p.stage = 'Opener Sent';
+        } else if (activeScriptTab === 'd_replies') {
+          p.stage = 'Replied';
+          if (activeScriptId === 'd_rep_yes') {
+            p.priority = 'High Priority';
+            if (p.intent_level === 'None') p.intent_level = 'Level 1: Problem Aware';
+          } else if (activeScriptId === 'd_rep_maybe') {
+            if (p.intent_level === 'None') p.intent_level = 'Level 1: Problem Aware';
+          } else if (activeScriptId === 'd_rep_details') {
+            p.stage = 'Offer Made';
+            p.intent_level = 'Level 2: Solution Interested';
+          } else if (activeScriptId === 'd_rep_not_looking') {
+            p.do_not_contact = true;
+            p.priority = 'Disqualified';
+          }
+        } else if (activeScriptTab === 'd_objections') {
+          p.stage = 'Replied';
+          if (activeScriptId === 'd_obj_target_watchlist') {
+            p.intent_level = 'Level 2: Solution Interested';
+          }
+        } else if (activeScriptTab === 'd_closing') {
+          p.stage = 'Offer Made';
+          if (activeScriptId === 'd_close_price' || activeScriptId === 'd_close_think') {
+            p.intent_level = 'Level 2: Solution Interested';
+          } else if (activeScriptId === 'd_close_not_interested') {
+            p.do_not_contact = true;
+            p.priority = 'Disqualified';
+          }
+        } else if (activeScriptTab === 'd_followups') {
+          p.followup_count = (p.followup_count || 0) + 1;
+        }
+      } else if (currentFlowMode === 'natural_c') {
         if (activeScriptTab === 'c_icebreaker') {
           p.stage = 'Opener Sent';
         } else if (activeScriptTab === 'c_explore') {
@@ -1880,7 +2183,7 @@
       document.getElementById('newPUrl').value = '';
       document.getElementById('newPRole').value = '';
       document.getElementById('newPStack').value = '';
-      document.getElementById('newPCohort').value = 'Cohort C (Natural Conversation)';
+      document.getElementById('newPCohort').value = 'Cohort D (Passive Discovery)';
       document.getElementById('addModal').style.display = 'flex';
       document.getElementById('newPName').focus();
     }
@@ -1951,7 +2254,7 @@
         p.company || '',
         p.role || '',
         p.tech_stack || '',
-        p.cohort || 'Cohort C (Natural Conversation)',
+        p.cohort || 'Cohort D (Passive Discovery)',
         p.priority || 'Unrated',
         p.intent_level || 'None',
         p.source || '',
@@ -2023,7 +2326,7 @@
               company: '',
               role: '',
               tech_stack: '',
-              cohort: 'Cohort C (Natural Conversation)',
+              cohort: 'Cohort D (Passive Discovery)',
               priority: 'Unrated',
               intent_level: 'None',
               source: 'Cold Profile',

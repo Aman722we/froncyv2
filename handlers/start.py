@@ -717,7 +717,7 @@ async def _complete_onboarding(
         )
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("◆ Upgrade to Pro (₹199/mo)", callback_data="upgrade_pro")],
+            [InlineKeyboardButton("💎 Upgrade to Pro (₹99/mo)", callback_data="upgrade_pro")],
             [
                 InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
                 InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
