@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import time
 from loguru import logger
 from db.connection import get_pool
-from utils.constants import ROLE_KEYWORDS
+from utils.constants import ROLE_KEYWORDS, resolve_user_stream, compute_role_alignment
 
 # ── High-Performance In-Memory Cache (Genius System Design) ────────────────
 # Caches the active manual jobs pool and active count for 60 seconds.
@@ -173,30 +173,14 @@ async def get_personalized_manual_jobs(
     # 2. ROLE FILTER: Keep only jobs matching the user's selected role stream
     filtered_jobs = all_jobs
     if not ignore_role_filter:
-        user_role = (user.get("role_pref") or "other").lower()
-        role_keywords = ROLE_KEYWORDS.get(user_role)
-        
-        is_custom_role = (role_keywords is None and user_role != "other")
-        
-        if is_custom_role:
-            common_words = {"developer", "engineer", "programmer", "specialist", "designer", "architect", "expert", "role", "job"}
-            custom_words = [w for w in user_role.split() if w not in common_words]
-            if not custom_words:
-                custom_words = [user_role]
+        user_role_info = resolve_user_stream(user.get("role_pref") or "other", user.get("skills") or [])
         
         def is_role_match(job: dict) -> bool:
             """Return True if the job matches the user's selected role stream."""
-            if user_role == "other":
+            if user_role_info["stream"] == "other":
                 return True
-                
-            job_skills = [s.lower() for s in (job.get("skills") or [])]
-            title_lower = (job.get("title") or "").lower()
-            
-            if is_custom_role:
-                search_space = " ".join(job_skills) + " " + title_lower
-                return all(w in search_space for w in custom_words)
-            else:
-                return any(kw in title_lower or kw in s for kw in role_keywords for s in job_skills + [title_lower])
+            # Require alignment score >= 40 (Neutral Title + Domain Skills, Multi-Stream, or Explicit Match)
+            return compute_role_alignment(user_role_info, job) >= 40
 
         filtered_jobs = [j for j in all_jobs if is_role_match(j)]
         if not filtered_jobs:
