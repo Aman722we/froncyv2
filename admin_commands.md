@@ -77,15 +77,15 @@
 
 ### `/addsource <provider> <board_token> <Company Name>`
 * **Description:** Adds a new company career board to the automated 15-minute polling engine.
-* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`, `WORKDAY`
+* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`, `WORKDAY`, `AMAZON`
 * **Usage:**
   ```text
   /addsource GREENHOUSE gatherai Gather AI
   /addsource LEVER notion Notion
   /addsource ASHBY linear Linear
-  /addsource WORKDAY fnz.wd3/fnz_careers FNZ
-  /addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India
   /addsource WORKDAY accenture.wd103/AccentureCareers Accenture
+  /addsource AMAZON software-development/IND Amazon India
+  /addsource AMAZON software-development/USA Amazon US
   ```
   *(For Workday, you can pass either `host.wdX/site_id` or the full career page URL; the crawler automatically resolves the CXS endpoint).*
 

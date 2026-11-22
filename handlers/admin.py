@@ -637,21 +637,20 @@ async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not args or len(args) < 3:
         await update.message.reply_text(
             "<b>Usage:</b> /addsource <provider> <board_token> <Company Name>\n\n"
-            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY, WORKDAY\n\n"
+            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY, WORKDAY, AMAZON\n\n"
             "<b>Examples:</b>\n"
             "<code>/addsource GREENHOUSE gatherai Gather AI</code>\n"
             "<code>/addsource LEVER notion Notion</code>\n"
             "<code>/addsource ASHBY linear Linear</code>\n"
-            "<code>/addsource WORKDAY fnz.wd3/fnz_careers FNZ</code>\n"
-            "<code>/addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India</code>\n"
-            "<code>/addsource WORKDAY accenture.wd103/AccentureCareers Accenture</code>",
+            "<code>/addsource WORKDAY accenture.wd103/AccentureCareers Accenture</code>\n"
+            "<code>/addsource AMAZON software-development/IND Amazon India</code>",
             parse_mode="HTML"
         )
         return
     
     provider = args[0].upper()
-    if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
-        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, ASHBY, or WORKDAY.", parse_mode="HTML")
+    if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY", "AMAZON"):
+        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, ASHBY, WORKDAY, or AMAZON.", parse_mode="HTML")
         return
     
     board_token = args[1].strip()
@@ -718,7 +717,7 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             continue
             
         provider = parts[0].upper()
-        if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
+        if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY", "AMAZON"):
             errors.append(f"Line {i+1}: Unknown provider {provider}")
             continue
             

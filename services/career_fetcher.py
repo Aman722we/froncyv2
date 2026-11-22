@@ -437,6 +437,164 @@ async def fetch_workday_jobs(board_token: str) -> tuple[list[dict], list[dict], 
     return normalized, raw_jobs, is_truncated
 
 
+def _parse_amazon_token(token: str) -> tuple[str | None, str | None]:
+    """
+    Parse an Amazon board token into (category, country).
+    Accepts:
+      - 'software-development/IND' -> ('software-development', 'IND')
+      - 'IND' -> ('software-development', 'IND')
+      - 'software-development/USA' -> ('software-development', 'USA')
+      - 'data-science/IND' -> ('data-science', 'IND')
+      - 'all/IND' -> (None, 'IND')
+      - 'category=software-development&country=IND' -> ('software-development', 'IND')
+    """
+    ISO2_TO_ISO3 = {
+        "IN": "IND",
+        "US": "USA",
+        "UK": "GBR",
+        "GB": "GBR",
+        "CA": "CAN",
+        "DE": "DEU",
+        "AU": "AUS",
+        "IE": "IRL",
+        "SG": "SGP",
+        "NL": "NLD",
+        "FR": "FRA",
+        "JP": "JPN",
+    }
+
+    def _normalize_country(c: str | None) -> str | None:
+        if not c:
+            return None
+        c_clean = c.strip().upper()
+        return ISO2_TO_ISO3.get(c_clean, c_clean)
+
+    token = (token or "").strip()
+    if "=" in token:
+        import urllib.parse
+        parsed = urllib.parse.parse_qs(token)
+        cat = parsed.get("category", [None])[0] or parsed.get("category[]", [None])[0]
+        country = parsed.get("country", [None])[0] or parsed.get("country[]", [None])[0]
+        return cat, _normalize_country(country)
+
+    if "/" in token:
+        parts = token.split("/", 1)
+        cat = parts[0].strip() if parts[0].strip().lower() != "all" else None
+        country = parts[1].strip() if parts[1].strip().lower() != "all" else None
+        return cat, _normalize_country(country)
+
+    # If single 2 or 3 letter uppercase token (e.g. IN, IND, US, USA), default category to software-development
+    if len(token) in (2, 3) and token.isalpha():
+        return "software-development", _normalize_country(token)
+
+    return token.lower(), None
+
+
+async def fetch_amazon_jobs(board_token: str) -> tuple[list[dict], list[dict], bool]:
+    """
+    Fetch published jobs from Amazon Careers (amazon.jobs). Public JSON API.
+    Returns (normalized_jobs, raw_jobs, is_truncated).
+    """
+    category, country = _parse_amazon_token(board_token)
+
+    url = "https://www.amazon.jobs/en/search.json"
+    params = {
+        "sort": "recent",
+        "result_limit": 100,
+        "offset": 0,
+    }
+    if category:
+        params["category[]"] = category
+    if country:
+        params["country"] = country
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url, params=params, headers=headers)
+    except Exception as e:
+        logger.error(f"Amazon [{board_token}]: network error: {e}")
+        return [], [], False
+
+    if resp.status_code != 200:
+        logger.error(f"Amazon [{board_token}]: HTTP {resp.status_code}")
+        return [], [], False
+
+    try:
+        data = resp.json()
+    except Exception as e:
+        logger.error(f"Amazon [{board_token}]: failed to parse JSON: {e}")
+        return [], [], False
+
+    # Tripwire: Verify expected schema structure
+    if not isinstance(data, dict) or "jobs" not in data or not isinstance(data.get("jobs"), list):
+        logger.error(f"Amazon [{board_token}]: unexpected JSON shape: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+        return [], [], False
+
+    raw_jobs = data.get("jobs") or []
+    hits = data.get("hits") or len(raw_jobs)
+    is_truncated = hits > len(raw_jobs)
+
+    normalized = []
+    from dateutil.parser import parse as parse_date
+
+    for job in raw_jobs:
+        try:
+            external_id = job.get("id_icims") or job.get("id")
+            if not external_id:
+                continue
+
+            title = (job.get("title") or "Untitled").strip()
+            location = (job.get("location") or job.get("normalized_location") or "Unknown").strip()
+            dept = job.get("job_category") or category or "Software Development"
+
+            # Parse published_at
+            published_at = None
+            posted_date = job.get("posted_date")
+            if posted_date:
+                try:
+                    published_at = parse_date(posted_date)
+                    if published_at.tzinfo is None:
+                        published_at = published_at.replace(tzinfo=timezone.utc)
+                except Exception:
+                    pass
+
+            # Full description text combining basic & preferred qualifications
+            desc_parts = []
+            if job.get("description"):
+                desc_parts.append(job["description"].strip())
+            if job.get("basic_qualifications"):
+                desc_parts.append("Basic Qualifications:\n" + job["basic_qualifications"].strip())
+            if job.get("preferred_qualifications"):
+                desc_parts.append("Preferred Qualifications:\n" + job["preferred_qualifications"].strip())
+
+            full_description = _strip_html("\n\n".join(desc_parts))
+            job_path = job.get("job_path") or f"/en/jobs/{external_id}"
+            clean_url = f"https://www.amazon.jobs{job_path}"
+
+            normalized.append({
+                "external_id": str(external_id),
+                "title": title,
+                "location": location,
+                "department": dept,
+                "description": full_description,
+                "published_at": published_at,
+                "job_url": clean_url,
+                "apply_url": clean_url,
+                "source_provider": "AMAZON",
+            })
+        except Exception as e:
+            logger.warning(f"Error normalizing Amazon job {job.get('id_icims')}: {e}")
+            continue
+
+    logger.info(f"Amazon [{board_token}]: fetched {len(normalized)} jobs (raw={len(raw_jobs)}, hits={hits})")
+    return normalized, raw_jobs, is_truncated
+
+
 async def fetch_jobs_for_source(source: dict) -> tuple[list[dict], list[dict], bool]:
     """
     Route to the correct fetcher based on provider.
@@ -453,6 +611,8 @@ async def fetch_jobs_for_source(source: dict) -> tuple[list[dict], list[dict], b
         return await fetch_ashby_jobs(token)
     elif provider == "WORKDAY":
         return await fetch_workday_jobs(token)
+    elif provider == "AMAZON":
+        return await fetch_amazon_jobs(token)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -468,6 +628,21 @@ async def verify_board_token(provider: str, token: str) -> bool:
         url = f"https://api.lever.co/v0/postings/{token}?mode=json"
     elif provider == "ASHBY":
         url = f"https://api.ashbyhq.com/posting-api/job-board/{token}"
+    elif provider == "AMAZON":
+        category, country = _parse_amazon_token(token)
+        url = "https://www.amazon.jobs/en/search.json"
+        params = {"result_limit": 1}
+        if category:
+            params["category[]"] = category
+        if country:
+            params["country[]"] = country
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                resp = await client.get(url, params=params, headers=headers)
+                return resp.status_code == 200 and isinstance(resp.json().get("jobs"), list)
+        except Exception:
+            return False
     elif provider == "WORKDAY":
         host, tenant, site = _parse_workday_token(token)
         if not host or not site:
