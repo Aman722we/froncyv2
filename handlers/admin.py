@@ -637,21 +637,22 @@ async def addsource_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not args or len(args) < 3:
         await update.message.reply_text(
             "<b>Usage:</b> /addsource <provider> <board_token> <Company Name>\n\n"
-            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY, WORKDAY\n\n"
+            "<b>Providers:</b> GREENHOUSE, LEVER, ASHBY, WORKDAY, AMAZON, APPLE, GOOGLE\n\n"
             "<b>Examples:</b>\n"
             "<code>/addsource GREENHOUSE gatherai Gather AI</code>\n"
             "<code>/addsource LEVER notion Notion</code>\n"
             "<code>/addsource ASHBY linear Linear</code>\n"
-            "<code>/addsource WORKDAY fnz.wd3/fnz_careers FNZ</code>\n"
-            "<code>/addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India</code>\n"
-            "<code>/addsource WORKDAY accenture.wd103/AccentureCareers Accenture</code>",
+            "<code>/addsource WORKDAY accenture.wd103/AccentureCareers Accenture</code>\n"
+            "<code>/addsource AMAZON software-development/IND Amazon India</code>\n"
+            "<code>/addsource APPLE software/india-INDC Apple India</code>\n"
+            "<code>/addsource GOOGLE software/India Google India</code>",
             parse_mode="HTML"
         )
         return
     
     provider = args[0].upper()
-    if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
-        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, ASHBY, or WORKDAY.", parse_mode="HTML")
+    if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY", "AMAZON", "APPLE", "GOOGLE"):
+        await update.message.reply_text(f"❌ Unknown provider: <code>{provider}</code>. Use GREENHOUSE, LEVER, ASHBY, WORKDAY, AMAZON, APPLE, or GOOGLE.", parse_mode="HTML")
         return
     
     board_token = args[1].strip()
@@ -718,7 +719,7 @@ async def bulkadd_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             continue
             
         provider = parts[0].upper()
-        if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY"):
+        if provider not in ("GREENHOUSE", "LEVER", "ASHBY", "WORKDAY", "AMAZON", "APPLE", "GOOGLE"):
             errors.append(f"Line {i+1}: Unknown provider {provider}")
             continue
             
@@ -2122,5 +2123,69 @@ async def revokepro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         parse_mode="HTML"
     )
     logger.info(f"Admin revoked plan for {target_id}")
+
+
+async def probefaang_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/probefaang - Probe Apple, Google, and Eightfold from the current server IP."""
+    user_id = update.effective_user.id
+    if user_id != settings.ADMIN_TELEGRAM_ID:
+        return
+
+    msg = await update.message.reply_text("🔍 Probing FAANG endpoints from server container...")
+
+    import httpx
+    results = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # 0. Outbound IP
+    server_ip = "Unknown"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            ip_resp = await client.get("https://api.ipify.org?format=json")
+            server_ip = ip_resp.json().get("ip", "Unknown")
+    except Exception:
+        pass
+    results.append(f"🌐 <b>Server Container IP:</b> <code>{server_ip}</code>")
+
+    # 1. Apple
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get("https://jobs.apple.com/en-in/search?sort=relevance", headers=headers)
+            has_data = "__staticRouterHydrationData" in resp.text
+            status_emoji = "✅" if resp.status_code == 200 and has_data else "❌"
+            results.append(
+                f"{status_emoji} <b>Apple Jobs:</b> HTTP {resp.status_code} ({len(resp.text)} bytes)\n"
+                f"   • Hydration data: {'Found' if has_data else 'MISSING'}"
+            )
+    except Exception as e:
+        results.append(f"❌ <b>Apple Jobs:</b> Error: {e}")
+
+    # 2. Google
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get("https://careers.google.com/jobs/results/", headers=headers)
+            has_data = "AF_initDataCallback" in resp.text
+            status_emoji = "✅" if resp.status_code == 200 and has_data else "❌"
+            results.append(
+                f"{status_emoji} <b>Google Careers:</b> HTTP {resp.status_code} ({len(resp.text)} bytes)\n"
+                f"   • AF_initDataCallback: {'Found' if has_data else 'MISSING'}"
+            )
+    except Exception as e:
+        results.append(f"❌ <b>Google Careers:</b> Error: {e}")
+
+    # 3. Eightfold (Netflix)
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get("https://explore.jobs.netflix.net/api/pcsx/search?domain=netflix.com", headers=headers)
+            status_emoji = "✅" if resp.status_code == 200 else ("⚠️ 403 (CF Blocked)" if resp.status_code == 403 else "❌")
+            results.append(f"{status_emoji} <b>Eightfold (Netflix):</b> HTTP {resp.status_code} ({len(resp.text)} bytes)")
+    except Exception as e:
+        results.append(f"❌ <b>Eightfold:</b> Error: {e}")
+
+    await msg.edit_text("\n\n".join(results), parse_mode="HTML")
 
 

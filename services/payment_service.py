@@ -21,44 +21,95 @@ PLAN_PRICES = {
 }
 
 
-async def _get_or_create_plan(client: razorpay.Client, db_pool, is_early_adopter: bool, amount: int) -> str:
-    """Gets existing Razorpay Plan ID or creates one dynamically and saves it to DB."""
-    config = await db_pool.fetchrow("SELECT * FROM pricing_config LIMIT 1")
-    
-    plan_col = "razorpay_early_plan_id" if is_early_adopter else "razorpay_reg_plan_id"
-    existing_plan_id = config.get(plan_col) if config else None
-    
-    if existing_plan_id:
+async def _get_or_create_plan(
+    client: razorpay.Client,
+    db_pool,
+    is_early_adopter: bool,
+    amount: int,
+    bot_id: int = 1
+) -> str:
+    """
+    Gets existing Razorpay Plan ID for the specific bot or creates one dynamically.
+    Ensures FroncyBot users see 'Froncy Pro', MentorSetu users see 'MentorSetu AI Pro', etc.
+    """
+    # 1. Resolve bot branding
+    brand_name = "Froncy"
+    bot_plan_id = None
+    try:
+        bot_row = await db_pool.fetchrow(
+            "SELECT id, bot_username, guru_name, razorpay_plan_id FROM bots WHERE id = $1",
+            bot_id
+        )
+        if bot_row:
+            bot_plan_id = bot_row.get("razorpay_plan_id")
+            uname = (bot_row.get("bot_username") or "").lower()
+            gname = (bot_row.get("guru_name") or "")
+            if bot_id == 1 or "froncy" in uname:
+                brand_name = "Froncy"
+            elif "mentorsetu" in uname or "mentorsetu" in gname.lower():
+                brand_name = "MentorSetu AI"
+            elif gname:
+                brand_name = gname.replace("(Primary)", "").strip()
+    except Exception as e:
+        logger.warning(f"Error fetching bot {bot_id} for plan creation: {e}")
+
+    target_plan_name = f"{brand_name} Pro"
+    target_amount_paise = amount * 100
+
+    # 2. Check if bot has cached plan ID and verify with Razorpay
+    if bot_plan_id:
         try:
-            plan_obj = client.plan.fetch(existing_plan_id)
-            plan_amt = plan_obj.get("item", {}).get("amount", 0)
-            if plan_amt == amount * 100:
-                return existing_plan_id
-            logger.warning(f"Plan {existing_plan_id} amount ({plan_amt} paise) does not match requested {amount * 100} paise. Recreating plan.")
+            plan_obj = client.plan.fetch(bot_plan_id)
+            plan_item = plan_obj.get("item", {})
+            if plan_item.get("amount") == target_amount_paise and plan_item.get("name") == target_plan_name:
+                return bot_plan_id
+            logger.warning(
+                f"Bot {bot_id} plan {bot_plan_id} (name='{plan_item.get('name')}', amount={plan_item.get('amount')}) "
+                f"does not match requested '{target_plan_name}' ({target_amount_paise} paise). Recreating."
+            )
         except Exception as e:
-            logger.warning(f"Could not verify existing plan {existing_plan_id}: {e}")
-        
-    # Create the plan on Razorpay
-    plan_name = "Job Radar Pro (Early Adopter)" if is_early_adopter else "Job Radar Pro (Regular)"
-    amount_paise = amount * 100
-    
-    logger.info(f"Creating Razorpay plan dynamically: {plan_name} for ₹{amount}")
+            logger.warning(f"Could not verify existing plan {bot_plan_id} for bot {bot_id}: {e}")
+
+    # Fallback to pricing_config if bot_id == 1
+    if bot_id == 1:
+        try:
+            config = await db_pool.fetchrow("SELECT razorpay_reg_plan_id FROM pricing_config LIMIT 1")
+            existing_plan_id = config.get("razorpay_reg_plan_id") if config else None
+            if existing_plan_id:
+                plan_obj = client.plan.fetch(existing_plan_id)
+                plan_item = plan_obj.get("item", {})
+                if plan_item.get("amount") == target_amount_paise and plan_item.get("name") == target_plan_name:
+                    await db_pool.execute("UPDATE bots SET razorpay_plan_id = $1 WHERE id = 1", existing_plan_id)
+                    return existing_plan_id
+        except Exception:
+            pass
+
+    # 3. Create the dedicated plan on Razorpay
+    logger.info(f"Creating Razorpay plan dynamically for bot {bot_id} ({brand_name}): {target_plan_name} for ₹{amount}")
     razorpay_plan = client.plan.create({
         "item": {
-            "name": plan_name,
-            "amount": amount_paise,
+            "name": target_plan_name,
+            "amount": target_amount_paise,
             "currency": "INR",
-            "description": f"Automated recurring subscription for {plan_name}"
+            "description": f"Automated recurring subscription for {target_plan_name}"
         },
         "period": "monthly",
         "interval": 1
     })
-    
-    plan_id = razorpay_plan["id"]
-    
-    # Save it to DB
-    await db_pool.execute(f"UPDATE pricing_config SET {plan_col} = $1", plan_id)
-    return plan_id
+    new_plan_id = razorpay_plan["id"]
+
+    # 4. Save to bots table
+    try:
+        await db_pool.execute("UPDATE bots SET razorpay_plan_id = $1 WHERE id = $2", new_plan_id, bot_id)
+        if bot_id == 1:
+            await db_pool.execute(
+                "UPDATE pricing_config SET razorpay_reg_plan_id = $1, razorpay_early_plan_id = $1 WHERE id = 1",
+                new_plan_id
+            )
+    except Exception as e:
+        logger.warning(f"Failed to cache plan ID to DB: {e}")
+
+    return new_plan_id
 
 
 async def create_subscription_link(
@@ -86,8 +137,8 @@ async def create_subscription_link(
     try:
         client = _get_client()
         
-        # Get the proper plan ID
-        plan_id = await _get_or_create_plan(client, db_pool, is_early_adopter, amount_val)
+        # Get the proper plan ID for this specific bot
+        plan_id = await _get_or_create_plan(client, db_pool, is_early_adopter, amount_val, bot_id=bot_id)
 
         # Create Subscription with bot_id tagged in notes for revenue attribution
         subscription = client.subscription.create({

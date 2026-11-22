@@ -77,17 +77,26 @@
 
 ### `/addsource <provider> <board_token> <Company Name>`
 * **Description:** Adds a new company career board to the automated 15-minute polling engine.
-* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`, `WORKDAY`
+* **Supported Providers:** `GREENHOUSE`, `LEVER`, `ASHBY`, `WORKDAY`, `AMAZON`, `APPLE`, `GOOGLE`
 * **Usage:**
   ```text
   /addsource GREENHOUSE gatherai Gather AI
   /addsource LEVER notion Notion
   /addsource ASHBY linear Linear
-  /addsource WORKDAY fnz.wd3/fnz_careers FNZ
-  /addsource WORKDAY elevancehealth.wd1/carelonglobal_in Carelon India
   /addsource WORKDAY accenture.wd103/AccentureCareers Accenture
+  /addsource AMAZON software-development/IND Amazon India
+  /addsource AMAZON software-development/USA Amazon US
+  /addsource APPLE software/india-INDC Apple India
+  /addsource GOOGLE software/India Google India
   ```
   *(For Workday, you can pass either `host.wdX/site_id` or the full career page URL; the crawler automatically resolves the CXS endpoint).*
+
+### `/probefaang`
+* **Description:** Performs an instant zero-browser diagnostic probe from the server container to Apple, Google, and Eightfold. Returns outbound container IP, HTTP status codes, byte size, and schema hydration check.
+* **Usage:**
+  ```text
+  /probefaang
+  ```
 
 ### `/bulkadd`
 * **Description:** Bulk adds dozens of career sources at once in a single message.
