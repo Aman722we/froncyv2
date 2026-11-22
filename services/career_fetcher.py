@@ -651,11 +651,12 @@ async def fetch_apple_jobs(board_token: str) -> tuple[list[dict], list[dict], bo
     """
     Fetch published jobs from Apple Careers (jobs.apple.com).
     Zero-browser plain HTTP parsing via React Router static hydration payload.
+    Omits 'sort' parameter so Apple defaults to reverse chronological order (newest first).
     Returns (normalized_jobs, raw_jobs, is_truncated).
     """
     query, location = _parse_apple_token(board_token)
     url = "https://jobs.apple.com/en-in/search"
-    params = {"sort": "relevance"}
+    params = {}
     if query:
         params["search"] = query
     if location:
@@ -957,7 +958,7 @@ async def verify_board_token(provider: str, token: str) -> bool:
     elif provider == "APPLE":
         query, location = _parse_apple_token(token)
         url = "https://jobs.apple.com/en-in/search"
-        params = {"sort": "relevance"}
+        params = {}
         if query:
             params["search"] = query
         if location:
