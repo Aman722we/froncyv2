@@ -27,6 +27,8 @@ async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
 
     context.user_data["awaiting_settings_custom_skill"] = True
 
@@ -653,6 +655,8 @@ async def settings_toggle_notification(update: Update, context: ContextTypes.DEF
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)
@@ -723,6 +727,8 @@ async def settings_pause_set(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)
@@ -748,6 +754,8 @@ async def settings_pause_resume(update: Update, context: ContextTypes.DEFAULT_TY
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)

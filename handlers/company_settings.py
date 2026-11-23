@@ -286,6 +286,9 @@ async def settings_comp_mode_toggle(update: Update, context: ContextTypes.DEFAUL
 
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
@@ -366,6 +369,9 @@ async def handle_company_search_text(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
     prefs = await get_user_prefs_detail(user_id, is_pro=is_pro)
@@ -479,6 +485,9 @@ async def handle_bundle_follow_callback(update: Update, context: ContextTypes.DE
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
 
     bundle_id = int(query.data.split("_")[-1])
@@ -505,6 +514,9 @@ async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
@@ -583,6 +595,9 @@ async def settings_comp_edit_mutes(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
