@@ -269,13 +269,13 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
     else:
         buttons.append([InlineKeyboardButton("🔒 Mode: All Companies • Pro for Watchlist", callback_data="upgrade_pro")])
 
-    # Tracked Companies Directory button (dynamic active count)
-    dir_label = "📋 Tracked Companies"
+    # Tracked Companies Directory button (dynamic active count + bot_name)
+    dir_label = f"📋 Tracked Companies by {bot_name}"
     try:
         from db.career_sources import get_tracked_companies_summary
         summary = await get_tracked_companies_summary()
         if summary.get("count"):
-            dir_label = f"📋 Tracked Companies ({summary['count']})"
+            dir_label = f"📋 Tracked Companies by {bot_name} ({summary['count']})"
     except Exception:
         pass
     buttons.append([InlineKeyboardButton(dir_label, callback_data="settings_comp_directory")])
