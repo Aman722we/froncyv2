@@ -418,6 +418,7 @@ def build_bot(token: str | None = None) -> Application:
         settings_comp_mode_toggle,
         settings_comp_search_start,
         settings_comp_bundles,
+        settings_comp_directory,
         handle_bundle_follow_callback,
         settings_comp_edit_follows,
         handle_menu_unfollow_callback,
@@ -429,6 +430,7 @@ def build_bot(token: str | None = None) -> Application:
     app.add_handler(CallbackQueryHandler(settings_comp_mode_toggle, pattern="^settings_comp_mode_(all|watchlist)$"))
     app.add_handler(CallbackQueryHandler(settings_comp_search_start, pattern="^settings_comp_search$"))
     app.add_handler(CallbackQueryHandler(settings_comp_bundles, pattern="^settings_comp_bundles$"))
+    app.add_handler(CallbackQueryHandler(settings_comp_directory, pattern="^settings_comp_directory$"))
     app.add_handler(CallbackQueryHandler(handle_bundle_follow_callback, pattern=r"^cf_bdl_\d+$"))
     app.add_handler(CallbackQueryHandler(settings_comp_edit_follows, pattern=r"^settings_comp_edit_follows(:\d+)?$"))
     app.add_handler(CallbackQueryHandler(handle_menu_unfollow_callback, pattern=r"^cf_unfw_menu:\d+(:\d+)?$"))

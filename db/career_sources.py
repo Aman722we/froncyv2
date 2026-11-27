@@ -102,3 +102,55 @@ async def source_already_exists(provider: str, board_token: str) -> bool:
             provider.upper(), board_token.lower()
         )
         return val is not None
+
+
+_SUMMARY_CACHE: dict = {"ts": 0.0, "data": None}
+
+
+def invalidate_tracked_companies_cache() -> None:
+    """Clear the cached tracked companies summary."""
+    _SUMMARY_CACHE["ts"] = 0.0
+    _SUMMARY_CACHE["data"] = None
+
+
+async def get_tracked_companies_summary(cache_ttl_seconds: int = 3600) -> dict:
+    """
+    Return exact count & real sample names of active, successfully-fetched career sources.
+    Cached in-memory for 1 hour to avoid repeated DB queries on menu opens.
+    """
+    import time
+
+    now = time.monotonic()
+    if _SUMMARY_CACHE["data"] is not None and (now - _SUMMARY_CACHE["ts"]) < cache_ttl_seconds:
+        return _SUMMARY_CACHE["data"]
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT company_name, last_successful_check_at
+            FROM career_sources
+            WHERE is_active = TRUE
+              AND last_successful_check_at IS NOT NULL
+              AND company_name IS NOT NULL
+              AND TRIM(company_name) <> ''
+            ORDER BY last_successful_check_at DESC
+            """
+        )
+
+    seen_lower: set[str] = set()
+    unique_names: list[str] = []
+    for r in rows:
+        name = (r["company_name"] or "").strip()
+        key = name.lower()
+        if name and key not in seen_lower:
+            seen_lower.add(key)
+            unique_names.append(name)
+
+    result = {
+        "count": len(unique_names),
+        "samples": unique_names[:8],
+    }
+    _SUMMARY_CACHE["ts"] = now
+    _SUMMARY_CACHE["data"] = result
+    return result

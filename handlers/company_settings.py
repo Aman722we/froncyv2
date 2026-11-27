@@ -269,6 +269,17 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
     else:
         buttons.append([InlineKeyboardButton("🔒 Mode: All Companies • Pro for Watchlist", callback_data="upgrade_pro")])
 
+    # Tracked Companies Directory button (dynamic active count + bot_name)
+    dir_label = f"📋 Tracked Companies by {bot_name}"
+    try:
+        from db.career_sources import get_tracked_companies_summary
+        summary = await get_tracked_companies_summary()
+        if summary.get("count"):
+            dir_label = f"📋 Tracked Companies by {bot_name} ({summary['count']})"
+    except Exception:
+        pass
+    buttons.append([InlineKeyboardButton(dir_label, callback_data="settings_comp_directory")])
+
     buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")])
 
     try:
@@ -276,6 +287,49 @@ async def settings_companies_menu(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         if "Message is not modified" not in str(e):
             logger.warning(f"Error editing company preferences menu: {e}")
+
+
+async def settings_comp_directory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Display live tracked-companies count, real recent samples, and optional per-bot Sheet URL."""
+    query = update.callback_query
+    await query.answer()
+
+    bot_id = context.bot_data.get("bot_id", 1)
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+
+    from db.career_sources import get_tracked_companies_summary
+    from db.bots import get_tracked_companies_url
+
+    summary = await get_tracked_companies_summary()
+    count = summary.get("count", 0)
+    samples = summary.get("samples", [])
+    tracked_url = await get_tracked_companies_url(bot_id)
+
+    samples_block = (
+        "\n".join([f"• {escape_md(name)}" for name in samples])
+        if samples
+        else "_No active sources synced yet\\._"
+    )
+
+    text = (
+        f"📋 *{escape_md(bot_name)} Tracked Companies*\n\n"
+        f"We actively monitor *{count}* verified company career portals on an hourly crawl\\.\n\n"
+        f"*Recently synced examples:*\n"
+        f"{samples_block}\n\n"
+        "🔍 Use *Search Company* to check if your target company is tracked and follow it for priority alerts\\."
+    )
+
+    buttons = []
+    if tracked_url:
+        buttons.append([InlineKeyboardButton("📄 Open Full Companies List", url=tracked_url)])
+    buttons.append([InlineKeyboardButton("🔍 Search Company", callback_data="settings_comp_search")])
+    buttons.append([InlineKeyboardButton("🔙 Back to Target Companies", callback_data="settings_companies")])
+
+    try:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="MarkdownV2")
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Error editing company directory: {e}")
 
 
 async def settings_comp_mode_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -286,6 +340,9 @@ async def settings_comp_mode_toggle(update: Update, context: ContextTypes.DEFAUL
 
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
@@ -366,6 +423,9 @@ async def handle_company_search_text(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
     prefs = await get_user_prefs_detail(user_id, is_pro=is_pro)
@@ -479,6 +539,9 @@ async def handle_bundle_follow_callback(update: Update, context: ContextTypes.DE
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
 
     bundle_id = int(query.data.split("_")[-1])
@@ -505,6 +568,9 @@ async def settings_comp_edit_follows(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 
@@ -583,6 +649,9 @@ async def settings_comp_edit_mutes(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     bot_id = context.bot_data.get("bot_id", 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        await query.answer("Please start the bot first with /start", show_alert=True)
+        return
     plan = get_effective_plan(user)
     is_pro = plan in ("pro", "trial", "proplus", "premium")
 

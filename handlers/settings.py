@@ -27,6 +27,8 @@ async def settings_edit_skills(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
 
     context.user_data["awaiting_settings_custom_skill"] = True
 
@@ -190,7 +192,8 @@ async def settings_skills_done(update: Update, context: ContextTypes.DEFAULT_TYP
 
     selected = context.user_data.get("edit_skills", [])
     user_id = update.effective_user.id
-    await update_user_profile(user_id, skills=[s.lower() for s in selected])
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in selected])
 
     skills_text = escape_md(", ".join(selected)) if selected else "None"
     await query.edit_message_text(
@@ -229,7 +232,8 @@ async def settings_experience_receive(update: Update, context: ContextTypes.DEFA
     # Clear the flag
     context.user_data.pop("awaiting_settings_experience", None)
     
-    await update_user_profile(user_id, experience_level=exp_val)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, experience_level=exp_val)
 
     exp_display = exp_val.replace('_plus', '+').replace('_', '-')
     
@@ -275,7 +279,8 @@ async def settings_batch_save(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     batch_val = int(query.data.replace("setbatch_", ""))
     user_id = update.effective_user.id
-    await update_user_profile(user_id, batch_year=batch_val)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, batch_year=batch_val)
 
     await query.edit_message_text(
         f"✅ Batch year updated to: *{batch_val}*",
@@ -447,7 +452,8 @@ async def settings_alert_time_save(update: Update, context: ContextTypes.DEFAULT
 
     time_val = query.data.replace("setalert_", "")  # e.g. "09:00"
     user_id = update.effective_user.id
-    await update_user_profile(user_id, alert_time=time_val)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, alert_time=time_val)
 
     await query.edit_message_text(
         f"✅ Alert time updated: {escape_md(time_val)} IST\n",
@@ -653,6 +659,8 @@ async def settings_toggle_notification(update: Update, context: ContextTypes.DEF
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)
@@ -723,6 +731,8 @@ async def settings_pause_set(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)
@@ -748,6 +758,8 @@ async def settings_pause_resume(update: Update, context: ContextTypes.DEFAULT_TY
 
     bot_id = context.bot_data.get('bot_id', 1)
     user = await get_user(user_id, bot_id=bot_id)
+    if not user:
+        return
     bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     is_pro = user.get("plan") in ("pro", "trial", "proplus", "premium")
     text = messages.notification_settings_message(user, bot_name=bot_name)

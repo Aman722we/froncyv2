@@ -348,10 +348,25 @@ async def view_job_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
     bot_id = context.bot_data.get('bot_id', 1)
     
+    user = await get_user(user_id, bot_id=bot_id)
+    if not user or not user.get("is_onboarded"):
+        msg = "⚠️ Please finish your setup first! Type /start to complete your profile."
+        if query:
+            try:
+                await query.answer(msg, show_alert=True)
+            except Exception:
+                pass
+            try:
+                await query.edit_message_text(msg)
+            except Exception:
+                pass
+        elif update.message:
+            await update.message.reply_text(msg)
+        return
+
     # User actually clicked to view the job, so mark it permanently seen
     from db.manual_jobs import mark_jobs_seen
     await mark_jobs_seen(user_id, [job_id], bot_id=bot_id)
-    user = await get_user(user_id, bot_id=bot_id)
     plan = get_effective_plan(user)
     user_skills = user.get("skills", [])
     user_exp = user.get("experience_level", "0")
