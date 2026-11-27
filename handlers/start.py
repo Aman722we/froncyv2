@@ -851,13 +851,15 @@ async def _complete_onboarding(
     except Exception as e:
         logger.warning(f"Failed to load tracked companies info for onboarding complete: {e}")
 
+    bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
     if getattr(settings, "ENABLE_FREE_TRIAL", True):
         trial_expires_at = await start_trial(user_id, db_pool, bot_id=bot_id)
-        msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
-        kb = keyboards.onboarding_complete_keyboard(tracked_url=tracked_url, tracked_count=tracked_count)
+        msg = messages.trial_activated_message(trial_expires_at, bot_name=bot_name)
+        kb = keyboards.onboarding_complete_keyboard(
+            tracked_url=tracked_url, tracked_count=tracked_count, bot_name=bot_name
+        )
     else:
         # Free plan completion with immediate Pro upgrade option (no trial experiment)
-        bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
         count_str = f"{tracked_count}" if tracked_count else "curated"
         msg = (
             "🎉 *Your profile setup is complete\!*\n\n"
@@ -871,14 +873,15 @@ async def _complete_onboarding(
             [InlineKeyboardButton("💎 Upgrade to Pro (₹99/mo)", callback_data="upgrade_pro")],
             [
                 InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
-                InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
-            ],
-            [
-                InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
+                InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu"),
             ],
         ]
         if tracked_url:
-            btn_label = f"📋 Tracked Companies ({tracked_count})" if tracked_count else "📋 Tracked Companies"
+            btn_label = (
+                f"📋 Tracked Companies by {bot_name} ({tracked_count})"
+                if tracked_count
+                else f"📋 Tracked Companies by {bot_name}"
+            )
             rows.append([InlineKeyboardButton(btn_label, url=tracked_url)])
         kb = InlineKeyboardMarkup(rows)
 

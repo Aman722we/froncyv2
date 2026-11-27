@@ -127,19 +127,21 @@ def resume_prompt_keyboard() -> InlineKeyboardMarkup:
 def onboarding_complete_keyboard(
     tracked_url: str | None = None,
     tracked_count: int | None = None,
+    bot_name: str = "Froncy",
 ) -> InlineKeyboardMarkup:
     """Post-onboarding actions."""
     rows = [
         [
             InlineKeyboardButton("🔍 View Jobs Now", callback_data="menu_jobs"),
-            InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
-        ],
-        [
-            InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
+            InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu"),
         ],
     ]
     if tracked_url:
-        label = f"📋 Tracked Companies ({tracked_count})" if tracked_count else "📋 Tracked Companies"
+        label = (
+            f"📋 Tracked Companies by {bot_name} ({tracked_count})"
+            if tracked_count
+            else f"📋 Tracked Companies by {bot_name}"
+        )
         rows.append([InlineKeyboardButton(label, url=tracked_url)])
     return InlineKeyboardMarkup(rows)
 

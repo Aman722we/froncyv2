@@ -186,10 +186,14 @@ class TestRFC011(unittest.IsolatedAsyncioTestCase):
         flat_urls_none = [btn.url for row in kb_none.inline_keyboard for btn in row if btn.url]
         self.assertEqual(flat_urls_none, [])
 
-        kb_valid = onboarding_complete_keyboard(tracked_url="https://docs.google.com/spreadsheets/d/abc", tracked_count=520)
+        kb_valid = onboarding_complete_keyboard(
+            tracked_url="https://docs.google.com/spreadsheets/d/abc",
+            tracked_count=520,
+            bot_name="Job Radar",
+        )
         flat_btns = [btn for row in kb_valid.inline_keyboard for btn in row if btn.url]
         self.assertEqual(len(flat_btns), 1)
-        self.assertEqual(flat_btns[0].text, "📋 Tracked Companies (520)")
+        self.assertEqual(flat_btns[0].text, "📋 Tracked Companies by Job Radar (520)")
 
     async def test_tracked_companies_summary_counts_unlinked_and_caches(self):
         invalidate_tracked_companies_cache()
