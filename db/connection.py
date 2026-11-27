@@ -129,6 +129,7 @@ async def init_db() -> asyncpg.Pool:
                 WHERE early_adopter_price != 99 OR razorpay_early_plan_id IN ('plan_SktaMkG3nLAul4', 'plan_U2T5lOksNUXUkB');
             """)
             await conn.execute("ALTER TABLE bots ADD COLUMN IF NOT EXISTS razorpay_plan_id TEXT;")
+            await conn.execute("ALTER TABLE bots ADD COLUMN IF NOT EXISTS tracked_companies_url TEXT;")
         except Exception as e:
             logger.warning(f"Failed to apply trial/pricing migrations: {e}")
 

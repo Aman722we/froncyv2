@@ -4,8 +4,52 @@ db/bots.py -- Multi-Tenant Bot Registry (Database Layer)
 Each row in the `bots` table represents one Guru's Telegram bot.
 This module provides CRUD operations for the bots table.
 """
+from urllib.parse import urlparse
 from loguru import logger
 from db.connection import get_pool
+
+
+def validate_tracked_companies_url(url: str | None) -> str | None:
+    """Validate that a stored tracked_companies_url is a safe https:// URL with a valid host."""
+    if not url or not isinstance(url, str):
+        return None
+    cleaned = url.strip()
+    if not cleaned or len(cleaned) > 500 or any(c.isspace() for c in cleaned):
+        return None
+    parsed = urlparse(cleaned)
+    if parsed.scheme.lower() != "https" or not parsed.netloc or "." not in parsed.netloc:
+        return None
+    return cleaned
+
+
+async def get_tracked_companies_url(bot_id: int) -> str | None:
+    """Fetch and validate the per-bot tracked_companies_url. Never falls back to another bot."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        raw = await conn.fetchval(
+            "SELECT tracked_companies_url FROM bots WHERE id = $1 AND is_active = TRUE",
+            bot_id,
+        )
+    return validate_tracked_companies_url(raw)
+
+
+async def set_tracked_companies_url(bot_id: int, url: str | None) -> bool:
+    """Set or clear a bot's tracked_companies_url after strict https validation."""
+    if url is not None and url.strip():
+        validated = validate_tracked_companies_url(url)
+        if not validated:
+            raise ValueError("Invalid tracked_companies_url: must be a valid https:// URL.")
+    else:
+        validated = None
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "UPDATE bots SET tracked_companies_url = $2 WHERE id = $1",
+            bot_id,
+            validated,
+        )
+        return res.endswith("1")
 
 
 async def get_all_active_bots() -> list[dict]:

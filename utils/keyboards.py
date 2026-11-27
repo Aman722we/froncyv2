@@ -124,9 +124,12 @@ def resume_prompt_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def onboarding_complete_keyboard() -> InlineKeyboardMarkup:
+def onboarding_complete_keyboard(
+    tracked_url: str | None = None,
+    tracked_count: int | None = None,
+) -> InlineKeyboardMarkup:
     """Post-onboarding actions."""
-    return InlineKeyboardMarkup([
+    rows = [
         [
             InlineKeyboardButton("🔍 View Jobs Now", callback_data="menu_jobs"),
             InlineKeyboardButton("🏢 Target Companies", callback_data="settings_companies"),
@@ -134,7 +137,11 @@ def onboarding_complete_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
         ],
-    ])
+    ]
+    if tracked_url:
+        label = f"📋 Tracked Companies ({tracked_count})" if tracked_count else "📋 Tracked Companies"
+        rows.append([InlineKeyboardButton(label, url=tracked_url)])
+    return InlineKeyboardMarkup(rows)
 
 
 # ──────────────────────────────────────────────

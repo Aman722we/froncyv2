@@ -33,7 +33,7 @@ from utils.helpers import escape_md
 from utils.admin_notify import notify_admin
 
 # Conversation states
-WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME, WAITING_CUSTOM_ROLE, WAITING_RESUME_CONSENT = range(11)
+WELCOME, SKILLS, ROLE, WAITING_CUSTOM_SKILL, CONFIRM_SKILLS, EXPERIENCE, LOCATION, BATCH_YEAR, RESUME_PROMPT, WAITING_RESUME, WAITING_CUSTOM_ROLE, WAITING_RESUME_CONSENT = range(12)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -279,7 +279,8 @@ async def custom_skill_receive(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data["selected_skills"] = normalized
     user_id = update.effective_user.id
-    await update_user_profile(user_id, skills=[s.lower() for s in normalized])
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized])
     context.user_data["has_resume"] = False
 
     return await prompt_experience_step(update, context)
@@ -333,9 +334,9 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             pass
 
-        if not extracted or len(extracted) < 3:
+        if not extracted:
             await update.message.reply_text(
-                "⚠️ We couldn't recognize enough technical skills from this PDF.\n\n"
+                "⚠️ We couldn't recognize any technical skills from this PDF.\n\n"
                 "Please type your technical skills below separated by commas (e.g. React, Python, AWS):",
                 parse_mode="HTML",
             )
@@ -343,25 +344,19 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         # Save skills directly to profile
         user_id = update.effective_user.id
+        bot_id = context.bot_data.get("bot_id", 1)
         context.user_data["selected_skills"] = extracted
-        await update_user_profile(user_id, skills=[s.lower() for s in extracted])
+        context.user_data["prev_extracted_skills"] = list(extracted)
+        context.user_data["skills_edited"] = False
+        context.user_data.pop("_skills_confirmed", None)
+        await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in extracted])
 
         # RFC-009: Ephemeral model — purge raw bytes & text immediately (never stored)
         del raw_bytes
         del resume_text
 
-        skills_preview = ", ".join(extracted[:10])
-        if len(extracted) > 10:
-            skills_preview += f" (+{len(extracted) - 10} more)"
-
-        import html
-        await update.message.reply_text(
-            f"✅ <b>Extracted {len(extracted)} Skills!</b> 📄\n\n"
-            f"<code>{html.escape(skills_preview)}</code>\n\n"
-            f"<i>Next: Let's set your experience level</i> 🎯",
-            parse_mode="HTML",
-        )
-        return await prompt_experience_step(update, context)
+        await _send_skills_review(update, context, extracted)
+        return CONFIRM_SKILLS
 
     except Exception as e:
         logger.warning(f"Resume parsing during onboarding failed: {e}")
@@ -375,6 +370,141 @@ async def resume_doc_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="HTML",
         )
         return WAITING_CUSTOM_SKILL
+
+
+async def _send_skills_review(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    skills: list[str],
+    edit_message: bool = False,
+) -> None:
+    """Render the extracted/edited skills review prompt with Continue, Edit, and optional Undo."""
+    import html
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+    skills_preview = ", ".join(skills[:15])
+    if len(skills) > 15:
+        skills_preview += f" (+{len(skills) - 15} more)"
+    escaped_skills = html.escape(skills_preview)
+
+    if len(skills) < 3:
+        header = f"⚠️ <b>We found only {len(skills)} skill(s) from your PDF.</b> 📄"
+        instruction = (
+            "Tap <b>✏️ Edit Skills</b> or type your <b>full comma-separated list</b> below to replace &amp; add more "
+            "(e.g. <code>React, Python, SQL</code>)."
+        )
+    else:
+        header = f"✅ <b>Extracted {len(skills)} Skills!</b> 📄"
+        instruction = (
+            "Do these look accurate? Tap <b>✅ Looks Good</b>, or tap <b>✏️ Edit Skills</b> / type your "
+            "<b>full comma-separated list</b> below to replace them. "
+            "<i>(You can also change them anytime in Settings.)</i>"
+        )
+
+    text = f"{header}\n\n<code>{escaped_skills}</code>\n\n{instruction}"
+    buttons = [
+        [InlineKeyboardButton("✅ Looks Good, Continue →", callback_data="onboard_skills_ok")],
+        [InlineKeyboardButton("✏️ Edit Skills", callback_data="onboard_skills_edit")],
+    ]
+    if context.user_data.get("skills_edited") and context.user_data.get("prev_extracted_skills"):
+        buttons.append([InlineKeyboardButton("↩️ Undo Edit (Restore Extracted)", callback_data="onboard_skills_undo")])
+
+    kb = InlineKeyboardMarkup(buttons)
+    if edit_message and update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def onboard_skills_ok_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Idempotently confirm extracted/edited skills and advance to Experience step."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
+    db_user = await get_user(user_id, bot_id=bot_id)
+    if (db_user and db_user.get("is_onboarded")) or context.user_data.get("_skills_confirmed"):
+        return ConversationHandler.END
+
+    context.user_data["_skills_confirmed"] = True
+    return await prompt_experience_step(update, context)
+
+
+async def onboard_skills_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Prompt user to type their full corrected comma-separated skill list."""
+    import html
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+    query = update.callback_query
+    await query.answer()
+
+    current = context.user_data.get("selected_skills", [])
+    current_str = html.escape(", ".join(current)) if current else "None"
+    buttons = []
+    if context.user_data.get("prev_extracted_skills"):
+        buttons.append([InlineKeyboardButton("↩️ Cancel Edit", callback_data="onboard_skills_undo")])
+    kb = InlineKeyboardMarkup(buttons) if buttons else None
+
+    await query.edit_message_text(
+        f"✏️ <b>Edit Your Skills</b>\n\n"
+        f"Current list:\n<code>{current_str}</code>\n\n"
+        f"Send your <b>full corrected comma-separated list</b> below to replace these "
+        f"(e.g. <code>React, Python, Docker, SQL</code>):",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+    return CONFIRM_SKILLS
+
+
+async def onboard_skills_undo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Restore the previously extracted skills list (1-step undo)."""
+    query = update.callback_query
+    await query.answer("Restored extracted skills!")
+
+    prev = context.user_data.get("prev_extracted_skills") or []
+    if not prev:
+        return CONFIRM_SKILLS
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
+    context.user_data["selected_skills"] = list(prev)
+    context.user_data["skills_edited"] = False
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in prev])
+
+    await _send_skills_review(update, context, prev, edit_message=True)
+    return CONFIRM_SKILLS
+
+
+async def confirm_skills_text_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Validate and replace skills when user types text directly in CONFIRM_SKILLS."""
+    import html
+    text = (update.message.text or "").strip()
+
+    if is_resume_intent(text):
+        await update.message.reply_text(
+            "📄 <b>Send your resume as a PDF file</b> (max 5MB) right here to re-extract your skills.",
+            parse_mode="HTML",
+        )
+        return CONFIRM_SKILLS
+
+    is_valid, normalized, err_msg = validate_and_normalize_skills(text, max_skills=15)
+    if not is_valid or not normalized:
+        await update.message.reply_text(
+            f"⚠️ {html.escape(err_msg or 'Please enter valid technical skills separated by commas.')}\n\n"
+            f"Send your full comma-separated skill list (e.g. <code>React, Python, SQL</code>):",
+            parse_mode="HTML",
+        )
+        return CONFIRM_SKILLS
+
+    user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
+    context.user_data["selected_skills"] = normalized
+    context.user_data["skills_edited"] = True
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in normalized])
+
+    await _send_skills_review(update, context, normalized, edit_message=False)
+    return CONFIRM_SKILLS
 
 
 async def resume_consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -399,9 +529,9 @@ async def experience_callback_handler(update: Update, context: ContextTypes.DEFA
 
     exp_val = query.data.replace("onboard_exp_", "")
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
 
-    await update_user_profile(user_id, experience_level=exp_val)
-    await update_user_profile(user_id, location_pref="all")
+    await update_user_profile(user_id, bot_id=bot_id, experience_level=exp_val, location_pref="all")
     context.user_data["experience_level"] = exp_val
     context.user_data["location"] = "all"
 
@@ -415,7 +545,8 @@ async def refresh_user_skills_callback(update: Update, context: ContextTypes.DEF
     await query.answer()
 
     user_id = update.effective_user.id
-    await update_user_profile(user_id, skills_need_review=False)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, skills_need_review=False)
 
     step2_bar = "[🟢🟢⚪] Step 2 of 3"
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
@@ -440,9 +571,10 @@ async def skills_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     selected = context.user_data.get("selected_skills", [])
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
 
     # Persist skills
-    await update_user_profile(user_id, skills=[s.lower() for s in selected])
+    await update_user_profile(user_id, bot_id=bot_id, skills=[s.lower() for s in selected])
 
     step2_bar = messages.escape_md("[🟢⚪] Step 2 of 2")
     await query.edit_message_text(
@@ -470,7 +602,8 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
         return WAITING_CUSTOM_ROLE
 
-    await update_user_profile(user_id, role_pref=role)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, role_pref=role)
     context.user_data["role_pref"] = role
 
     step2_bar = "[🟢🟢⚪] Step 2 of 3"
@@ -495,7 +628,8 @@ async def custom_role_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     role = raw[:50]  # Clamp to 50 chars to avoid abuse
     user_id = update.effective_user.id
 
-    await update_user_profile(user_id, role_pref=role)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, role_pref=role)
     context.user_data["role_pref"] = role
 
     step2_bar = "[🟢🟢⚪] Step 2 of 3"
@@ -529,9 +663,9 @@ async def experience_message_handler(update: Update, context: ContextTypes.DEFAU
 
     exp_val = text
     user_id = update.effective_user.id
+    bot_id = context.bot_data.get("bot_id", 1)
 
-    await update_user_profile(user_id, experience_level=exp_val)
-    await update_user_profile(user_id, location_pref="all")   # sensible default
+    await update_user_profile(user_id, bot_id=bot_id, experience_level=exp_val, location_pref="all")   # sensible default
     context.user_data["experience_level"] = exp_val
     context.user_data["location"] = "all"
 
@@ -550,7 +684,8 @@ async def location_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     location = loc_map.get(query.data, "remote")
 
     user_id = update.effective_user.id
-    await update_user_profile(user_id, location_pref=location)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, location_pref=location)
     context.user_data["location"] = location
 
     step3_bar = messages.escape_md("[🟢🟢🟢⚪] Step 3 of 4")
@@ -574,7 +709,8 @@ async def batch_year_received(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     batch_year = int(text)
     user_id = update.effective_user.id
-    await update_user_profile(user_id, batch_year=batch_year)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await update_user_profile(user_id, bot_id=bot_id, batch_year=batch_year)
     context.user_data["batch_year"] = batch_year
 
     step4_bar = messages.escape_md("[🟢🟢🟢🟢] Step 4 of 4: Almost there!")
@@ -675,7 +811,8 @@ async def _complete_onboarding(
     """Finish onboarding — activate trial, show trial activated message."""
     user_id = update.effective_user.id
     user_tg = update.effective_user
-    await set_onboarded(user_id)
+    bot_id = context.bot_data.get("bot_id", 1)
+    await set_onboarded(user_id, bot_id=bot_id)
 
     skills   = context.user_data.get("selected_skills", [])
     location = context.user_data.get("location", "all")
@@ -701,22 +838,34 @@ async def _complete_onboarding(
     except Exception as e:
         logger.warning(f"Failed to record cohort/source for user {user_id}: {e}")
 
+    tracked_url = None
+    tracked_count = None
+    try:
+        from db.bots import get_tracked_companies_url
+        from db.career_sources import get_tracked_companies_summary
+        tracked_url = await get_tracked_companies_url(bot_id)
+        summary = await get_tracked_companies_summary()
+        tracked_count = summary.get("count") or None
+    except Exception as e:
+        logger.warning(f"Failed to load tracked companies info for onboarding complete: {e}")
+
     if getattr(settings, "ENABLE_FREE_TRIAL", True):
         trial_expires_at = await start_trial(user_id, db_pool, bot_id=bot_id)
         msg = messages.trial_activated_message(trial_expires_at, bot_name=context.bot.first_name)
-        kb = keyboards.onboarding_complete_keyboard()
+        kb = keyboards.onboarding_complete_keyboard(tracked_url=tracked_url, tracked_count=tracked_count)
     else:
         # Free plan completion with immediate Pro upgrade option (no trial experiment)
         bot_name = (context.bot.first_name or "Froncy") if context and context.bot else "Froncy"
+        count_str = f"{tracked_count}" if tracked_count else "curated"
         msg = (
             "🎉 *Your profile setup is complete\!*\n\n"
             "You are on the *Free Plan* with access to our daily curated job feed\.\n\n"
             "⚡ *Want automated alerts?*\n"
-            f"Upgrade to *Pro* to have {escape_md(bot_name)} monitor 530\+ company career pages on an hourly crawl "
+            f"Upgrade to *Pro* to have {escape_md(bot_name)} monitor {escape_md(count_str)} company career pages on an hourly crawl "
             "and alert you on Telegram as matching jobs drop\."
         )
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        kb = InlineKeyboardMarkup([
+        rows = [
             [InlineKeyboardButton("💎 Upgrade to Pro (₹99/mo)", callback_data="upgrade_pro")],
             [
                 InlineKeyboardButton("💼 Browse Daily Feed", callback_data="menu_jobs"),
@@ -725,7 +874,11 @@ async def _complete_onboarding(
             [
                 InlineKeyboardButton("🎯 My Profile", callback_data="menu_profile"),
             ],
-        ])
+        ]
+        if tracked_url:
+            btn_label = f"📋 Tracked Companies ({tracked_count})" if tracked_count else "📋 Tracked Companies"
+            rows.append([InlineKeyboardButton(btn_label, url=tracked_url)])
+        kb = InlineKeyboardMarkup(rows)
 
     if query:
         await query.edit_message_text(msg, reply_markup=kb, parse_mode="MarkdownV2")
@@ -836,6 +989,13 @@ def get_start_handler() -> ConversationHandler:
                 CallbackQueryHandler(onboard_upload_resume_prompt, pattern="^onboard_upload_resume$"),
                 MessageHandler(filters.Document.ALL, resume_doc_receive),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, custom_skill_receive),
+            ],
+            CONFIRM_SKILLS: [
+                CallbackQueryHandler(onboard_skills_ok_callback, pattern="^onboard_skills_ok$"),
+                CallbackQueryHandler(onboard_skills_edit_callback, pattern="^onboard_skills_edit$"),
+                CallbackQueryHandler(onboard_skills_undo_callback, pattern="^onboard_skills_undo$"),
+                MessageHandler(filters.Document.ALL, resume_doc_receive),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_skills_text_receive),
             ],
             WAITING_RESUME_CONSENT: [
                 CallbackQueryHandler(resume_consent_callback, pattern="^onboard_consent_"),

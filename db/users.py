@@ -56,17 +56,20 @@ async def get_user(telegram_id: int, bot_id: int = 1) -> dict | None:
 
 async def update_user_profile(
     telegram_id: int,
+    *,
+    bot_id: int,
     skills: list[str] | None = None,
     location_pref: str | None = None,
     alert_time: str | None = None,
     experience_level: str | None = None,
     batch_year: int | None = None,
     role_pref: str | None = None,
-    bot_id: int | None = None,
     skills_need_review: bool | None = None,
     **kwargs,
 ) -> dict:
-    """Update user profile fields. Only updates non-None values."""
+    """Update user profile fields. Only updates non-None values. Requires bot_id."""
+    if bot_id is None:
+        raise ValueError("bot_id is required for update_user_profile")
     pool = get_pool()
     updates = []
     values = []
@@ -108,16 +111,13 @@ async def update_user_profile(
         values.append(skills_need_review)
 
     if not updates:
-        return await get_user(telegram_id, bot_id=bot_id or 1)
+        return await get_user(telegram_id, bot_id=bot_id)
 
     updates.append("updated_at = NOW()")
 
-    if bot_id is not None:
-        param_idx += 1
-        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 AND bot_id = ${param_idx} RETURNING *"
-        values.append(bot_id)
-    else:
-        sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 RETURNING *"
+    param_idx += 1
+    sql = f"UPDATE users SET {', '.join(updates)} WHERE telegram_id = $1 AND bot_id = ${param_idx} RETURNING *"
+    values.append(bot_id)
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(sql, telegram_id, *values)
@@ -193,13 +193,16 @@ async def delete_user_resume(telegram_id: int, bot_id: int = 1) -> bool:
         return True
 
 
-async def set_onboarded(telegram_id: int) -> None:
-    """Mark user as having completed onboarding."""
+async def set_onboarded(telegram_id: int, bot_id: int) -> None:
+    """Mark user as having completed onboarding for a specific bot."""
+    if bot_id is None:
+        raise ValueError("bot_id is required for set_onboarded")
     pool = get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE users SET is_onboarded = TRUE, updated_at = NOW() WHERE telegram_id = $1",
+            "UPDATE users SET is_onboarded = TRUE, updated_at = NOW() WHERE telegram_id = $1 AND bot_id = $2",
             telegram_id,
+            bot_id,
         )
 
 
