@@ -157,6 +157,7 @@ class TestRFC011(unittest.IsolatedAsyncioTestCase):
 
         cb_update = MagicMock()
         cb_update.effective_user = MagicMock(id=55555)
+        cb_update.message = None
         cb_update.callback_query = AsyncMock()
         with patch("handlers.start.update_user_profile", AsyncMock()) as mock_upd_undo:
             state2 = await onboard_skills_undo_callback(cb_update, ctx)
@@ -165,14 +166,14 @@ class TestRFC011(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.user_data["selected_skills"], ["React", "Python", "SQL"])
         mock_upd_undo.assert_awaited_once_with(55555, bot_id=1, skills=["react", "python", "sql"])
 
-        with patch("handlers.start.get_user", AsyncMock(return_value={"is_onboarded": False})), \
-             patch("handlers.start.prompt_experience_step", AsyncMock(return_value=EXPERIENCE)) as mock_exp:
+        # 3. Pressing OK uses real prompt_experience_step with update.message=None; pressing twice is idempotent
+        with patch("handlers.start.get_user", AsyncMock(return_value={"is_onboarded": False})):
             s_ok1 = await onboard_skills_ok_callback(cb_update, ctx)
             s_ok2 = await onboard_skills_ok_callback(cb_update, ctx)
 
         self.assertEqual(s_ok1, EXPERIENCE)
         self.assertEqual(s_ok2, ConversationHandler.END)
-        self.assertEqual(mock_exp.await_count, 1)
+        cb_update.callback_query.edit_message_text.assert_awaited()
 
     def test_tracked_companies_url_validation_and_keyboard(self):
         self.assertIsNotNone(validate_tracked_companies_url("https://docs.google.com/spreadsheets/d/abc"))

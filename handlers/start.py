@@ -247,6 +247,8 @@ async def prompt_experience_step(update: Update, context: ContextTypes.DEFAULT_T
         "📅 <b>What is your experience level?</b>\n"
         "Tap a button below or type a number of years (e.g. 0, 2, 5):"
     )
+    if query is None and update.callback_query:
+        query = update.callback_query
     if query:
         await query.edit_message_text(text, reply_markup=exp_kb, parse_mode="HTML")
     else:
@@ -428,7 +430,7 @@ async def onboard_skills_ok_callback(update: Update, context: ContextTypes.DEFAU
         return ConversationHandler.END
 
     context.user_data["_skills_confirmed"] = True
-    return await prompt_experience_step(update, context)
+    return await prompt_experience_step(update, context, query=query)
 
 
 async def onboard_skills_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
